@@ -13,6 +13,7 @@ class Carrier extends Model
     protected $fillable = [
         'guid',
         'short_code',
+        'wt_code',
         'name',
         'emails',
         'is_active',

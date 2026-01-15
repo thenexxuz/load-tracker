@@ -4,6 +4,7 @@ import AdminLayout from '@/layouts/AppLayout.vue'
 
 const form = useForm({
     short_code: '',
+    wt_code: '',
     name: '',
     emails: '',
     is_active: true,
@@ -37,7 +38,7 @@ const submit = () => {
                 Create New Carrier
             </h1>
 
-            <!-- Messages -->
+            <!-- Error message area -->
             <div
                 v-if="Object.keys(form.errors).length"
                 class="mb-6 p-4 bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-200 rounded-lg"
@@ -69,6 +70,27 @@ const submit = () => {
                     />
                     <p v-if="form.errors.short_code" class="mt-1 text-sm text-red-600 dark:text-red-400">
                         {{ form.errors.short_code }}
+                    </p>
+                </div>
+
+                <!-- WT Code (NEW FIELD) -->
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        WT Code
+                    </label>
+                    <input
+                        v-model="form.wt_code"
+                        type="text"
+                        :class="[
+              'w-full p-3 border rounded-md focus:ring-2 focus:outline-none',
+              form.errors.wt_code
+                ? 'border-red-500 focus:ring-red-500 bg-red-50 dark:bg-red-950/30'
+                : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500'
+            ]"
+                        placeholder="e.g. WT-12345 or leave blank"
+                    />
+                    <p v-if="form.errors.wt_code" class="mt-1 text-sm text-red-600 dark:text-red-400">
+                        {{ form.errors.wt_code }}
                     </p>
                 </div>
 

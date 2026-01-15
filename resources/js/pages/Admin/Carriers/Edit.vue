@@ -6,6 +6,7 @@ const props = defineProps<{
     carrier: {
         id: number
         short_code: string
+        wt_code: string | null
         name: string
         emails: string
         is_active: boolean
@@ -14,6 +15,7 @@ const props = defineProps<{
 
 const form = useForm({
     short_code: props.carrier.short_code,
+    wt_code: props.carrier.wt_code || '',
     name: props.carrier.name,
     emails: props.carrier.emails || '',
     is_active: props.carrier.is_active,
@@ -22,7 +24,8 @@ const form = useForm({
 const submit = () => {
     form.put(route('admin.carriers.update', props.carrier.id), {
         onSuccess: () => {
-            form.processing = false
+            // Optional: success message or redirect
+            alert('Carrier updated successfully!')
         },
         onError: (errors) => {
             console.log('Form errors:', errors)
@@ -75,6 +78,27 @@ const submit = () => {
                     />
                     <p v-if="form.errors.short_code" class="mt-1 text-sm text-red-600 dark:text-red-400">
                         {{ form.errors.short_code }}
+                    </p>
+                </div>
+
+                <!-- WT Code (NEW FIELD) -->
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        WT Code
+                    </label>
+                    <input
+                        v-model="form.wt_code"
+                        type="text"
+                        :class="[
+              'w-full p-3 border rounded-md focus:ring-2 focus:outline-none',
+              form.errors.wt_code
+                ? 'border-red-500 focus:ring-red-500 bg-red-50 dark:bg-red-950/30'
+                : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500'
+            ]"
+                        placeholder="e.g. WT-12345 or leave blank"
+                    />
+                    <p v-if="form.errors.wt_code" class="mt-1 text-sm text-red-600 dark:text-red-400">
+                        {{ form.errors.wt_code }}
                     </p>
                 </div>
 
@@ -135,7 +159,7 @@ const submit = () => {
                     </label>
                 </div>
 
-                <!-- Submit -->
+                <!-- Submit & Cancel -->
                 <div class="flex justify-end space-x-4">
                     <a href="javascript:history.back()"
                        class="px-6 py-3 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
