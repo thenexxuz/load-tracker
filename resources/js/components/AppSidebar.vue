@@ -25,11 +25,6 @@ const mainNavItems: NavItem[] = [
         href: dashboard(),
         icon: LayoutGrid,
     },
-    {
-        title: 'Configure',
-        href: configure(),
-        icon: SettingsIcon,
-    },
 ];
 
 const footerNavItems: NavItem[] = [

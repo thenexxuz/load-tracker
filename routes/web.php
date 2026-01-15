@@ -16,10 +16,6 @@ Route::get('dashboard', function () {
     return Inertia::render('Dashboard');
 })->middleware(['auth', 'verified'])->name('dashboard');
 
-Route::get('configure', function () {
-    return Inertia::render('Configure');
-})->middleware(['auth', 'verified'])->name('configure');
-
 Route::middleware(['auth', 'role:administrator'])->prefix('admin')->name('admin.')->group(function () {
     Route::resource('roles', RoleController::class);
     Route::resource('users', UserController::class)->only(['index', 'edit', 'update']);
