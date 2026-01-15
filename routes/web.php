@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\RoleController;
+use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
@@ -17,5 +19,10 @@ Route::get('dashboard', function () {
 Route::get('configure', function () {
     return Inertia::render('Configure');
 })->middleware(['auth', 'verified'])->name('configure');
+
+Route::middleware(['auth', 'role:administrator'])->prefix('admin')->name('admin.')->group(function () {
+    Route::resource('roles', RoleController::class);
+    Route::resource('users', UserController::class)->only(['index', 'edit', 'update']);
+});
 
 require __DIR__.'/settings.php';
