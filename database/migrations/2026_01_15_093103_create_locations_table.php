@@ -19,19 +19,19 @@ return new class extends Migration
             $table->string('zip', 10)->nullable();
             $table->string('country', 2)->default('US');
 
-            // New: location type as enum
-            $table->enum('type', [
-                'pickup',
-                'distribution_center',
-                'recycling',
-            ])->default('pickup');
+            $table->enum('type', ['pickup', 'distribution_center', 'recycling'])
+                ->default('pickup');
+
+            // Foreign key: each DC points to ONE recycling location
+            $table->foreignId('recycling_location_id')
+                ->nullable()
+                ->constrained('locations')
+                ->nullOnDelete();
 
             $table->decimal('latitude', 10, 8)->nullable();
             $table->decimal('longitude', 11, 8)->nullable();
             $table->boolean('is_active')->default(true);
             $table->timestamps();
-
-            $table->nullableMorphs('recycling_location');
         });
     }
 

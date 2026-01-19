@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3'
-import { BookOpen, Folder, LayoutGrid, SettingsIcon, Truck, User } from 'lucide-vue-next';
+import { BookOpen, Folder, LayoutGrid, Map, Truck, User } from 'lucide-vue-next'
 
 import NavFooter from '@/components/NavFooter.vue'
-import NavMain from '@/components/NavMain.vue'
 import NavUser from '@/components/NavUser.vue'
 import {
     Sidebar,
@@ -19,12 +18,12 @@ import { type NavItem } from '@/types'
 
 import AppLogo from './AppLogo.vue'
 
-// Get current user from Inertia shared props
 const { auth } = usePage().props
-const userRoles = auth?.user?.roles || [] // array of role names (from Spatie)
+const userRoles = auth?.user?.roles || []
 
 const hasUserAccess = userRoles.includes('administrator')
 const hasCarrierAccess = userRoles.includes('administrator') || userRoles.includes('supervisor')
+const hasLocationsAccess = userRoles.includes('administrator') || userRoles.includes('supervisor')
 
 const mainNavItems: NavItem[] = [
     {
@@ -33,22 +32,25 @@ const mainNavItems: NavItem[] = [
         icon: LayoutGrid,
     },
     ...(hasUserAccess
-        ? [
-            {
-                title: 'User Management',
-                href: route('admin.users.index'),
-                icon: User,
-            },
-        ]
+        ? [{
+            title: 'User Management',
+            href: route('admin.users.index'),
+            icon: User,
+        }]
         : []),
     ...(hasCarrierAccess
-        ? [
-            {
-                title: 'Carrier Management',
-                href: route('admin.carriers.index'),
-                icon: Truck,
-            },
-        ]
+        ? [{
+            title: 'Carrier Management',
+            href: route('admin.carriers.index'),
+            icon: Truck,
+        }]
+        : []),
+    ...(hasLocationsAccess
+        ? [{
+            title: 'Location Management',
+            href: route('admin.locations.index'),
+            icon: Map,
+        }]
         : []),
 ]
 
@@ -70,7 +72,16 @@ const footerNavItems: NavItem[] = []
         </SidebarHeader>
 
         <SidebarContent>
-            <NavMain :items="mainNavItems" />
+            <SidebarMenu>
+                <SidebarMenuItem v-for="item in mainNavItems" :key="item.title">
+                    <SidebarMenuButton size="lg" as-child>
+                        <Link :href="item.href" class="flex items-center gap-5">
+                            <component :is="item.icon" class="w-5 h-5" />
+                            <span class="text-base font-medium">{{ item.title }}</span>
+                        </Link>
+                    </SidebarMenuButton>
+                </SidebarMenuItem>
+            </SidebarMenu>
         </SidebarContent>
 
         <SidebarFooter>
