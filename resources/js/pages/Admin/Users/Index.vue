@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import AdminLayout from '@/layouts/AppLayout.vue'
-import { Head } from '@inertiajs/vue3'
+import { Head, router, usePage } from '@inertiajs/vue3'
+import { onMounted } from 'vue'
+import Swal from 'sweetalert2'
 
 defineProps<{
     users: Array<{
@@ -11,6 +13,62 @@ defineProps<{
         edit_url: string
     }>
 }>()
+
+const page = usePage()
+
+// Show flashed success message on page load (e.g. after update)
+onMounted(() => {
+    if (page.props.flash?.success) {
+        Swal.fire({
+            icon: 'success',
+            title: 'Success!',
+            text: page.props.flash.success,
+            timer: 3000,
+            showConfirmButton: false,
+            toast: true,
+            position: 'top-end'
+        })
+    }
+})
+
+// SweetAlert2-powered delete confirmation
+const destroy = async (id: number) => {
+    const result = await Swal.fire({
+        title: 'Delete User?',
+        text: "This action cannot be undone.",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'Yes, delete it!',
+        cancelButtonText: 'Cancel',
+        reverseButtons: true
+    })
+
+    if (result.isConfirmed) {
+        router.delete(route('admin.users.destroy', id), {
+            onSuccess: () => {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Deleted!',
+                    text: 'User has been deleted.',
+                    timer: 2000,
+                    showConfirmButton: false,
+                    toast: true,
+                    position: 'top-end'
+                })
+            },
+            onError: () => {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: 'Failed to delete user.'
+                })
+            },
+            preserveScroll: true,
+        })
+    }
+}
 </script>
 
 <template>

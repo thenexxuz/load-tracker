@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { Head, router } from '@inertiajs/vue3'
-import { ref, watch } from 'vue'
+import { Head, router, usePage } from '@inertiajs/vue3'
+import { ref, watch, onMounted } from 'vue'
 import AdminLayout from '@/layouts/AppLayout.vue'
+import Swal from 'sweetalert2'
 
 const props = defineProps<{
     carriers: {
@@ -10,28 +11,68 @@ const props = defineProps<{
     filters: any
 }>()
 
+const page = usePage()
+
 const search = ref(props.filters.search || '')
 
+// Live search
 watch(search, (value) => {
     router.get(route('admin.carriers.index'), { search: value }, { preserveState: true })
 })
 
-// Delete confirmation
-const destroy = (id: number) => {
-    if (!confirm('Are you sure you want to delete this carrier? This action cannot be undone.')) {
-        return
-    }
-
-    router.delete(route('admin.carriers.destroy', id), {
-        onSuccess: () => {
-            alert('Carrier deleted successfully!')
-        },
-        onError: () => {
-            alert('Failed to delete carrier.')
-        },
-        preserveScroll: true,
+// SweetAlert2-powered delete confirmation
+const destroy = async (id: number) => {
+    const result = await Swal.fire({
+        title: 'Delete Carrier?',
+        text: "This action cannot be undone.",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'Yes, delete it!',
+        cancelButtonText: 'Cancel',
+        reverseButtons: true
     })
+
+    if (result.isConfirmed) {
+        router.delete(route('admin.carriers.destroy', id), {
+            onSuccess: () => {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Deleted!',
+                    text: 'Carrier has been deleted.',
+                    timer: 2000,
+                    showConfirmButton: false,
+                    toast: true,
+                    position: 'top-end'
+                })
+            },
+            onError: () => {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: 'Failed to delete carrier.'
+                })
+            },
+            preserveScroll: true,
+        })
+    }
 }
+
+// Show success message from flash (after create/update/delete redirect)
+onMounted(() => {
+    if (page.props.flash?.success) {
+        Swal.fire({
+            icon: 'success',
+            title: 'Success!',
+            text: page.props.flash.success,
+            timer: 3000,
+            showConfirmButton: false,
+            toast: true,
+            position: 'top-end'
+        })
+    }
+})
 </script>
 
 <template>
@@ -50,8 +91,12 @@ const destroy = (id: number) => {
             </div>
 
             <!-- Search Input -->
-            <input v-model="search" type="text" placeholder="Search by name or short code..."
-                   class="mb-6 w-full max-w-md border border-gray-300 dark:border-gray-600 rounded-md p-2.5 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+            <input
+                v-model="search"
+                type="text"
+                placeholder="Search by name or short code..."
+                class="mb-6 w-full max-w-md border border-gray-300 dark:border-gray-600 rounded-md p-2.5 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            />
 
             <!-- No Carriers Message -->
             <div v-if="!carriers.data.length" class="mt-12 text-center py-16 bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/30 border border-gray-200 dark:border-gray-700">
@@ -81,9 +126,9 @@ const destroy = (id: number) => {
                         <td class="px-6 py-4 text-gray-600 dark:text-gray-400">{{ carrier.name }}</td>
 
                         <td class="px-6 py-4 text-gray-600 dark:text-gray-400 relative group">
-                            <span class="inline-block">
-                                {{ carrier.emails ? carrier.emails.split(',').length + ' email' + (carrier.emails.split(',').length !== 1 ? 's' : '') : 'None' }}
-                            </span>
+                <span class="inline-block">
+                  {{ carrier.emails ? carrier.emails.split(',').length + ' email' + (carrier.emails.split(',').length !== 1 ? 's' : '') : 'None' }}
+                </span>
                         </td>
 
                         <td class="px-6 py-4">

@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { Head, router } from '@inertiajs/vue3'
-import { ref, watch } from 'vue'
+import { Head, router, usePage } from '@inertiajs/vue3'
+import { ref, watch, onMounted } from 'vue'
 import AdminLayout from '@/layouts/AppLayout.vue'
+import Swal from 'sweetalert2'
 
 const props = defineProps<{
     locations: {
@@ -16,10 +17,11 @@ const props = defineProps<{
             } | null
             is_active: boolean
         }>
-        // ... pagination meta (links, current_page, etc.) if needed
     }
     filters: Record<string, any>
 }>()
+
+const page = usePage()
 
 const search = ref(props.filters.search || '')
 
@@ -32,22 +34,59 @@ watch(search, (value) => {
     )
 })
 
-// Delete with confirmation
-const destroy = (id: number) => {
-    if (!confirm('Are you sure you want to delete this location? This action cannot be undone.')) {
-        return
-    }
-
-    router.delete(route('admin.locations.destroy', id), {
-        onSuccess: () => {
-            alert('Location deleted successfully!')
-        },
-        onError: () => {
-            alert('Failed to delete location.')
-        },
-        preserveScroll: true,
+// SweetAlert2-powered delete confirmation
+const destroy = async (id: number) => {
+    const result = await Swal.fire({
+        title: 'Delete Location?',
+        text: "This action cannot be undone.",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'Yes, delete it!',
+        cancelButtonText: 'Cancel',
+        reverseButtons: true
     })
+
+    if (result.isConfirmed) {
+        router.delete(route('admin.locations.destroy', id), {
+            onSuccess: () => {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Deleted!',
+                    text: 'Location has been deleted.',
+                    timer: 2000,
+                    showConfirmButton: false,
+                    toast: true,
+                    position: 'top-end'
+                })
+            },
+            onError: () => {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: 'Failed to delete location.'
+                })
+            },
+            preserveScroll: true,
+        })
+    }
 }
+
+// Show flashed success message on page load (after create/update/delete redirect)
+onMounted(() => {
+    if (page.props.flash?.success) {
+        Swal.fire({
+            icon: 'success',
+            title: 'Success!',
+            text: page.props.flash.success,
+            timer: 3000,
+            showConfirmButton: false,
+            toast: true,
+            position: 'top-end'
+        })
+    }
+})
 </script>
 
 <template>

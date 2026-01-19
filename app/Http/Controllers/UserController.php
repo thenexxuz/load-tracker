@@ -11,16 +11,15 @@ class UserController extends Controller
 {
     public function index()
     {
-        $users = User::with('roles')->get(); // Load roles if using Spatie
+        $users = User::with('roles')->get();
 
-        return Inertia::render('Admin/Users/Index', [  // Adjust page/component name as needed
+        return Inertia::render('Admin/Users/Index', [
             'users' => $users->map(function ($user) {
                 return [
                     'id' => $user->id,
                     'name' => $user->name,
                     'email' => $user->email,
-                    'roles' => $user->roles->pluck('name'), // For display
-                    // Add more fields as needed
+                    'roles' => $user->roles->pluck('name'),
                     'edit_url' => route('admin.users.edit', $user->id),
                 ];
             }),
@@ -55,9 +54,10 @@ class UserController extends Controller
             }
         }
 
-        // If passed the check → sync roles
+        // Sync roles
         $user->syncRoles($request->input('roles', []));
 
+        // Redirect with success message (flash data)
         return redirect()->route('admin.users.index')
             ->with('success', 'User roles updated successfully.');
     }

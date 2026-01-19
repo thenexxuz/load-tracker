@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, useForm } from '@inertiajs/vue3'
+import { Head, router, useForm } from '@inertiajs/vue3';
 import AdminLayout from '@/layouts/AppLayout.vue'
 
 const props = defineProps<{
@@ -24,8 +24,10 @@ const form = useForm({
 const submit = () => {
     form.put(route('admin.carriers.update', props.carrier.id), {
         onSuccess: () => {
-            // Optional: success message or redirect
-            alert('Carrier updated successfully!')
+            router.visit(route('admin.carriers.index'), {
+                data: { success: 'Carrier updated successfully!' },
+                preserveState: true,
+            })
         },
         onError: (errors) => {
             console.log('Form errors:', errors)

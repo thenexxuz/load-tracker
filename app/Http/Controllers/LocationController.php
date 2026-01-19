@@ -62,7 +62,8 @@ class LocationController extends Controller
         // Create the location
         $location = Location::create($validated);
 
-        return Inertia::location(route('admin.locations.index'));
+        return redirect()->route('admin.locations.index')
+            ->with('success', 'Location created successfully.');
     }
 
     public function show(Location $location)

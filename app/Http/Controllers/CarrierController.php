@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Controllers\Controller;
 use App\Models\Carrier;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -32,6 +31,7 @@ class CarrierController extends Controller
     {
         $validated = $request->validate([
             'short_code' => 'required|string|max:20|unique:carriers,short_code',
+            'wt_code' => 'nullable|string|max:50|unique:carriers,wt_code',
             'name' => 'required|string|max:255',
             'emails' => 'nullable|string', // comma separated
             'is_active' => 'boolean',
@@ -61,6 +61,7 @@ class CarrierController extends Controller
     {
         $validated = $request->validate([
             'short_code' => 'required|string|max:20|unique:carriers,short_code,'.$carrier->id,
+            'wt_code' => 'nullable|string|max:50|unique:carriers,wt_code,'.$carrier->id,
             'name' => 'required|string|max:255',
             'emails' => 'nullable|string',
             'is_active' => 'boolean',

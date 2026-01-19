@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, useForm } from '@inertiajs/vue3'
+import { Head, router, useForm } from '@inertiajs/vue3';
 import { watch } from 'vue'
 import AdminLayout from '@/layouts/AppLayout.vue'
 
@@ -54,7 +54,10 @@ watch(
 const submit = () => {
     form.put(route('admin.locations.update', props.location.id), {
         onSuccess: () => {
-            alert('Location updated successfully!')
+            router.visit(route('admin.locations.index'), {
+                data: { success: 'Location updated successfully!' },
+                preserveState: true,
+            })
         },
         onError: (errors) => {
             console.log('Form errors:', errors)

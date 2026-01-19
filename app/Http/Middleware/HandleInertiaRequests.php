@@ -37,6 +37,7 @@ class HandleInertiaRequests extends Middleware
     public function share(Request $request): array
     {
         $user = $request->user();
+
         return [
             ...parent::share($request),
             'name' => config('app.name'),
@@ -48,7 +49,10 @@ class HandleInertiaRequests extends Middleware
                     'roles' => $user->roles ? $user->roles->pluck('name')->toArray() : [],
                 ] : null,
             ],
-            // Ziggy (keep this if you have it)
+            'flash' => [
+                'success' => fn () => $request->session()->get('success'),
+                'error' => fn () => $request->session()->get('error'),
+            ],
             'ziggy' => fn () => [
                 ...(new Ziggy)->toArray(),
                 'location' => $request->url(),
