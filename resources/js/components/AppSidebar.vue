@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3'
-import { BookOpen, Folder, LayoutGrid, Map, SearchIcon, Truck, User } from 'lucide-vue-next';
+import { BookOpen, Folder, LayoutGrid, Map, SearchIcon, Truck, TruckIcon, User } from 'lucide-vue-next';
 
 import NavFooter from '@/components/NavFooter.vue'
 import NavUser from '@/components/NavUser.vue'
@@ -25,6 +25,7 @@ const hasUserAccess = userRoles.includes('administrator')
 const hasAuditAccess = userRoles.includes('administrator') || userRoles.includes('supervisor')
 const hasCarrierAccess = userRoles.includes('administrator') || userRoles.includes('supervisor')
 const hasLocationsAccess = userRoles.includes('administrator') || userRoles.includes('supervisor')
+const hasShipmentAccess = userRoles.includes('administrator') || userRoles.includes('supervisor') || userRoles.includes('truckload') || userRoles.includes('data-entry')
 
 const mainNavItems: NavItem[] = [
     {
@@ -58,6 +59,13 @@ const mainNavItems: NavItem[] = [
             title: 'Location Management',
             href: route('admin.locations.index'),
             icon: Map,
+        }]
+        : []),
+    ...(hasShipmentAccess
+        ? [{
+            title: 'Shipments',
+            href: route('admin.shipments.index'),
+            icon: TruckIcon,
         }]
         : []),
 ]

@@ -4,6 +4,7 @@ use App\Http\Controllers\AuditController;
 use App\Http\Controllers\CarrierController;
 use App\Http\Controllers\LocationController;
 use App\Http\Controllers\RoleController;
+use App\Http\Controllers\ShipmentController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -28,6 +29,7 @@ Route::middleware(['auth', 'role:administrator'])->prefix('admin')->name('admin.
 Route::middleware(['auth', 'role:administrator|supervisor'])->prefix('admin')->name('admin.')->group(function () {
     Route::resource('carriers', CarrierController::class);
     Route::resource('locations', LocationController::class);
+    Route::resource('shipments', ShipmentController::class);
 });
 
 require __DIR__.'/settings.php';
