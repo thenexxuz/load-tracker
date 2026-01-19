@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { watch } from 'vue'
+
 import AdminLayout from '@/layouts/AppLayout.vue'
 
 const props = defineProps<{
@@ -14,10 +15,12 @@ const props = defineProps<{
         zip: string | null
         country: string
         type: 'pickup' | 'distribution_center' | 'recycling'
-        recycling_location_id: number | null
         latitude: number | null
         longitude: number | null
         is_active: boolean
+        recycling_location_id: number | null
+        email: string | null
+        expected_arrival_time: string | null
     }
     availableRecyclingLocations: Array<{
         id: number
@@ -39,17 +42,9 @@ const form = useForm({
     longitude: props.location.longitude,
     is_active: props.location.is_active,
     recycling_location_id: props.location.recycling_location_id ?? null,
+    email: props.location.email || '',
+    expected_arrival_time: props.location.expected_arrival_time,
 })
-
-// Reset recycling_location_id when type changes away from distribution_center
-watch(
-    () => form.type,
-    (newType) => {
-        if (newType !== 'distribution_center') {
-            form.recycling_location_id = null
-        }
-    }
-)
 
 const submit = () => {
     form.put(route('admin.locations.update', props.location.id), {
@@ -67,6 +62,15 @@ const submit = () => {
         }
     })
 }
+
+watch(
+    () => form.type,
+    (newType) => {
+        if (newType !== 'distribution_center') {
+            form.recycling_location_id = null
+        }
+    }
+)
 </script>
 
 <template>
@@ -78,7 +82,7 @@ const submit = () => {
                 Edit Location: {{ location.short_code }}
             </h1>
 
-            <!-- Error message banner -->
+            <!-- Error banner -->
             <div
                 v-if="Object.keys(form.errors).length"
                 class="mb-6 p-4 bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-200 rounded-lg"
@@ -86,7 +90,7 @@ const submit = () => {
                 Please fix the errors below.
             </div>
 
-            <!-- Main Form -->
+            <!-- Form -->
             <form
                 @submit.prevent="submit"
                 class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg dark:shadow-gray-900/30 border border-gray-200 dark:border-gray-700 max-w-3xl"
@@ -128,7 +132,7 @@ const submit = () => {
                   ? 'border-red-500 focus:ring-red-500 bg-red-50 dark:bg-red-950/30'
                   : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500'
               ]"
-                            placeholder="e.g. Dallas Distribution Center"
+                            placeholder="e.g. Dallas Pickup Hub"
                         />
                         <p v-if="form.errors.name" class="mt-1 text-sm text-red-600 dark:text-red-400">
                             {{ form.errors.name }}
@@ -238,6 +242,47 @@ const submit = () => {
                         </p>
                     </div>
 
+                    <!-- Email (NEW) -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Email
+                        </label>
+                        <input
+                            v-model="form.email"
+                            type="email"
+                            :class="[
+                'w-full p-3 border rounded-md focus:ring-2 focus:outline-none',
+                form.errors.email
+                  ? 'border-red-500 focus:ring-red-500 bg-red-50 dark:bg-red-950/30'
+                  : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500'
+              ]"
+                            placeholder="location@example.com"
+                        />
+                        <p v-if="form.errors.email" class="mt-1 text-sm text-red-600 dark:text-red-400">
+                            {{ form.errors.email }}
+                        </p>
+                    </div>
+
+                    <!-- Expected Arrival Time (NEW) -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Expected Arrival Time
+                        </label>
+                        <input
+                            v-model="form.expected_arrival_time"
+                            type="time"
+                            :class="[
+                'w-full p-3 border rounded-md focus:ring-2 focus:outline-none',
+                form.errors.expected_arrival_time
+                  ? 'border-red-500 focus:ring-red-500 bg-red-50 dark:bg-red-950/30'
+                  : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500'
+              ]"
+                        />
+                        <p v-if="form.errors.expected_arrival_time" class="mt-1 text-sm text-red-600 dark:text-red-400">
+                            {{ form.errors.expected_arrival_time }}
+                        </p>
+                    </div>
+
                     <!-- Type -->
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -262,10 +307,10 @@ const submit = () => {
                         </p>
                     </div>
 
-                    <!-- Conditional: Single Recycling Location Dropdown -->
+                    <!-- Recycling Location -->
                     <div v-if="form.type === 'distribution_center'" class="md:col-span-2">
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                            Recycling Location (optional)
+                            Recycling Location
                         </label>
                         <select
                             v-model="form.recycling_location_id"

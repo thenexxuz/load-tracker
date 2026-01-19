@@ -15,8 +15,21 @@ class Location extends Model
     use HasFactory, LogsActivity;
 
     protected $fillable = [
-        'guid', 'short_code', 'name', 'address', 'city', 'state', 'zip', 'country',
-        'type', 'recycling_location_id', 'latitude', 'longitude', 'is_active',
+        'guid',
+        'short_code',
+        'name',
+        'address',
+        'city',
+        'state',
+        'zip',
+        'country',
+        'email',
+        'expected_arrival_time',
+        'type',
+        'recycling_location_id',
+        'latitude',
+        'longitude',
+        'is_active',
     ];
 
     protected $casts = [
@@ -80,8 +93,20 @@ class Location extends Model
     {
         return LogOptions::defaults()
             ->logOnly([
-                'short_code', 'name', 'address', 'city', 'state', 'zip', 'country',
-                'type', 'recycling_location_id', 'latitude', 'longitude', 'is_active',
+                'short_code',
+                'name',
+                'address',
+                'city',
+                'state',
+                'zip',
+                'country',
+                'email',
+                'expected_arrival_time',
+                'type',
+                'recycling_location_id',
+                'latitude',
+                'longitude',
+                'is_active',
             ])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
