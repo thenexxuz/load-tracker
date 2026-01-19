@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { Head, router, usePage } from '@inertiajs/vue3'
-import { ref, watch, onMounted } from 'vue'
-import AdminLayout from '@/layouts/AppLayout.vue'
 import Swal from 'sweetalert2'
+import { ref, watch, onMounted } from 'vue'
+
+import AdminLayout from '@/layouts/AppLayout.vue'
+
+const page = usePage()
 
 const props = defineProps<{
     locations: {
@@ -23,8 +26,6 @@ const props = defineProps<{
     }
     filters: Record<string, any>
 }>()
-
-const page = usePage()
 
 const search = ref(props.filters.search || '')
 
@@ -196,27 +197,35 @@ onMounted(() => {
                         Showing {{ locations.from }} to {{ locations.to }} of {{ locations.total }} locations
                     </div>
 
-                    <!-- Pagination Buttons -->
-                    <div class="flex items-center space-x-2">
-                        <button
-                            :disabled="!locations.links.prev"
-                            @click="router.get(locations.links.prev, {}, { preserveState: true })"
-                            class="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        >
-                            Previous
-                        </button>
+                    <!-- Pagination (replace your existing pagination div) -->
+                    <div v-if="locations.data?.length" class="mt-6 flex flex-col sm:flex-row justify-between items-center gap-4 text-sm text-gray-700 dark:text-gray-300">
+                        <!-- Showing range -->
+                        <div>
+                            Showing {{ locations.from || 0 }} to {{ locations.to || 0 }} of {{ locations.total || 0 }} locations
+                        </div>
 
-                        <span class="px-4 py-2">
-              Page {{ locations.current_page }} of {{ locations.last_page }}
-            </span>
+                        <!-- Pagination Buttons -->
+                        <div class="flex items-center space-x-2">
+                            <button
+                                :disabled="!locations.links?.prev"
+                                @click="locations.links?.prev && router.get(locations.links.prev, {}, { preserveState: true })"
+                                class="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                                Previous
+                            </button>
 
-                        <button
-                            :disabled="!locations.links.next"
-                            @click="router.get(locations.links.next, {}, { preserveState: true })"
-                            class="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        >
-                            Next
-                        </button>
+                            <span class="px-4 py-2 font-medium">
+      Page {{ locations.current_page }} of {{ locations.last_page }}
+    </span>
+
+                            <button
+                                :disabled="!locations.links?.next"
+                                @click="locations.links?.next && router.get(locations.links.next, {}, { preserveState: true })"
+                                class="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                                Next
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
