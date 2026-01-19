@@ -14,14 +14,15 @@ class LocationController extends Controller
     public function index()
     {
         $locations = Location::query()
-            ->with('recyclingLocation') // Load the relationship
-            ->when(request('search'), fn ($q, $search) => $q->where('name', 'like', "%{$search}%")->orWhere('short_code', 'like', "%{$search}%"))
+            ->with('recyclingLocation:id,short_code,name')
+            ->when(request('search'), fn ($q, $search) => $q->where('name', 'like', "%{$search}%")
+                ->orWhere('short_code', 'like', "%{$search}%"))
             ->orderBy('name')
             ->paginate(15);
 
         return Inertia::render('Admin/Locations/Index', [
             'locations' => $locations,
-            'filters' => request()->only('search'),
+            'filters'   => request()->only('search'),
         ]);
     }
 

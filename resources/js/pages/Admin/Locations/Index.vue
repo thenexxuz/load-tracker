@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, router, usePage, useForm } from '@inertiajs/vue3'
+import { Head, router, usePage } from '@inertiajs/vue3'
 import { ref, watch, onMounted } from 'vue'
 import AdminLayout from '@/layouts/AppLayout.vue'
 import Swal from 'sweetalert2'
@@ -14,6 +14,12 @@ const props = defineProps<{
             recycling_location: { short_code: string; name: string | null } | null
             is_active: boolean
         }>
+        links: any[] // Pagination links from Laravel paginator
+        current_page: number
+        last_page: number
+        from: number
+        to: number
+        total: number
     }
     filters: Record<string, any>
 }>()
@@ -22,52 +28,7 @@ const page = usePage()
 
 const search = ref(props.filters.search || '')
 
-// Import modal state
-const showImportModal = ref(false)
-const selectedFile = ref<File | null>(null)
-
-const importForm = useForm({
-    file: null as File | null,
-})
-
-const handleFileChange = (event: Event) => {
-    const input = event.target as HTMLInputElement
-    if (input.files?.length) {
-        selectedFile.value = input.files[0]
-        importForm.file = input.files[0]
-    }
-}
-
-const importFile = () => {
-    if (!importForm.file) return
-
-    importForm.post(route('admin.locations.import'), {
-        forceFormData: true,
-        onSuccess: () => {
-            showImportModal.value = false
-            selectedFile.value = null
-            importForm.reset()
-            Swal.fire({
-                icon: 'success',
-                title: 'Imported!',
-                text: 'Locations imported successfully.',
-                timer: 3000,
-                showConfirmButton: false,
-                toast: true,
-                position: 'top-end'
-            })
-        },
-        onError: (errors) => {
-            Swal.fire({
-                icon: 'error',
-                title: 'Import Failed',
-                html: Object.values(errors).join('<br>')
-            })
-        }
-    })
-}
-
-// Live search
+// Live search (preserves pagination state)
 watch(search, (value) => {
     router.get(
         route('admin.locations.index'),
@@ -115,7 +76,7 @@ const destroy = async (id: number) => {
     }
 }
 
-// Show success flash message
+// Show success toast from flash message
 onMounted(() => {
     if (page.props.flash?.success) {
         Swal.fire({
@@ -140,84 +101,12 @@ onMounted(() => {
                 <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">
                     Locations Management
                 </h1>
-                <div class="space-x-4">
-                    <a
-                        :href="route('admin.locations.create')"
-                        class="bg-blue-600 hover:bg-blue-700 text-white px-5.5 py-3 rounded-md font-medium transition-colors"
-                    >
-                        Add New Location
-                    </a>
-                    <!-- IMPORT BUTTON -->
-                    <button
-                        @click="showImportModal = true"
-                        class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-md font-medium transition-colors"
-                    >
-                        Import from TSV
-                    </button>
-                </div>
-            </div>
-
-            <!-- Import Modal -->
-            <div v-if="showImportModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60">
-                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-2xl max-w-lg w-full mx-4 overflow-hidden">
-                    <div class="p-6">
-                        <h2 class="text-xl font-bold mb-4 text-gray-900 dark:text-gray-100">
-                            Import Locations from TSV
-                        </h2>
-
-                        <p class="mb-4 text-sm text-gray-600 dark:text-gray-400">
-                            Upload a tab-separated (.tsv or .txt) file. Expected columns (in this order):
-                        </p>
-
-                        <ul class="list-disc pl-5 mb-6 text-sm text-gray-600 dark:text-gray-400">
-                            <li>short_code</li>
-                            <li>name</li>
-                            <li>address</li>
-                            <li>city</li>
-                            <li>state</li>
-                            <li>zip</li>
-                            <li>country</li>
-                            <li>type (pickup, distribution_center, recycling)</li>
-                            <li>latitude (optional)</li>
-                            <li>longitude (optional)</li>
-                            <li>is_active (1/0, true/false)</li>
-                            <li>email (optional)</li>
-                            <li>expected_arrival_time (optional, HH:mm AM/PM)</li>
-                        </ul>
-
-                        <form @submit.prevent="importFile">
-                            <div class="mb-6">
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    Select TSV File
-                                </label>
-                                <input
-                                    type="file"
-                                    accept=".tsv,.txt"
-                                    @change="handleFileChange"
-                                    class="block w-full text-sm text-gray-900 border border-gray-300 rounded-lg cursor-pointer bg-gray-50 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-300 focus:outline-none file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 dark:file:bg-gray-600 dark:file:text-gray-200"
-                                    required
-                                />
-                            </div>
-
-                            <div class="flex justify-end space-x-3">
-                                <button
-                                    type="button"
-                                    @click="showImportModal = false"
-                                    class="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    :disabled="!selectedFile || importForm.processing"
-                                    class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    {{ importForm.processing ? 'Importing...' : 'Import' }}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
+                <a
+                    :href="route('admin.locations.create')"
+                    class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-md font-medium transition-colors"
+                >
+                    Add New Location
+                </a>
             </div>
 
             <!-- Search Input -->
@@ -299,6 +188,37 @@ onMounted(() => {
                     </tr>
                     </tbody>
                 </table>
+
+                <!-- Pagination -->
+                <div class="mt-6 flex flex-col sm:flex-row justify-between items-center gap-4 text-sm text-gray-700 dark:text-gray-300">
+                    <!-- Showing range -->
+                    <div>
+                        Showing {{ locations.from }} to {{ locations.to }} of {{ locations.total }} locations
+                    </div>
+
+                    <!-- Pagination Buttons -->
+                    <div class="flex items-center space-x-2">
+                        <button
+                            :disabled="!locations.links.prev"
+                            @click="router.get(locations.links.prev, {}, { preserveState: true })"
+                            class="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                            Previous
+                        </button>
+
+                        <span class="px-4 py-2">
+              Page {{ locations.current_page }} of {{ locations.last_page }}
+            </span>
+
+                        <button
+                            :disabled="!locations.links.next"
+                            @click="router.get(locations.links.next, {}, { preserveState: true })"
+                            class="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                            Next
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </AdminLayout>
