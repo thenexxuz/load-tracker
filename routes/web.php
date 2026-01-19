@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AuditController;
 use App\Http\Controllers\CarrierController;
 use App\Http\Controllers\LocationController;
 use App\Http\Controllers\RoleController;
@@ -19,6 +20,7 @@ Route::get('dashboard', function () {
 })->middleware(['auth', 'verified'])->name('dashboard');
 
 Route::middleware(['auth', 'role:administrator'])->prefix('admin')->name('admin.')->group(function () {
+    Route::get('audits', [AuditController::class, 'index'])->name('audits.index');
     Route::resource('roles', RoleController::class);
     Route::resource('users', UserController::class)->only(['index', 'edit', 'update']);
 });

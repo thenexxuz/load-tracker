@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3'
-import { BookOpen, Folder, LayoutGrid, Map, Truck, User } from 'lucide-vue-next'
+import { BookOpen, Folder, LayoutGrid, Map, SearchIcon, Truck, User } from 'lucide-vue-next';
 
 import NavFooter from '@/components/NavFooter.vue'
 import NavUser from '@/components/NavUser.vue'
@@ -22,6 +22,7 @@ const { auth } = usePage().props
 const userRoles = auth?.user?.roles || []
 
 const hasUserAccess = userRoles.includes('administrator')
+const hasAuditAccess = userRoles.includes('administrator') || userRoles.includes('supervisor')
 const hasCarrierAccess = userRoles.includes('administrator') || userRoles.includes('supervisor')
 const hasLocationsAccess = userRoles.includes('administrator') || userRoles.includes('supervisor')
 
@@ -31,6 +32,13 @@ const mainNavItems: NavItem[] = [
         href: dashboard(),
         icon: LayoutGrid,
     },
+    ...(hasAuditAccess
+        ? [{
+            title: 'Audit History',
+            href: route('admin.audits.index'),
+            icon: SearchIcon,
+        }]
+        : []),
     ...(hasUserAccess
         ? [{
             title: 'User Management',
