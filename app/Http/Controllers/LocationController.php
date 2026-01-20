@@ -22,7 +22,7 @@ class LocationController extends Controller
 
         return Inertia::render('Admin/Locations/Index', [
             'locations' => $locations,
-            'filters'   => request()->only('search'),
+            'filters' => request()->only('search'),
         ]);
     }
 
@@ -138,7 +138,7 @@ class LocationController extends Controller
 
         try {
             $csv = Reader::createFromPath($file->getRealPath(), 'r');
-            $csv->setDelimiter("\t"); // Tab-separated
+            $csv->setDelimiter("\t");
             $csv->setHeaderOffset(0); // First row = headers
 
             $records = $csv->getRecords();
@@ -164,6 +164,7 @@ class LocationController extends Controller
                     'is_active' => ['nullable', 'boolean'],
                     'email' => ['nullable', 'email', 'max:255'],
                     'expected_arrival_time' => ['nullable', 'string'],
+                    'recycling_short_code' => ['nullable', 'string', 'max:20'],
                 ]);
 
                 if ($validator->fails()) {
@@ -172,32 +173,49 @@ class LocationController extends Controller
                     continue;
                 }
 
-                // Business rule: only distribution centers can have recycling_location_id
-                if ($data['type'] !== 'distribution_center') {
-                    $data['recycling_location_id'] = null;
-                }
-
                 // Normalize country
                 $data['country'] = strtoupper($data['country'] ?? 'US');
+
+                // Handle recycling relationship (only for distribution_center)
+                $recyclingLocationId = null;
+                if ($data['type'] === 'distribution_center' && ! empty($data['recycling_short_code'])) {
+                    $recyclingLocation = Location::where('short_code', $data['recycling_short_code'])->first();
+                    if ($recyclingLocation) {
+                        $recyclingLocationId = $recyclingLocation->id;
+                    } else {
+                        $errors[] = 'Row '.($offset + 2).": Recycling location with short_code '{$data['recycling_short_code']}' not found.";
+
+                        continue;
+                    }
+                }
+
+                // Business rule: force null if not distribution_center
+                if ($data['type'] !== 'distribution_center') {
+                    $recyclingLocationId = null;
+                }
+
+                // Prepare data for create/update
+                $importData = [
+                    'guid' => (string) Str::uuid(),
+                    'name' => $data['name'] ?? null,
+                    'address' => $data['address'],
+                    'city' => $data['city'] ?? null,
+                    'state' => $data['state'] ?? null,
+                    'zip' => $data['zip'] ?? null,
+                    'country' => $data['country'],
+                    'type' => $data['type'],
+                    'latitude' => $data['latitude'] ? (float) $data['latitude'] : null,
+                    'longitude' => $data['longitude'] ? (float) $data['longitude'] : null,
+                    'is_active' => filter_var($data['is_active'] ?? true, FILTER_VALIDATE_BOOLEAN),
+                    'email' => $data['email'] ?? null,
+                    'expected_arrival_time' => $data['expected_arrival_time'] ?? null,
+                    'recycling_location_id' => $recyclingLocationId,
+                ];
 
                 // Create or update based on short_code
                 Location::updateOrCreate(
                     ['short_code' => $data['short_code']],
-                    [
-                        'guid' => (string) Str::uuid(),
-                        'name' => $data['name'] ?? null,
-                        'address' => $data['address'],
-                        'city' => $data['city'] ?? null,
-                        'state' => $data['state'] ?? null,
-                        'zip' => $data['zip'] ?? null,
-                        'country' => $data['country'],
-                        'type' => $data['type'],
-                        'latitude' => $data['latitude'] ? (float) $data['latitude'] : null,
-                        'longitude' => $data['longitude'] ? (float) $data['longitude'] : null,
-                        'is_active' => filter_var($data['is_active'] ?? true, FILTER_VALIDATE_BOOLEAN),
-                        'email' => $data['email'] ?? null,
-                        'expected_arrival_time' => $data['expected_arrival_time'] ?? null,
-                    ]
+                    $importData
                 );
 
                 $imported++;
@@ -218,5 +236,77 @@ class LocationController extends Controller
         } catch (\Exception $e) {
             return back()->withErrors(['file' => 'Failed to process file: '.$e->getMessage()]);
         }
+    }
+
+    public function export(Request $request)
+    {
+        $query = Location::query()
+            ->with('recyclingLocation:id,short_code') // only need short_code
+            ->when($request->search, fn ($q, $search) => $q->where('name', 'like', "%{$search}%")
+                ->orWhere('short_code', 'like', "%{$search}%"));
+
+        $locations = $query->get([
+            'short_code',
+            'name',
+            'address',
+            'city',
+            'state',
+            'zip',
+            'country',
+            'type',
+            'latitude',
+            'longitude',
+            'is_active',
+            'email',
+            'expected_arrival_time',
+            'recycling_location_id', // we'll replace with short_code below
+        ]);
+
+        // Transform to include recycling_short_code instead of ID
+        $exportData = $locations->map(function ($loc) {
+            return [
+                'short_code' => $loc->short_code,
+                'name' => $loc->name ?? '',
+                'address' => $loc->address,
+                'city' => $loc->city ?? '',
+                'state' => $loc->state ?? '',
+                'zip' => $loc->zip ?? '',
+                'country' => $loc->country,
+                'type' => $loc->type,
+                'latitude' => $loc->latitude,
+                'longitude' => $loc->longitude,
+                'is_active' => $loc->is_active ? '1' : '0',
+                'email' => $loc->email ?? '',
+                'expected_arrival_time' => $loc->expected_arrival_time ?? '',
+                'recycling_short_code' => $loc->recyclingLocation?->short_code ?? '', // ← Added!
+            ];
+        });
+
+        // Generate TSV content
+        $headers = [
+            'short_code', 'name', 'address', 'city', 'state', 'zip', 'country',
+            'type', 'latitude', 'longitude', 'is_active', 'email', 'expected_arrival_time',
+            'recycling_short_code', // Make sure importer knows this is the short code
+        ];
+
+        $tsv = implode("\t", $headers)."\n";
+
+        foreach ($exportData as $row) {
+            $tsv .= implode("\t", array_map(function ($value) {
+                // Escape tabs and quotes, wrap in quotes if needed
+                $value = str_replace(["\t", "\n", "\r"], ['\\t', '\\n', '\\r'], $value);
+                if (str_contains($value, "\t") || str_contains($value, '"') || str_contains($value, "\n")) {
+                    $value = '"'.str_replace('"', '""', $value).'"';
+                }
+
+                return $value;
+            }, $row))."\n";
+        }
+
+        $filename = 'locations_export_'.now()->format('Y-m-d_His').'.tsv';
+
+        return response($tsv)
+            ->header('Content-Type', 'text/tab-separated-values')
+            ->header('Content-Disposition', "attachment; filename=\"$filename\"");
     }
 }

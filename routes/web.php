@@ -28,9 +28,9 @@ Route::middleware(['auth', 'role:administrator'])->prefix('admin')->name('admin.
 
 Route::middleware(['auth', 'role:administrator|supervisor'])->prefix('admin')->name('admin.')->group(function () {
     Route::resource('carriers', CarrierController::class);
+    Route::post('locations/import', [LocationController::class, 'import'])->name('locations.import');
+    Route::get('locations/export', [LocationController::class, 'export'])->name('locations.export');
     Route::resource('locations', LocationController::class);
-    Route::post('admin/locations/import', [LocationController::class, 'import'])
-        ->name('locations.import');
     Route::resource('shipments', ShipmentController::class);
 });
 
