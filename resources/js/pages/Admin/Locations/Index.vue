@@ -38,7 +38,7 @@ watch(search, (value) => {
     )
 })
 
-// Import modal state
+// Import modal
 const showImportModal = ref(false)
 const selectedFile = ref<File | null>(null)
 
@@ -95,7 +95,7 @@ const importFile = () => {
     })
 }
 
-// Export (downloads current filtered list)
+// Export
 const isExporting = ref(false)
 
 const exportLocations = () => {
@@ -103,13 +103,12 @@ const exportLocations = () => {
     const url = route('admin.locations.export', { search: search.value })
     window.location.href = url
 
-    // Fake loading state reset after 2 seconds
     setTimeout(() => {
         isExporting.value = false
     }, 2000)
 }
 
-// Delete with SweetAlert2
+// Delete
 const destroy = async (id: number) => {
     const result = await Swal.fire({
         title: 'Delete Location?',
@@ -148,7 +147,7 @@ const destroy = async (id: number) => {
     }
 }
 
-// Show success flash message
+// Flash success
 onMounted(() => {
     if (page.props.flash?.success) {
         Swal.fire({
@@ -315,7 +314,6 @@ onMounted(() => {
                 </span>
                         </td>
                         <td class="px-6 py-4 text-center space-x-5">
-                            <!-- Edit -->
                             <a
                                 :href="route('admin.locations.edit', loc.id)"
                                 class="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 transition-colors"
@@ -326,7 +324,6 @@ onMounted(() => {
                                 </svg>
                             </a>
 
-                            <!-- Delete -->
                             <button
                                 @click="destroy(loc.id)"
                                 class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 transition-colors"
@@ -342,29 +339,27 @@ onMounted(() => {
                 </table>
 
                 <!-- Pagination -->
-                <div v-if="locations.data?.length" class="mt-6 flex flex-col sm:flex-row justify-between items-center gap-4 text-sm text-gray-700 dark:text-gray-300">
-                    <!-- Showing range -->
+                <div class="mt-6 flex flex-col sm:flex-row justify-between items-center gap-4 text-sm text-gray-700 dark:text-gray-300">
                     <div>
                         Showing {{ locations.from || 0 }} to {{ locations.to || 0 }} of {{ locations.total || 0 }} locations
                     </div>
 
-                    <!-- Buttons -->
                     <div class="flex items-center space-x-2">
                         <button
-                            :disabled="!locations.links?.prev"
-                            @click="locations.links?.prev && router.get(locations.links.prev, {}, { preserveState: true, preserveScroll: true })"
+                            :disabled="locations.current_page === 1"
+                            @click="router.get(route('admin.locations.index', { page: locations.current_page - 1 }), {}, { preserveState: true, preserveScroll: true })"
                             class="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         >
                             Previous
                         </button>
 
                         <span class="px-4 py-2 font-medium">
-      Page {{ locations.current_page || 1 }} of {{ locations.last_page || 1 }}
-    </span>
+              Page {{ locations.current_page }} of {{ locations.last_page }}
+            </span>
 
                         <button
-                            :disabled="!locations.links?.next"
-                            @click="locations.links?.next && router.get(locations.links.next, {}, { preserveState: true, preserveScroll: true })"
+                            :disabled="locations.current_page === locations.last_page"
+                            @click="router.get(route('admin.locations.index', { page: locations.current_page + 1 }), {}, { preserveState: true, preserveScroll: true })"
                             class="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         >
                             Next
