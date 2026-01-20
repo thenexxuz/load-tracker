@@ -16,7 +16,8 @@ class LocationController extends Controller
         $locations = Location::query()
             ->with('recyclingLocation:id,short_code,name')
             ->when(request('search'), fn ($q, $search) => $q->where('name', 'like', "%{$search}%")
-                ->orWhere('short_code', 'like', "%{$search}%"))
+                ->orWhere('short_code', 'like', "%{$search}%")
+                ->orWhere('type', 'like', "%{$search}%"))
             ->orderBy('name')
             ->paginate(15);
 
