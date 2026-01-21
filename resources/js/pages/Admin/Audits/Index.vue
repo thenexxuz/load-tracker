@@ -5,7 +5,6 @@ import { ref, watch, onMounted } from 'vue'
 
 import AdminLayout from '@/layouts/AppLayout.vue'
 
-
 const props = defineProps<{
     logs: {
         data: Array<{
@@ -17,9 +16,12 @@ const props = defineProps<{
             changes: object | null
             created_at: string
         }>
-        links: any[]          // For pagination
+        links: any[]
         current_page: number
         last_page: number
+        from: number
+        to: number
+        total: number
     }
     filters: Record<string, any>
 }>()
@@ -29,7 +31,7 @@ const page = usePage()
 const search = ref(props.filters.search || '')
 const modelFilter = ref(props.filters.model || '')
 
-// Live search & filter
+// Live search & filter (preserves pagination)
 watch([search, modelFilter], () => {
     router.get(
         route('admin.audits.index'),
@@ -41,7 +43,7 @@ watch([search, modelFilter], () => {
     )
 })
 
-// Show success message from flash (after some action)
+// Show success message from flash
 onMounted(() => {
     if (page.props.flash?.success) {
         Swal.fire({
@@ -55,13 +57,6 @@ onMounted(() => {
         })
     }
 })
-
-// Pagination helper
-const goToPage = (url: string | null) => {
-    if (url) {
-        router.get(url, {}, { preserveState: true })
-    }
-}
 </script>
 
 <template>
@@ -136,37 +131,43 @@ const goToPage = (url: string | null) => {
                             {{ log.record_id || '—' }}
                         </td>
                         <td class="px-6 py-4 text-gray-600 dark:text-gray-400">
-                <pre v-if="log.changes" class="text-xs bg-gray-50 dark:bg-gray-900 p-2 rounded overflow-auto max-h-32">
-                  {{ JSON.stringify(log.changes, null, 2) }}
-                </pre>
+                            <pre v-if="log.changes" class="text-xs bg-gray-50 dark:bg-gray-900 p-2 rounded overflow-auto max-h-32">
+                              {{ JSON.stringify(log.changes, null, 2) }}
+                            </pre>
                             <span v-else>—</span>
                         </td>
                     </tr>
                     </tbody>
                 </table>
-            </div>
 
-            <!-- Pagination -->
-            <div v-if="logs.data?.length" class="mt-6 flex justify-center items-center space-x-4">
-                <button
-                    :disabled="!logs.links.prev"
-                    @click="goToPage(logs.links.prev)"
-                    class="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 transition-colors"
-                >
-                    Previous
-                </button>
+                <!-- Pagination (same as Locations) -->
+                <div v-if="logs.data?.length" class="mt-6 flex flex-col sm:flex-row justify-between items-center gap-4 text-sm text-gray-700 dark:text-gray-300">
+                    <div>
+                        Showing {{ logs.from || 0 }} to {{ logs.to || 0 }} of {{ logs.total || 0 }} audit records
+                    </div>
 
-                <span class="text-gray-700 dark:text-gray-300">
-          Page {{ logs.current_page }} of {{ logs.last_page }}
-        </span>
+                    <div class="flex items-center space-x-2">
+                        <button
+                            :disabled="logs.current_page === 1"
+                            @click="router.get(route('admin.audits.index', { page: logs.current_page - 1 }), {}, { preserveState: true, preserveScroll: true })"
+                            class="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                            Previous
+                        </button>
 
-                <button
-                    :disabled="!logs.links.next"
-                    @click="goToPage(logs.links.next)"
-                    class="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 transition-colors"
-                >
-                    Next
-                </button>
+                        <span class="px-4 py-2 font-medium">
+                          Page {{ logs.current_page }} of {{ logs.last_page }}
+                        </span>
+
+                        <button
+                            :disabled="logs.current_page === logs.last_page"
+                            @click="router.get(route('admin.audits.index', { page: logs.current_page + 1 }), {}, { preserveState: true, preserveScroll: true })"
+                            class="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                            Next
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </AdminLayout>

@@ -19,6 +19,12 @@ const props = defineProps<{
             carrier: { name: string; short_code: string } | null
             trailer: string | null
         }>
+        links: any[]
+        current_page: number
+        last_page: number
+        from: number
+        to: number
+        total: number
     }
     filters: Record<string, any>
 }>()
@@ -27,12 +33,12 @@ const page = usePage()
 
 const search = ref(props.filters.search || '')
 
-// Live search
+// Live search (preserves pagination)
 watch(search, (value) => {
-    router.get(route('admin.shipments.index'), { search: value }, { preserveState: true })
+    router.get(route('admin.shipments.index'), { search: value }, { preserveState: true, replace: true })
 })
 
-// SweetAlert2-powered delete confirmation
+// Delete with SweetAlert2
 const destroy = async (id: number) => {
     const result = await Swal.fire({
         title: 'Delete Shipment?',
@@ -86,15 +92,13 @@ onMounted(() => {
     }
 })
 
-// Helper to format date as YYYY-MM-DD only
+// Format date to YYYY-MM-DD only
 const formatDate = (dateString: string | null) => {
     if (!dateString) return '—'
-
-    // Split on 'T' and take only the date part
     return dateString.split('T')[0] || '—'
 }
 
-// Helper for hover tooltip (shows full datetime if present)
+// Tooltip: show full original datetime on hover
 const getFullDateTime = (dateString: string | null) => {
     if (!dateString) return 'No date/time recorded'
     return dateString
@@ -174,18 +178,18 @@ const getFullDateTime = (dateString: string | null) => {
                         <td class="px-6 py-4 text-gray-600 dark:text-gray-400">
                             {{ shipment.dc_location?.short_code || '—' }}
                         </td>
-                        <td class="px-6 py-4 text-gray-600 dark:text-gray-400 group relative">
-                <span class="cursor-help" :title="getFullDateTime(shipment.drop_date)">
+                        <td class="px-6 py-4 text-gray-600 dark:text-gray-400 group relative cursor-help">
+                <span :title="getFullDateTime(shipment.drop_date)">
                   {{ formatDate(shipment.drop_date) }}
                 </span>
                         </td>
-                        <td class="px-6 py-4 text-gray-600 dark:text-gray-400 group relative">
-                <span class="cursor-help" :title="getFullDateTime(shipment.pickup_date)">
+                        <td class="px-6 py-4 text-gray-600 dark:text-gray-400 group relative cursor-help">
+                <span :title="getFullDateTime(shipment.pickup_date)">
                   {{ formatDate(shipment.pickup_date) }}
                 </span>
                         </td>
-                        <td class="px-6 py-4 text-gray-600 dark:text-gray-400 group relative">
-                <span class="cursor-help" :title="getFullDateTime(shipment.delivery_date)">
+                        <td class="px-6 py-4 text-gray-600 dark:text-gray-400 group relative cursor-help">
+                <span :title="getFullDateTime(shipment.delivery_date)">
                   {{ formatDate(shipment.delivery_date) }}
                 </span>
                         </td>
@@ -196,7 +200,6 @@ const getFullDateTime = (dateString: string | null) => {
                             {{ shipment.trailer || '—' }}
                         </td>
                         <td class="px-6 py-4 text-center space-x-5">
-                            <!-- Edit -->
                             <a
                                 :href="route('admin.shipments.edit', shipment.id)"
                                 class="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 transition-colors"
@@ -207,7 +210,6 @@ const getFullDateTime = (dateString: string | null) => {
                                 </svg>
                             </a>
 
-                            <!-- Delete -->
                             <button
                                 @click="destroy(shipment.id)"
                                 class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 transition-colors"
@@ -221,6 +223,35 @@ const getFullDateTime = (dateString: string | null) => {
                     </tr>
                     </tbody>
                 </table>
+
+                <!-- Pagination -->
+                <div v-if="shipments.data?.length" class="mt-6 flex flex-col sm:flex-row justify-between items-center gap-4 text-sm text-gray-700 dark:text-gray-300">
+                    <div>
+                        Showing {{ shipments.from || 0 }} to {{ shipments.to || 0 }} of {{ shipments.total || 0 }} shipments
+                    </div>
+
+                    <div class="flex items-center space-x-2">
+                        <button
+                            :disabled="shipments.current_page === 1"
+                            @click="router.get(route('admin.shipments.index', { page: shipments.current_page - 1 }), {}, { preserveState: true, preserveScroll: true })"
+                            class="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                            Previous
+                        </button>
+
+                        <span class="px-4 py-2 font-medium">
+              Page {{ shipments.current_page }} of {{ shipments.last_page }}
+            </span>
+
+                        <button
+                            :disabled="shipments.current_page === shipments.last_page"
+                            @click="router.get(route('admin.shipments.index', { page: shipments.current_page + 1 }), {}, { preserveState: true, preserveScroll: true })"
+                            class="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                            Next
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </AdminLayout>
