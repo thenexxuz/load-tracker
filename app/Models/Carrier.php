@@ -85,8 +85,8 @@ class Carrier extends Model
             }
         }
 
-        return "$total shipment" . ($total === 1 ? '' : 's') 
-            . ($summary ? ' (' . implode(', ', $summary) . ')' : '');
+        return "$total shipment".($total === 1 ? '' : 's')
+            .($summary ? ' ('.implode(', ', $summary).')' : '');
     }
 
     /**
@@ -107,12 +107,12 @@ class Carrier extends Model
     {
         $latest = $this->latestShipment;
 
-        if (!$latest) {
+        if (! $latest) {
             return 'No shipments yet';
         }
 
-        $date = $latest->delivery_date 
-            ? $latest->delivery_date->format('M j, Y') 
+        $date = $latest->delivery_date
+            ? $latest->delivery_date->format('M j, Y')
             : ($latest->drop_date ? $latest->drop_date->format('M j, Y') : 'No date');
 
         return "Latest: {$latest->shipment_number} ({$latest->status}) on {$date}";

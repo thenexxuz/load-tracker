@@ -6,65 +6,69 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
+    /**
+     * Run the migrations.
+     */
     public function up(): void
     {
         Schema::create('shipments', function (Blueprint $table) {
             $table->id();
-            $table->uuid('guid')->unique(); // Optional: unique identifier
 
-            // Core identifiers
-            $table->string('shipment_number')->unique();
-            $table->string('bol')->nullable(); // Bill of Lading
-            $table->string('po_number')->nullable(); // Purchase Order
+            $table->uuid('guid')->unique();
 
-            // Status (enum or string - using string for flexibility)
-            $table->string('status')->default('pending'); // e.g. pending, picked_up, in_transit, delivered, cancelled
+            $table->string('shipment_number')->nullable()->unique()->index();
 
-            // Locations (foreign keys to your Location model)
+            $table->string('bol')->nullable();
+            $table->string('po_number')->nullable();
+
+            $table->string('status')
+                ->default('Pending');
+
             $table->foreignId('shipper_location_id')
-                ->constrained('locations')
-                ->onDelete('restrict'); // Prevent deletion if used
-
-            $table->foreignId('dc_location_id')
-                ->nullable()
                 ->constrained('locations')
                 ->onDelete('restrict');
 
-            // Carrier
+            $table->foreignId('dc_location_id')
+                ->constrained('locations')
+                ->onDelete('restrict');
+
             $table->foreignId('carrier_id')
                 ->nullable()
                 ->constrained('carriers')
                 ->onDelete('set null');
 
-            // Dates & Times
             $table->date('drop_date')->nullable();
             $table->dateTime('pickup_date')->nullable();
             $table->dateTime('delivery_date')->nullable();
 
-            // Quantities
             $table->unsignedInteger('rack_qty')->default(0);
             $table->unsignedInteger('load_bar_qty')->default(0);
             $table->unsignedInteger('strap_qty')->default(0);
 
-            // Trailer / Equipment
             $table->string('trailer')->nullable();
+            $table->string('drayage')->nullable();
 
-            // Drayage (yes/no or string?)
-            $table->boolean('drayage')->default(false);
+            $table->dateTime('on_site')->nullable();
+            $table->dateTime('shipped')->nullable();
+            $table->dateTime('crossed_border')->nullable();
+            $table->dateTime('recycling_sent')->nullable();
+            $table->dateTime('paperwork_sent')->nullable();
+            $table->dateTime('delivery_sent')->nullable();  // was delivery_alert_sent in some versions
 
-            // Flags
-            $table->boolean('on_site')->default(false);
-            $table->boolean('shipped')->default(false);
-            $table->boolean('recycling_sent')->default(false);
-            $table->boolean('paperwork_sent')->default(false);
-            $table->boolean('delivery_alert_sent')->default(false);
+            $table->string('consolidation_number')->nullable();
 
-            // Timestamps
+            $table->text('notes')->nullable();
+
+            $table->json('other')->nullable();
+
             $table->timestamps();
-            $table->softDeletes(); // Optional: allow soft deletion
+            $table->softDeletes();
         });
     }
 
+    /**
+     * Reverse the migrations.
+     */
     public function down(): void
     {
         Schema::dropIfExists('shipments');

@@ -10,10 +10,11 @@ return new class extends Migration
     {
         Schema::create('carriers', function (Blueprint $table) {
             $table->id();
-            $table->uuid('guid')->unique();
-            $table->string('short_code')->unique();
-            $table->string('name');
-            $table->text('emails')->nullable();
+            $table->uuid('guid')->unique()->index();
+            $table->string('short_code', 50)->unique()->index();
+            $table->string('wt_code', 50)->nullable()->index();
+            $table->string('name', 255);
+            $table->text('emails')->nullable()->comment('Semicolon-separated list of email addresses');
             $table->boolean('is_active')->default(true);
             $table->timestamps();
         });
