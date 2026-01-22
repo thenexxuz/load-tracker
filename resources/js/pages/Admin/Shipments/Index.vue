@@ -19,7 +19,6 @@ const props = defineProps<{
             carrier: { name: string; short_code: string } | null
             trailer: string | null
         }>
-        links: any[]
         current_page: number
         last_page: number
         from: number
@@ -103,6 +102,11 @@ const getFullDateTime = (dateString: string | null) => {
     if (!dateString) return 'No date/time recorded'
     return dateString
 }
+
+// Navigate to Show page when row is clicked
+const goToShow = (id: number) => {
+    router.visit(route('admin.shipments.show', id))
+}
 </script>
 
 <template>
@@ -162,7 +166,12 @@ const getFullDateTime = (dateString: string | null) => {
                     </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                    <tr v-for="shipment in shipments.data" :key="shipment.id">
+                    <tr
+                        v-for="shipment in shipments.data"
+                        :key="shipment.id"
+                        class="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer transition-colors"
+                        @click="goToShow(shipment.id)"
+                    >
                         <td class="px-6 py-4 capitalize text-gray-600 dark:text-gray-400">
                             {{ shipment.status }}
                         </td>
@@ -199,11 +208,12 @@ const getFullDateTime = (dateString: string | null) => {
                         <td class="px-6 py-4 text-gray-600 dark:text-gray-400">
                             {{ shipment.trailer || '—' }}
                         </td>
-                        <td class="px-6 py-4 text-center space-x-5">
+                        <td class="px-6 py-4 text-center space-x-5" @click.stop>
                             <a
                                 :href="route('admin.shipments.edit', shipment.id)"
                                 class="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 transition-colors"
                                 title="Edit Shipment"
+                                @click.stop
                             >
                                 <svg class="w-5.5 h-5.5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
@@ -211,7 +221,7 @@ const getFullDateTime = (dateString: string | null) => {
                             </a>
 
                             <button
-                                @click="destroy(shipment.id)"
+                                @click.stop="destroy(shipment.id)"
                                 class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 transition-colors"
                                 title="Delete Shipment"
                             >
