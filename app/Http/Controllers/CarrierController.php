@@ -17,7 +17,7 @@ class CarrierController extends Controller
             ->when(request('search'), fn($q, $search) => $q->where('name', 'like', "%{$search}%")
                 ->orWhere('short_code', 'like', "%{$search}%")
                 ->orWhere('contact_name', 'like', "%{$search}%")
-                ->orWhere('email', 'like', "%{$search}%"))
+                ->orWhere('emails', 'like', "%{$search}%"))
             ->orderBy('name')
             ->paginate(15);
 
@@ -80,7 +80,7 @@ class CarrierController extends Controller
 
     public function destroy(Carrier $carrier)
     {
-        if ($carrier->loads()->exists()) {
+        if ($carrier->shipments()->exists()) {
             return back()->withErrors(['error' => 'Cannot delete carrier in use.']);
         }
 
@@ -120,13 +120,20 @@ class CarrierController extends Controller
             'updated_at',
         ]);
 
-        // Transform for clean TSV output
+        // Transform for clean TSV output – emails use semicolon instead of comma
         $exportData = $carriers->map(function ($carrier) {
+            $emails = $carrier->emails;
+
+            // If email contains commas, replace them with semicolons
+            if (str_contains($emails, ',')) {
+                $emails = str_replace(',', ';', $emails);
+            }
+
             return [
                 'short_code'    => $carrier->short_code,
                 'name'          => $carrier->name ?? '',
                 'contact_name'  => $carrier->contact_name ?? '',
-                'email'         => $carrier->email ?? '',
+                'emails'        => $emails ?? '',
                 'phone'         => $carrier->phone ?? '',
                 'address'       => $carrier->address ?? '',
                 'city'          => $carrier->city ?? '',
@@ -142,7 +149,7 @@ class CarrierController extends Controller
 
         // Headers
         $headers = [
-            'short_code', 'name', 'contact_name', 'email', 'phone',
+            'short_code', 'name', 'contact_name', 'emails', 'phone',
             'address', 'city', 'state', 'zip', 'country',
             'is_active', 'notes', 'created_at', 'updated_at'
         ];
@@ -157,7 +164,7 @@ class CarrierController extends Controller
                     $value = '"' . str_replace('"', '""', $value) . '"';
                 }
                 return $value;
-            }, $row)) . "\n";
+            }, $row->toArray())) . "\n";
         }
 
         $filename = 'carriers_export_' . now()->format('Y-m-d_His') . '.tsv';
@@ -195,7 +202,7 @@ class CarrierController extends Controller
                     'short_code'   => ['required', 'string', 'max:50'],
                     'name'         => ['required', 'string', 'max:255'],
                     'contact_name' => ['nullable', 'string', 'max:255'],
-                    'email'        => ['nullable', 'email', 'max:255'],
+                    'emails'       => ['nullable', 'string'],
                     'phone'        => ['nullable', 'string', 'max:50'],
                     'address'      => ['nullable', 'string', 'max:255'],
                     'city'         => ['nullable', 'string', 'max:100'],

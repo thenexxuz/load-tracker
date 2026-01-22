@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { Head, router, usePage } from '@inertiajs/vue3'
-import { ref, watch, onMounted } from 'vue'
 import { useForm } from '@inertiajs/vue3'
-import AdminLayout from '@/layouts/AppLayout.vue'
 import Swal from 'sweetalert2'
+import { ref, watch, onMounted } from 'vue'
+
+import AdminLayout from '@/layouts/AppLayout.vue'
 
 const props = defineProps<{
   carriers: {
@@ -160,6 +161,27 @@ onMounted(() => {
     })
   }
 })
+
+// Helper to count emails and format tooltip
+const getEmailInfo = (email: string | null) => {
+  if (!email || email.trim() === '') {
+    return {
+      count: 0,
+      tooltip: 'No emails set for this carrier'
+    }
+  }
+
+  const emails = email.split(';')
+    .map(e => e.trim())
+    .filter(e => e.length > 0)
+
+  const count = emails.length
+  const tooltip = count === 0 
+    ? 'No emails set for this carrier'
+    : emails.join('; ')
+
+  return { count, tooltip }
+}
 </script>
 
 <template>
@@ -212,7 +234,7 @@ onMounted(() => {
               <li>short_code</li>
               <li>name</li>
               <li>contact_name</li>
-              <li>email</li>
+              <li>email (semicolon delimited if multiple)</li>
               <li>phone</li>
               <li>address</li>
               <li>city</li>
@@ -287,7 +309,7 @@ onMounted(() => {
               <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300">Short Code</th>
               <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300">Name</th>
               <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300">Contact Name</th>
-              <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300">Email</th>
+              <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300">Emails</th>
               <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300">Phone</th>
               <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300">Active</th>
               <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300 text-center">Actions</th>
@@ -304,8 +326,10 @@ onMounted(() => {
               <td class="px-6 py-4 text-gray-600 dark:text-gray-400">
                 {{ carrier.contact_name || '—' }}
               </td>
-              <td class="px-6 py-4 text-gray-600 dark:text-gray-400">
-                {{ carrier.email || '—' }}
+              <td class="px-6 py-4 text-gray-600 dark:text-gray-400 group relative cursor-help">
+                <span :title="getEmailInfo(carrier.emails).tooltip">
+                  {{ getEmailInfo(carrier.emails).count }}
+                </span>
               </td>
               <td class="px-6 py-4 text-gray-600 dark:text-gray-400">
                 {{ carrier.phone || '—' }}
