@@ -27,12 +27,16 @@ Route::middleware(['auth', 'role:administrator'])->prefix('admin')->name('admin.
 });
 
 Route::middleware(['auth', 'role:administrator|supervisor'])->prefix('admin')->name('admin.')->group(function () {
+    // Carrier Routes
     Route::post('carriers/import', [CarrierController::class, 'import'])->name('carriers.import');
     Route::get('carriers/export', [CarrierController::class, 'export'])->name('carriers.export');
     Route::resource('carriers', CarrierController::class);
+    // Location Routes
     Route::post('locations/import', [LocationController::class, 'import'])->name('locations.import');
     Route::get('locations/export', [LocationController::class, 'export'])->name('locations.export');
     Route::resource('locations', LocationController::class);
+    // Shipment Routes
+    Route::post('shipments/pbi-import', [ShipmentController::class, 'pbiImport'])->name('shipments.pbi-import');
     Route::resource('shipments', ShipmentController::class);
 });
 
