@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Validator;
 use Inertia\Inertia;
+use League\Csv\Writer;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 
 class ShipmentController extends Controller
@@ -168,15 +169,15 @@ class ShipmentController extends Controller
     }
 
     /**
-     * Import shipments from Power BI / Excel XLSX file
-     * - Ignores first two rows
+     * Import shipments from Power BI XLSX file
+     * - Skips first two rows
      * - Uses third row as headers
-     * - Assumes all dates in file are in format m/d/Y
+     * - Failed rows are collected and returned as downloadable TSV
      */
     public function pbiImport(Request $request)
     {
         $request->validate([
-            'file' => 'required|file|mimes:xlsx,xls|max:10240', // max 10MB
+            'file' => 'required|file|mimes:xlsx,xls|max:10240',
         ]);
 
         $file = $request->file('file');
@@ -186,25 +187,29 @@ class ShipmentController extends Controller
             $worksheet = $spreadsheet->getActiveSheet();
             $rows = $worksheet->toArray();
 
-            // Remove first two rows (0-based index)
+            // Skip first two rows
             $dataRows = array_slice($rows, 2);
 
             if (empty($dataRows)) {
-                return back()->withErrors(['file' => 'The file has no data after the first two rows.']);
+                return back()->withErrors(['file' => 'No data found after the first two rows.']);
             }
 
             $imported = 0;
-            $errors = [];
+            $failedRows = [];
+            $headerRow = $rows[2] ?? []; // original headers for failed TSV
 
             foreach ($dataRows as $rowIndex => $row) {
-                // Map columns by header name (case-insensitive, trim)
+                // Map by header (case-insensitive, trimmed)
                 $mapped = [];
                 foreach ($row as $colIndex => $value) {
-                    $header = trim(strtolower($rows[2][$colIndex] ?? ''));
+                    $header = trim(strtolower($headerRow[$colIndex] ?? ''));
                     if ($header) {
                         $mapped[$header] = trim($value ?? '');
                     }
                 }
+
+                // Add original row data for failed TSV (preserves original order/values)
+                $originalRow = $row;
 
                 $validator = Validator::make($mapped, [
                     'load' => ['required', 'string', 'max:100'],
@@ -212,70 +217,70 @@ class ShipmentController extends Controller
                     'msft po#' => ['nullable', 'string', 'max:100'],
                     'origin' => ['required', 'string', 'max:50'],
                     'destination' => ['required', 'string', 'max:50'],
-                    'ship date' => ['required', 'string'], // we'll parse later
+                    'ship date' => ['required', 'string'],
                     'deliver date' => ['nullable', 'string'],
                     'sum of pallets' => ['required', 'integer', 'min:0'],
                 ]);
 
                 if ($validator->fails()) {
-                    $errors[] = "Row " . ($rowIndex + 3) . ": " . implode(', ', $validator->errors()->all());
+                    $errorMsg = implode('; ', $validator->errors()->all());
+                    $failedRows[] = array_merge($originalRow, ['ERROR' => $errorMsg]);
+
                     continue;
                 }
 
                 $validated = $validator->validated();
 
-                // ────────────────────────────────────────────────
-                // Parse dates with format m/d/Y
-                // ────────────────────────────────────────────────
+                // Parse dates strictly as m/d/Y
                 try {
                     $pickupDateRaw = Carbon::createFromFormat('m/d/Y', $validated['ship date']);
-                    if (!$pickupDateRaw) {
-                        throw new \Exception("Invalid ship date format");
+                    if (! $pickupDateRaw) {
+                        throw new \Exception;
                     }
                 } catch (\Exception $e) {
-                    $errors[] = "Row " . ($rowIndex + 3) . ": Invalid 'Ship Date' format (expected m/d/Y).";
+                    $failedRows[] = array_merge($originalRow, ['ERROR' => "Invalid 'Ship Date' format (expected m/d/Y)"]);
+
                     continue;
                 }
 
                 $deliveryDateRaw = null;
-                if (!empty($validated['deliver date'])) {
+                if (! empty($validated['deliver date'])) {
                     try {
                         $deliveryDateRaw = Carbon::createFromFormat('m/d/Y', $validated['deliver date']);
-                        if (!$deliveryDateRaw) {
-                            throw new \Exception("Invalid deliver date format");
+                        if (! $deliveryDateRaw) {
+                            throw new \Exception;
                         }
                     } catch (\Exception $e) {
-                        $errors[] = "Row " . ($rowIndex + 3) . ": Invalid 'Deliver Date' format (expected m/d/Y).";
+                        $failedRows[] = array_merge($originalRow, ['ERROR' => "Invalid 'Deliver Date' format (expected m/d/Y)"]);
+
                         continue;
                     }
                 }
 
-                // Find shipper and DC locations by short_code
-                $shipperLocation = Location::where('short_code', $validated['origin'])->first();
-                $dcLocation = Location::where('short_code', $validated['destination'])->first();
+                // Lookup locations
+                $shipper = Location::where('short_code', $validated['origin'])->first();
+                $dc = Location::where('short_code', $validated['destination'])->first();
 
-                if (!$shipperLocation) {
-                    $errors[] = "Row " . ($rowIndex + 3) . ": Origin location '{$validated['origin']}' not found.";
+                if (! $shipper) {
+                    $failedRows[] = array_merge($originalRow, ['ERROR' => "Origin location '{$validated['origin']}' not found"]);
+
+                    continue;
+                }
+                if (! $dc) {
+                    $failedRows[] = array_merge($originalRow, ['ERROR' => "Destination location '{$validated['destination']}' not found"]);
+
                     continue;
                 }
 
-                if (!$dcLocation) {
-                    $errors[] = "Row " . ($rowIndex + 3) . ": Destination location '{$validated['destination']}' not found.";
-                    continue;
-                }
-
-                // Apply time from DC location's expected_arrival_time (if exists)
-                $time = $dcLocation->expected_arrival_time
-                    ? Carbon::parse($dcLocation->expected_arrival_time)->format('H:i:s')
+                // Time from DC expected arrival (if exists)
+                $time = $dc->expected_arrival_time
+                    ? Carbon::parse($dc->expected_arrival_time)->format('H:i:s')
                     : '00:00:00';
 
-                $pickupDate = $pickupDateRaw->format('Y-m-d') . ' ' . $time;
+                $pickupDate = $pickupDateRaw->format('Y-m-d').' '.$time;
+                $deliveryDate = $deliveryDateRaw ? $deliveryDateRaw->format('Y-m-d').' '.$time : null;
 
-                $deliveryDate = $deliveryDateRaw
-                    ? $deliveryDateRaw->format('Y-m-d') . ' ' . $time
-                    : null;
-
-                // Drop date: 2 days before pickup, but move to Friday if weekend
+                // Drop date: 2 days before pickup, adjust to Friday if weekend
                 $dropDate = Carbon::parse($pickupDate)->subDays(2);
                 if ($dropDate->isSaturday()) {
                     $dropDate->subDay();
@@ -288,34 +293,52 @@ class ShipmentController extends Controller
                     'shipment_number' => $validated['load'],
                     'status' => $validated['status'],
                     'po_number' => $validated['msft po#'] ?? null,
-                    'shipper_location_id' => $shipperLocation->id,
-                    'dc_location_id' => $dcLocation->id,
+                    'shipper_location_id' => $shipper->id,
+                    'dc_location_id' => $dc->id,
                     'carrier_id' => null,
                     'drop_date' => $dropDate,
                     'pickup_date' => $pickupDate,
                     'delivery_date' => $deliveryDate,
                     'rack_qty' => (int) $validated['sum of pallets'],
-                    // bol, load_bar_qty, strap_qty left unset → handled by model methods later
-                    // all other fields remain null / default
                 ]);
 
                 $imported++;
             }
 
-            $message = "$imported shipment(s) imported successfully.";
-            if ($errors) {
-                $message .= " " . count($errors) . " rows skipped due to errors.";
+            // ────────────────────────────────────────────────
+// If there are failed rows → generate and return TSV download
+// ────────────────────────────────────────────────
+            if (!empty($failedRows)) {
+                // Prepend original headers + 'ERROR' column
+                $tsvHeaders = array_merge($headerRow, ['ERROR']);
+
+                // Create CSV writer with tab delimiter
+                $writer = Writer::createFromString('');
+                $writer->setDelimiter("\t");
+                $writer->insertOne($tsvHeaders);
+
+                foreach ($failedRows as $failedRow) {
+                    $writer->insertOne($failedRow);
+                }
+
+                $tsvContent = (string) $writer;
+
+                $filename = 'failed_shipments_' . now()->format('Y-m-d_His') . '.tsv';
+
+                // Flash warning message BEFORE returning the file
+                session()->flash('warning', "$imported shipments imported successfully. " . count($failedRows) . " rows failed and are included in the downloaded TSV file.");
+
+                return response($tsvContent)
+                    ->header('Content-Type', 'text/tab-separated-values; charset=utf-8')
+                    ->header('Content-Disposition', "attachment; filename=\"$filename\"");
             }
 
-            if ($imported === 0 && $errors) {
-                return back()->withErrors(['file' => implode('; ', $errors)]);
-            }
-
+            // No failures → normal success redirect
             return redirect()->route('admin.shipments.index')
-                ->with('success', $message);
+                ->with('success', "$imported shipment(s) imported successfully.");
 
         } catch (\Exception $e) {
-            return back()->withErrors(['file' => 'Failed to process file: ' . $e->getMessage()]);
+            return back()->withErrors(['file' => 'Failed to process file: '.$e->getMessage()]);
         }
     }
 }

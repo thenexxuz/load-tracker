@@ -141,7 +141,7 @@ const destroy = async (id: number) => {
   }
 }
 
-// Flash success
+// Flash success / warning
 onMounted(() => {
   if (page.props.flash?.success) {
     Swal.fire({
@@ -149,6 +149,18 @@ onMounted(() => {
       title: 'Success!',
       text: page.props.flash.success,
       timer: 3000,
+      showConfirmButton: false,
+      toast: true,
+      position: 'top-end'
+    })
+  }
+
+  if (page.props.flash?.warning) {
+    Swal.fire({
+      icon: 'warning',
+      title: 'Partial Import Warning',
+      text: page.props.flash.warning,
+      timer: 6000,
       showConfirmButton: false,
       toast: true,
       position: 'top-end'
