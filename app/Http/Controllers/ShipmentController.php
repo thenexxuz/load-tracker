@@ -14,23 +14,46 @@ use PhpOffice\PhpSpreadsheet\IOFactory;
 
 class ShipmentController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $shipments = Shipment::query()
-            ->with(['shipperLocation:id,short_code,name', 'dcLocation:id,short_code,name', 'carrier:id,name'])
-            ->when(request('search'), function ($q, $search) {
+        $query = Shipment::query()
+            ->with(['shipperLocation', 'dcLocation', 'carrier']);
+
+        // Search
+        if ($search = $request->input('search')) {
+            $query->where(function ($q) use ($search) {
                 $q->where('shipment_number', 'like', "%{$search}%")
                     ->orWhere('bol', 'like', "%{$search}%")
-                    ->orWhere('po_number', 'like', "%{$search}%")
-                    ->orWhereHas('shipperLocation', fn ($q) => $q->where('short_code', 'like', "%{$search}%"))
-                    ->orWhereHas('dcLocation', fn ($q) => $q->where('short_code', 'like', "%{$search}%"));
-            })
-            ->orderBy('created_at', 'desc')
-            ->paginate(15);
+                    ->orWhere('po_number', 'like', "%{$search}%");
+            });
+        }
+
+        // Exclude statuses
+        if ($excludedStatuses = $request->input('excluded_statuses')) {
+            $query->whereNotIn('status', (array) $excludedStatuses);
+        }
+
+        // Exclude shippers
+        if ($excludedShippers = $request->input('excluded_shippers')) {
+            $query->whereHas('shipperLocation', function ($q) use ($excludedShippers) {
+                $q->whereNotIn('short_code', (array) $excludedShippers);
+            });
+        }
+
+        // Exclude DCs
+        if ($excludedDcs = $request->input('excluded_dcs')) {
+            $query->whereHas('dcLocation', function ($q) use ($excludedDcs) {
+                $q->whereNotIn('short_code', (array) $excludedDcs);
+            });
+        }
+
+        $shipments = $query->latest()->paginate(15);
 
         return Inertia::render('Admin/Shipments/Index', [
             'shipments' => $shipments,
-            'filters' => request()->only('search'),
+            'statuses' => Shipment::select('status')->distinct()->pluck('status')->sort()->values(),
+            'all_shipper_codes' => Location::where('type', 'pickup')->pluck('short_code')->unique()->sort()->values(),
+            'all_dc_codes' => Location::where('type', 'distribution_center')->pluck('short_code')->unique()->sort()->values(),
         ]);
     }
 
@@ -172,7 +195,7 @@ class ShipmentController extends Controller
      * Import shipments from Power BI XLSX file
      * - Skips first two rows
      * - Uses third row as headers
-     * - Failed rows are collected and returned as downloadable TSV
+     * - Failed rows stored in session → downloaded via separate route
      */
     public function pbiImport(Request $request)
     {
@@ -208,7 +231,7 @@ class ShipmentController extends Controller
                     }
                 }
 
-                // Add original row data for failed TSV (preserves original order/values)
+                // Preserve original row data for failed TSV
                 $originalRow = $row;
 
                 $validator = Validator::make($mapped, [
@@ -231,7 +254,7 @@ class ShipmentController extends Controller
 
                 $validated = $validator->validated();
 
-                // Parse dates strictly as m/d/Y
+                // Parse dates as m/d/Y
                 try {
                     $pickupDateRaw = Carbon::createFromFormat('m/d/Y', $validated['ship date']);
                     if (! $pickupDateRaw) {
@@ -306,13 +329,11 @@ class ShipmentController extends Controller
             }
 
             // ────────────────────────────────────────────────
-// If there are failed rows → generate and return TSV download
-// ────────────────────────────────────────────────
-            if (!empty($failedRows)) {
-                // Prepend original headers + 'ERROR' column
+            // Handle failed rows
+            // ────────────────────────────────────────────────
+            if (! empty($failedRows)) {
+                // Build TSV content
                 $tsvHeaders = array_merge($headerRow, ['ERROR']);
-
-                // Create CSV writer with tab delimiter
                 $writer = Writer::createFromString('');
                 $writer->setDelimiter("\t");
                 $writer->insertOne($tsvHeaders);
@@ -322,23 +343,43 @@ class ShipmentController extends Controller
                 }
 
                 $tsvContent = (string) $writer;
+                $filename = 'failed_shipments_'.now()->format('Y-m-d_His').'.tsv';
 
-                $filename = 'failed_shipments_' . now()->format('Y-m-d_His') . '.tsv';
+                // Store in session for one-time download
+                session()->flash('failed_tsv_content', $tsvContent);
+                session()->flash('failed_tsv_filename', $filename);
 
-                // Flash warning message BEFORE returning the file
-                session()->flash('warning', "$imported shipments imported successfully. " . count($failedRows) . " rows failed and are included in the downloaded TSV file.");
-
-                return response($tsvContent)
-                    ->header('Content-Type', 'text/tab-separated-values; charset=utf-8')
-                    ->header('Content-Disposition', "attachment; filename=\"$filename\"");
+                return redirect()->route('admin.shipments.index')
+                    ->with('warning', "$imported shipments imported successfully. ".count($failedRows).' rows failed — download the failed rows below.');
             }
 
-            // No failures → normal success redirect
+            // All good
             return redirect()->route('admin.shipments.index')
                 ->with('success', "$imported shipment(s) imported successfully.");
 
         } catch (\Exception $e) {
             return back()->withErrors(['file' => 'Failed to process file: '.$e->getMessage()]);
         }
+    }
+
+    /**
+     * Download the failed rows TSV (one-time use)
+     */
+    public function downloadFailedTsv()
+    {
+        $content = session('failed_tsv_content');
+        $filename = session('failed_tsv_filename', 'failed_shipments.tsv');
+
+        if (! $content) {
+            return redirect()->route('admin.shipments.index')
+                ->with('error', 'No failed file available to download.');
+        }
+
+        // Clear session data after serving
+        session()->forget(['failed_tsv_content', 'failed_tsv_filename']);
+
+        return response($content)
+            ->header('Content-Type', 'text/tab-separated-values; charset=utf-8')
+            ->header('Content-Disposition', "attachment; filename=\"$filename\"");
     }
 }

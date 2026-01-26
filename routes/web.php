@@ -37,6 +37,8 @@ Route::middleware(['auth', 'role:administrator|supervisor'])->prefix('admin')->n
     Route::resource('locations', LocationController::class);
     // Shipment Routes
     Route::post('shipments/pbi-import', [ShipmentController::class, 'pbiImport'])->name('shipments.pbi-import');
+    Route::get('shipments/failed-tsv', [ShipmentController::class, 'downloadFailedTsv'])->name('shipments.download-failed-tsv');
+
     Route::resource('shipments', ShipmentController::class);
 });
 
