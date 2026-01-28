@@ -163,22 +163,22 @@ onMounted(() => {
 })
 
 // Helper to count emails and format tooltip
-const getEmailInfo = (email: string | null) => {
-  if (!email || email.trim() === '') {
+const getEmailInfo = (emails: string | null) => {
+  if (!emails || emails.trim() === '') {
     return {
       count: 0,
       tooltip: 'No emails set for this carrier'
     }
   }
 
-  const emails = email.split(';')
+  const emailArr = emails.split(/,|;/gi)
     .map(e => e.trim())
     .filter(e => e.length > 0)
 
-  const count = emails.length
+  const count = emailArr.length
   const tooltip = count === 0 
     ? 'No emails set for this carrier'
-    : emails.join('; ')
+    : emailArr.join('; ')
 
   return { count, tooltip }
 }
