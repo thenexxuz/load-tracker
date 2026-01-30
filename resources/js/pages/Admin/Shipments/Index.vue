@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, router, usePage } from '@inertiajs/vue3'
-import { ref, onMounted } from 'vue'
+import { ref, watch, onMounted, computed } from 'vue'
+import { onClickOutside } from '@vueuse/core'
 import { useForm } from '@inertiajs/vue3'
 import AdminLayout from '@/layouts/AppLayout.vue'
 import Swal from 'sweetalert2'
@@ -12,7 +13,7 @@ const props = defineProps<{
       status: string
       bol: string | null
       shipment_number: string
-      pickup_location: { short_code: string; name: string | null } | null  // ← changed from shipper_location
+      pickup_location: { short_code: string; name: string | null } | null
       dc_location: { short_code: string; name: string | null } | null
       drop_date: string | null
       pickup_date: string | null
@@ -26,13 +27,114 @@ const props = defineProps<{
     to: number
     total: number
   }
+  statuses: string[]
+  all_shipper_codes: string[]     // Pickup location short codes
+  all_dc_codes: string[]          // DC location short codes
 }>()
 
 const page = usePage()
 
+// ── Status filter ───────────────────────────────────────────────────────
+const selectedStatuses = ref<string[]>([...props.statuses]) // all selected by default
+
+const excludedStatuses = computed(() =>
+  props.statuses.filter(s => !selectedStatuses.value.includes(s))
+)
+
+// ── Pickup Location filter ──────────────────────────────────────────────
+const selectedPickupLocations = ref<string[]>([...props.all_shipper_codes])
+
+const excludedPickupLocations = computed(() =>
+  props.all_shipper_codes.filter(s => !selectedPickupLocations.value.includes(s))
+)
+
+// ── DC Location filter ──────────────────────────────────────────────────
+const selectedDcLocations = ref<string[]>([...props.all_dc_codes])
+
+const excludedDcLocations = computed(() =>
+  props.all_dc_codes.filter(s => !selectedDcLocations.value.includes(s))
+)
+
+// ── Shared filter application ───────────────────────────────────────────
+function applyFilters() {
+  router.post(route('admin.shipments.filter'), {
+    excluded_statuses: excludedStatuses.value.length ? excludedStatuses.value : undefined,
+    excluded_pickup_locations: excludedPickupLocations.value.length ? excludedPickupLocations.value : undefined,
+    excluded_dc_locations: excludedDcLocations.value.length ? excludedDcLocations.value : undefined,
+    search: search.value.trim() || undefined,
+  }, {
+    preserveState: true,
+    preserveScroll: true,
+    replace: true
+  })
+}
+
+watch([selectedStatuses, selectedPickupLocations, selectedDcLocations], applyFilters, { deep: true })
+
+// Search
 const search = ref('')
 
-// PBI Import Modal
+watch(search, () => applyFilters())
+
+// ── Dropdown visibility ─────────────────────────────────────────────────
+const showStatusFilter  = ref(false)
+const showPickupFilter  = ref(false)
+const showDcFilter      = ref(false)
+
+// Refs for outside-click detection
+const statusFilterRef   = ref<HTMLElement | null>(null)
+const pickupFilterRef   = ref<HTMLElement | null>(null)
+const dcFilterRef       = ref<HTMLElement | null>(null)
+
+onClickOutside(statusFilterRef, () => showStatusFilter.value = false)
+onClickOutside(pickupFilterRef, () => showPickupFilter.value = false)
+onClickOutside(dcFilterRef,     () => showDcFilter.value = false)
+
+// ── Toggle functions ────────────────────────────────────────────────────
+const toggleStatusFilter = () => {
+  showStatusFilter.value = !showStatusFilter.value
+  showPickupFilter.value = false
+  showDcFilter.value = false
+}
+
+const togglePickupFilter = () => {
+  showPickupFilter.value = !showPickupFilter.value
+  showStatusFilter.value = false
+  showDcFilter.value = false
+}
+
+const toggleDcFilter = () => {
+  showDcFilter.value = !showDcFilter.value
+  showStatusFilter.value = false
+  showPickupFilter.value = false
+}
+
+// ── Dynamic header text ─────────────────────────────────────────────────
+const statusHeaderText = computed(() => {
+  const total = props.statuses.length
+  const shown = selectedStatuses.value.length
+  if (shown === total) return 'Status'
+  if (shown === 0) return 'Status (none)'
+  return `Status (${shown}/${total})`
+})
+
+const pickupHeaderText = computed(() => {
+  const total = props.all_shipper_codes.length
+  const shown = selectedPickupLocations.value.length
+  if (shown === total) return 'Pickup Location'
+  if (shown === 0) return 'Pickup Location (none)'
+  return `Pickup Location (${shown}/${total})`
+})
+
+const dcHeaderText = computed(() => {
+  const total = props.all_dc_codes.length
+  const shown = selectedDcLocations.value.length
+  if (shown === total) return 'DC'
+  if (shown === 0) return 'DC (none)'
+  return `DC (${shown}/${total})`
+})
+
+// ── PBI Import Modal ────────────────────────────────────────────────────
 const showPbiImportModal = ref(false)
 const selectedPbiFile = ref<File | null>(null)
 
@@ -90,7 +192,7 @@ const importPbiFile = () => {
   })
 }
 
-// Delete
+// ── Delete ──────────────────────────────────────────────────────────────
 const destroy = async (id: number) => {
   const result = await Swal.fire({
     title: 'Delete Shipment?',
@@ -129,7 +231,7 @@ const destroy = async (id: number) => {
   }
 }
 
-// Flash messages
+// ── Flash messages ──────────────────────────────────────────────────────
 onMounted(() => {
   if (page.props.flash?.success) {
     Swal.fire({
@@ -160,7 +262,7 @@ onMounted(() => {
   }
 })
 
-// Date helpers
+// ── Date helpers ────────────────────────────────────────────────────────
 const formatDate = (dateString: string | null) => {
   if (!dateString) return '—'
   return dateString.split('T')[0] || '—'
@@ -171,7 +273,7 @@ const getFullDateTime = (dateString: string | null) => {
   return dateString
 }
 
-// Row click → Show
+// ── Row click → Show ────────────────────────────────────────────────────
 const goToShow = (id: number) => {
   router.visit(route('admin.shipments.show', id))
 }
@@ -205,7 +307,7 @@ const goToShow = (id: number) => {
 
       <!-- PBI Import Modal -->
       <div v-if="showPbiImportModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60">
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-2xl max-w-lg w-full mx-4 overflow-hidden">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-2xl max-w-lg w-full mx-4">
           <div class="p-6">
             <h2 class="text-xl font-bold mb-4 text-gray-900 dark:text-gray-100">
               Import Shipments from PBI XLSX
@@ -271,15 +373,91 @@ const goToShow = (id: number) => {
       />
 
       <!-- Table -->
-      <div class="overflow-x-auto">
-        <table class="w-full border-collapse bg-white dark:bg-gray-800 rounded-lg overflow-hidden shadow-md dark:shadow-gray-900/30">
+      <div>
+        <table class="w-full border-collapse bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/30">
           <thead>
             <tr class="bg-gray-100 dark:bg-gray-700 text-left">
-              <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300">Status</th>
+              <!-- Status filter header -->
+              <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300 cursor-pointer relative min-w-[160px]" ref="statusFilterRef">
+                <div @click="toggleStatusFilter" class="flex items-center justify-between">
+                  {{ statusHeaderText }}
+                  <span class="ml-1 text-xs">▼</span>
+                </div>
+
+                <div v-if="showStatusFilter" class="absolute top-full left-0 mt-1 w-80 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-xl z-50">
+                  <div class="p-4">
+                    <select v-model="selectedStatuses" multiple class="w-full h-48 border border-gray-300 dark:border-gray-600 rounded p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                      <option v-for="status in props.statuses" :key="status" :value="status">
+                        {{ status }}
+                      </option>
+                    </select>
+                  </div>
+                  <div class="border-t border-gray-200 dark:border-gray-700 p-3 flex justify-between items-center">
+                    <span class="text-sm text-gray-500 dark:text-gray-400">
+                      {{ selectedStatuses.length }} / {{ props.statuses.length }}
+                    </span>
+                    <button @click="selectedStatuses = [...props.statuses]" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-md text-sm transition-colors">
+                      Select all
+                    </button>
+                  </div>
+                </div>
+              </th>
+
               <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300">BOL</th>
               <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300">Shipment Number</th>
-              <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300">Pickup Location</th>
-              <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300">DC</th>
+
+              <!-- Pickup Location filter header -->
+              <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300 cursor-pointer relative min-w-[180px]" ref="pickupFilterRef">
+                <div @click="togglePickupFilter" class="flex items-center justify-between">
+                  {{ pickupHeaderText }}
+                  <span class="ml-1 text-xs">▼</span>
+                </div>
+
+                <div v-if="showPickupFilter" class="absolute top-full left-0 mt-1 w-80 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-xl z-50">
+                  <div class="p-4">
+                    <select v-model="selectedPickupLocations" multiple class="w-full h-48 border border-gray-300 dark:border-gray-600 rounded p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                      <option v-for="code in props.all_shipper_codes" :key="code" :value="code">
+                        {{ code }}
+                      </option>
+                    </select>
+                  </div>
+                  <div class="border-t border-gray-200 dark:border-gray-700 p-3 flex justify-between items-center">
+                    <span class="text-sm text-gray-500 dark:text-gray-400">
+                      {{ selectedPickupLocations.length }} / {{ props.all_shipper_codes.length }}
+                    </span>
+                    <button @click="selectedPickupLocations = [...props.all_shipper_codes]" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-md text-sm transition-colors">
+                      Select all
+                    </button>
+                  </div>
+                </div>
+              </th>
+
+              <!-- DC Location filter header -->
+              <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300 cursor-pointer relative min-w-[140px]" ref="dcFilterRef">
+                <div @click="toggleDcFilter" class="flex items-center justify-between">
+                  {{ dcHeaderText }}
+                  <span class="ml-1 text-xs">▼</span>
+                </div>
+
+                <div v-if="showDcFilter" class="absolute top-full left-0 mt-1 w-80 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-xl z-50">
+                  <div class="p-4">
+                    <select v-model="selectedDcLocations" multiple class="w-full h-48 border border-gray-300 dark:border-gray-600 rounded p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                      <option v-for="code in props.all_dc_codes" :key="code" :value="code">
+                        {{ code }}
+                      </option>
+                    </select>
+                  </div>
+                  <div class="border-t border-gray-200 dark:border-gray-700 p-3 flex justify-between items-center">
+                    <span class="text-sm text-gray-500 dark:text-gray-400">
+                      {{ selectedDcLocations.length }} / {{ props.all_dc_codes.length }}
+                    </span>
+                    <button @click="selectedDcLocations = [...props.all_dc_codes]" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-md text-sm transition-colors">
+                      Select all
+                    </button>
+                  </div>
+                </div>
+              </th>
+
               <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300">Drop Date</th>
               <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300">Pickup Date</th>
               <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300">Delivery Date</th>
@@ -360,7 +538,7 @@ const goToShow = (id: number) => {
               <td colspan="11" class="px-6 py-16 text-center text-gray-500 dark:text-gray-400 text-lg font-medium">
                 No shipments found
                 <p class="mt-2 text-sm text-gray-400 dark:text-gray-500">
-                  Try adjusting search or add a new shipment.
+                  Try adjusting search or filters.
                 </p>
               </td>
             </tr>

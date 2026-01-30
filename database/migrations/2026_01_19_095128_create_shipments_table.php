@@ -24,7 +24,7 @@ return new class extends Migration
             $table->string('status')
                 ->default('Pending');
 
-            $table->foreignId('shipper_location_id')
+            $table->foreignId('pickup_location_id')
                 ->constrained('locations')
                 ->onDelete('restrict');
 

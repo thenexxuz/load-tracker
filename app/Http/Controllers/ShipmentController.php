@@ -17,7 +17,7 @@ class ShipmentController extends Controller
     public function index(Request $request)
     {
         $query = Shipment::query()
-            ->with(['shipperLocation', 'dcLocation', 'carrier']);
+            ->with(['pickupLocation', 'dcLocation', 'carrier']);
 
         // Search
         if ($search = $request->input('search')) {
@@ -34,14 +34,14 @@ class ShipmentController extends Controller
         }
 
         // Exclude shippers
-        if ($excludedShippers = $request->input('excluded_shippers')) {
-            $query->whereHas('shipperLocation', function ($q) use ($excludedShippers) {
+        if ($excludedShippers = $request->input('excluded_pickup_locations')) {
+            $query->whereHas('pickupLocation', function ($q) use ($excludedShippers) {
                 $q->whereNotIn('short_code', (array) $excludedShippers);
             });
         }
 
         // Exclude DCs
-        if ($excludedDcs = $request->input('excluded_dcs')) {
+        if ($excludedDcs = $request->input('excluded_dc_locations')) {
             $query->whereHas('dcLocation', function ($q) use ($excludedDcs) {
                 $q->whereNotIn('short_code', (array) $excludedDcs);
             });
@@ -281,18 +281,35 @@ class ShipmentController extends Controller
                 }
 
                 // Lookup locations
-                $shipper = Location::where('short_code', $validated['origin'])->first();
+                $pickup = Location::where('short_code', $validated['origin'])->first();
                 $dc = Location::where('short_code', $validated['destination'])->first();
 
-                if (! $shipper) {
-                    $failedRows[] = array_merge($originalRow, ['ERROR' => "Origin location '{$validated['origin']}' not found"]);
-
-                    continue;
+                if (! $pickup) {
+                    $pickup = new Location();
+                    $pickup->short_code = $validated['origin'];
+                    $pickup->name = $validated['origin'];
+                    $pickup->address = 'Unknown Address';
+                    $pickup->city = 'Unknown City';
+                    $pickup->state = 'Unknown State';
+                    $pickup->zip = '00000';
+                    $pickup->country = 'XX';
+                    $pickup->is_active = false;
+                    $pickup->type = 'pickup';
+                    $pickup->save();
                 }
                 if (! $dc) {
-                    $failedRows[] = array_merge($originalRow, ['ERROR' => "Destination location '{$validated['destination']}' not found"]);
-
-                    continue;
+                    $dc = new Location();
+                    $dc->short_code = $validated['destination'];
+                    $dc->name = $validated['destination'];
+                    $dc->address = 'Unknown Address';
+                    $dc->city = 'Unknown City';
+                    $dc->state = 'Unknown State';
+                    $dc->zip = '00000';
+                    $dc->country = 'XX';
+                    $dc->expected_arrival_time = '08:00:00';
+                    $dc->is_active = false;
+                    $dc->type = 'distribution_center';
+                    $dc->save();
                 }
 
                 // Time from DC expected arrival (if exists)
@@ -316,7 +333,7 @@ class ShipmentController extends Controller
                     'shipment_number' => $validated['load'],
                     'status' => $validated['status'],
                     'po_number' => $validated['msft po#'] ?? null,
-                    'shipper_location_id' => $shipper->id,
+                    'pickup_location_id' => $pickup->id,
                     'dc_location_id' => $dc->id,
                     'carrier_id' => null,
                     'drop_date' => $dropDate,

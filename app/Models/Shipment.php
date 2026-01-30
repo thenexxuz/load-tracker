@@ -20,7 +20,7 @@ class Shipment extends Model
         'bol',
         'po_number',
         'status',
-        'shipper_location_id',
+        'pickup_location_id',
         'dc_location_id',
         'carrier_id',
         'drop_date',
@@ -60,9 +60,9 @@ class Shipment extends Model
     }
 
     // Relationships
-    public function shipperLocation(): BelongsTo
+    public function pickupLocation(): BelongsTo
     {
-        return $this->belongsTo(Location::class, 'shipper_location_id');
+        return $this->belongsTo(Location::class, 'pickup_location_id');
     }
 
     public function dcLocation(): BelongsTo
@@ -110,7 +110,7 @@ class Shipment extends Model
                 'bol',
                 'po_number',
                 'status',
-                'shipper_location_id',
+                'pickup_location_id',
                 'dc_location_id',
                 'carrier_id',
                 'drop_date',
