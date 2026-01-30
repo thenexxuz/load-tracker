@@ -4,6 +4,7 @@ use App\Http\Controllers\AuditController;
 use App\Http\Controllers\CarrierController;
 use App\Http\Controllers\LocationController;
 use App\Http\Controllers\RoleController;
+use App\Http\Controllers\RateController;
 use App\Http\Controllers\ShipmentController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
@@ -43,6 +44,8 @@ Route::middleware(['auth', 'role:administrator|supervisor'])->prefix('admin')->n
         return redirect()->route('admin.shipments.index');
     });
     Route::resource('shipments', ShipmentController::class);
+    // Rate Routes
+    Route::resource('rates', RateController::class);
 });
 
 require __DIR__.'/settings.php';

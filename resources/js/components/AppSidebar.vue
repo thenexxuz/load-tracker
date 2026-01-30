@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3'
-import { BookOpen, Folder, LayoutGrid, Map, SearchIcon, Truck, TruckIcon, User } from 'lucide-vue-next';
+import { BookOpen, Folder, LayoutGrid, Map, SearchIcon, Truck, TruckIcon, User, DollarSign } from 'lucide-vue-next';
 
 import NavFooter from '@/components/NavFooter.vue'
 import NavUser from '@/components/NavUser.vue'
@@ -23,6 +23,7 @@ const userRoles = auth?.user?.roles || []
 
 const hasUserAccess = userRoles.includes('administrator')
 const hasAuditAccess = userRoles.includes('administrator') || userRoles.includes('supervisor')
+const hasRatesAccess = userRoles.includes('administrator') || userRoles.includes('supervisor')
 const hasCarrierAccess = userRoles.includes('administrator') || userRoles.includes('supervisor')
 const hasLocationsAccess = userRoles.includes('administrator') || userRoles.includes('supervisor')
 const hasShipmentAccess = userRoles.includes('administrator') || userRoles.includes('supervisor') || userRoles.includes('truckload') || userRoles.includes('data-entry')
@@ -52,6 +53,13 @@ const mainNavItems: NavItem[] = [
             title: 'Carrier Management',
             href: route('admin.carriers.index'),
             icon: Truck,
+        }]
+        : []),
+    ...(hasRatesAccess
+        ? [{
+            title: 'Rates Management',
+            href: route('admin.rates.index'),
+            icon: DollarSign,
         }]
         : []),
     ...(hasLocationsAccess
