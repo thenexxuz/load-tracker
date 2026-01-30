@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Head, useForm } from '@inertiajs/vue3'
+import { computed } from 'vue'
 import AdminLayout from '@/layouts/AppLayout.vue'
 import Swal from 'sweetalert2'
 
@@ -9,7 +10,7 @@ const props = defineProps<{
     status: string
     bol: string | null
     shipment_number: number | null
-    shipper_location_id: number
+    pickup_location_id: number
     dc_location_id: number
     drop_date: string | null
     pickup_date: string | null
@@ -36,15 +37,33 @@ const props = defineProps<{
   carriers: Array<{ id: number; name: string; short_code: string }>
 }>()
 
+// Helper to extract date-only string (YYYY-MM-DD) from ISO or any date string
+const toDateInput = (dateStr: string | null) => {
+  if (!dateStr) return ''
+  // Handle ISO format or any string with date part
+  const match = dateStr.match(/^(\d{4}-\d{2}-\d{2})/)
+  return match ? match[1] : ''
+}
+
+// Helper for datetime-local (YYYY-MM-DDTHH:mm)
+const toDateTimeInput = (dateStr: string | null) => {
+  if (!dateStr) return ''
+  try {
+    const date = new Date(dateStr)
+    if (isNaN(date.getTime())) return ''
+    return date.toISOString().slice(0, 16) // YYYY-MM-DDTHH:mm
+  } catch {
+    return ''
+  }
+}
+
+// Form setup with computed getters/setters for dates
 const form = useForm({
   status: props.shipment.status || 'Pending',
   bol: props.shipment.bol || '',
   shipment_number: props.shipment.shipment_number,
-  shipper_location_id: props.shipment.shipper_location_id,
+  pickup_location_id: props.shipment.pickup_location_id,
   dc_location_id: props.shipment.dc_location_id,
-  drop_date: props.shipment.drop_date || null,
-  pickup_date: props.shipment.pickup_date || null,
-  delivery_date: props.shipment.delivery_date || null,
   po_number: props.shipment.po_number || '',
   rack_qty: props.shipment.rack_qty || 0,
   carrier_id: props.shipment.carrier_id || null,
@@ -54,39 +73,71 @@ const form = useForm({
   drayage: props.shipment.drayage || '',
   on_site_checked: !!props.shipment.on_site,
   shipped_checked: !!props.shipment.shipped,
-  crossed_border: props.shipment.crossed_border || null,
   recycling_sent_checked: !!props.shipment.recycling_sent,
   paperwork_sent_checked: !!props.shipment.paperwork_sent,
   delivery_sent_checked: !!props.shipment.delivery_sent,
   consolidation_number: props.shipment.consolidation_number || '',
   notes: props.shipment.notes || '',
   other: props.shipment.other ? JSON.stringify(props.shipment.other, null, 2) : '',
+  // Internal storage for original date strings (for submission)
+  _drop_date_raw: props.shipment.drop_date,
+  _pickup_date_raw: props.shipment.pickup_date,
+  _delivery_date_raw: props.shipment.delivery_date,
 })
 
+// Computed properties for date inputs (display formatted, store original on change)
+const dropDate = computed({
+  get: () => toDateInput(form._drop_date_raw),
+  set: (val: string) => {
+    form._drop_date_raw = val ? `${val}T00:00:00.000Z` : null // preserve as ISO-like
+  }
+})
+
+const pickupDateTime = computed({
+  get: () => toDateTimeInput(form._pickup_date_raw),
+  set: (val: string) => {
+    form._pickup_date_raw = val ? `${val}:00.000Z` : null // add seconds
+  }
+})
+
+const deliveryDateTime = computed({
+  get: () => toDateTimeInput(form._delivery_date_raw),
+  set: (val: string) => {
+    form._delivery_date_raw = val ? `${val}:00.000Z` : null
+  }
+})
+
+// Submit handler – use raw values
 const submit = () => {
   const payload = {
     ...form.data(),
+    drop_date: form._drop_date_raw,
+    pickup_date: form._pickup_date_raw,
+    delivery_date: form._delivery_date_raw,
     on_site: form.on_site_checked 
-      ? (props.shipment.on_site ? props.shipment.on_site : new Date().toISOString()) 
+      ? (props.shipment.on_site || new Date().toISOString()) 
       : null,
     shipped: form.shipped_checked 
-      ? (props.shipment.shipped ? props.shipment.shipped : new Date().toISOString()) 
+      ? (props.shipment.shipped || new Date().toISOString()) 
       : null,
     recycling_sent: form.recycling_sent_checked 
-      ? (props.shipment.recycling_sent ? props.shipment.recycling_sent : new Date().toISOString()) 
+      ? (props.shipment.recycling_sent || new Date().toISOString()) 
       : null,
     paperwork_sent: form.paperwork_sent_checked 
-      ? (props.shipment.paperwork_sent ? props.shipment.paperwork_sent : new Date().toISOString()) 
+      ? (props.shipment.paperwork_sent || new Date().toISOString()) 
       : null,
     delivery_sent: form.delivery_sent_checked 
-      ? (props.shipment.delivery_sent ? props.shipment.delivery_sent : new Date().toISOString()) 
+      ? (props.shipment.delivery_sent || new Date().toISOString()) 
       : null,
-    // Remove temporary checked fields
+    // Clean up temp fields
     on_site_checked: undefined,
     shipped_checked: undefined,
     recycling_sent_checked: undefined,
     paperwork_sent_checked: undefined,
     delivery_sent_checked: undefined,
+    _drop_date_raw: undefined,
+    _pickup_date_raw: undefined,
+    _delivery_date_raw: undefined,
   }
 
   form.put(route('admin.shipments.update', props.shipment.id), {
@@ -180,13 +231,13 @@ const submit = () => {
             </p>
           </div>
 
-          <!-- Shipper Location (only pickup type) -->
+          <!-- Shipper Location -->
           <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Shipper Location <span class="text-red-600 dark:text-red-400">*</span>
             </label>
             <select
-              v-model="form.shipper_location_id"
+              v-model="form.pickup_location_id"
               required
               class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none appearance-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
             >
@@ -195,12 +246,12 @@ const submit = () => {
                 {{ loc.short_code }} - {{ loc.name || 'Unnamed' }}
               </option>
             </select>
-            <p v-if="form.errors.shipper_location_id" class="mt-1 text-sm text-red-600 dark:text-red-400">
-              {{ form.errors.shipper_location_id }}
+            <p v-if="form.errors.pickup_location_id" class="mt-1 text-sm text-red-600 dark:text-red-400">
+              {{ form.errors.pickup_location_id }}
             </p>
           </div>
 
-          <!-- DC Location (only distribution_center type) -->
+          <!-- DC Location -->
           <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               DC Location <span class="text-red-600 dark:text-red-400">*</span>
@@ -237,11 +288,11 @@ const submit = () => {
             </p>
           </div>
 
-          <!-- Drop Date -->
+          <!-- Drop Date (date-only) -->
           <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Drop Date</label>
             <input
-              v-model="form.drop_date"
+              v-model="dropDate"
               type="date"
               class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
             />
@@ -250,11 +301,11 @@ const submit = () => {
             </p>
           </div>
 
-          <!-- Pickup Date -->
+          <!-- Pickup Date (datetime-local) -->
           <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Pickup Date</label>
             <input
-              v-model="form.pickup_date"
+              v-model="pickupDateTime"
               type="datetime-local"
               class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
             />
@@ -263,11 +314,11 @@ const submit = () => {
             </p>
           </div>
 
-          <!-- Delivery Date -->
+          <!-- Delivery Date (datetime-local) -->
           <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Delivery Date</label>
             <input
-              v-model="form.delivery_date"
+              v-model="deliveryDateTime"
               type="datetime-local"
               class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
             />
@@ -345,7 +396,7 @@ const submit = () => {
             </p>
           </div>
 
-          <!-- Checkboxes for datetime flags -->
+          <!-- Checkboxes -->
           <div class="col-span-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
             <label class="flex items-center space-x-3 cursor-pointer">
               <input

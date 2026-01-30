@@ -63,6 +63,24 @@ class ShipmentController extends Controller
             });
         }
 
+        // Drop Date filter
+        $dropStart = $request->input('drop_start');
+        $dropEnd = $request->input('drop_end');
+
+        // If both are provided → between those two dates (inclusive)
+        if ($dropStart && $dropEnd) {
+            $query->whereDate('drop_date', '>=', $dropStart)
+                ->whereDate('drop_date', '<=', $dropEnd);
+        }
+        // Only start date → from that date onward
+        elseif ($dropStart) {
+            $query->whereDate('drop_date', '>=', $dropStart);
+        }
+        // Only end date → up to that date
+        elseif ($dropEnd) {
+            $query->whereDate('drop_date', '<=', $dropEnd);
+        }
+
         $shipments = $query->latest()->paginate(15);
 
         return Inertia::render('Admin/Shipments/Index', [
@@ -133,7 +151,7 @@ class ShipmentController extends Controller
 
     public function show(Shipment $shipment)
     {
-        $shipment->load(['shipperLocation:id,short_code,name', 'dcLocation:id,short_code,name', 'carrier:id,name']);
+        $shipment->load(['pickupLocation:id,short_code,name', 'dcLocation:id,short_code,name', 'carrier:id,name']);
 
         return Inertia::render('Admin/Shipments/Show', [
             'shipment' => $shipment,
@@ -142,7 +160,7 @@ class ShipmentController extends Controller
 
     public function edit(Shipment $shipment)
     {
-        $shipment->load(['shipperLocation', 'dcLocation', 'carrier']);
+        $shipment->load(['pickupLocation', 'dcLocation', 'carrier']);
 
         $pickupLocations = Location::where('type', 'pickup')
             ->select('id', 'short_code', 'name')

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, router, usePage } from '@inertiajs/vue3'
-import { ref, watch, onMounted, computed } from 'vue'
+import { ref, watch, onMounted, computed, nextTick } from 'vue'
 import { onClickOutside } from '@vueuse/core'
 import { useForm } from '@inertiajs/vue3'
 import AdminLayout from '@/layouts/AppLayout.vue'
@@ -28,40 +28,52 @@ const props = defineProps<{
     total: number
   }
   statuses: string[]
-  all_shipper_codes: string[]     // Pickup location short codes
-  all_dc_codes: string[]          // DC location short codes
-  all_carrier_names: string[]     // Carrier names (or short_codes)
+  all_shipper_codes: string[]
+  all_dc_codes: string[]
+  all_carrier_names: string[]
 }>()
 
 const page = usePage()
 
 // ── Status filter ───────────────────────────────────────────────────────
 const selectedStatuses = ref<string[]>([...props.statuses])
-
 const excludedStatuses = computed(() =>
   props.statuses.filter(s => !selectedStatuses.value.includes(s))
 )
 
 // ── Pickup Location filter ──────────────────────────────────────────────
 const selectedPickupLocations = ref<string[]>([...props.all_shipper_codes])
-
 const excludedPickupLocations = computed(() =>
   props.all_shipper_codes.filter(s => !selectedPickupLocations.value.includes(s))
 )
 
 // ── DC Location filter ──────────────────────────────────────────────────
 const selectedDcLocations = ref<string[]>([...props.all_dc_codes])
-
 const excludedDcLocations = computed(() =>
   props.all_dc_codes.filter(s => !selectedDcLocations.value.includes(s))
 )
 
 // ── Carrier filter ──────────────────────────────────────────────────────
 const selectedCarriers = ref<string[]>([...props.all_carrier_names])
-
 const excludedCarriers = computed(() =>
   props.all_carrier_names.filter(c => !selectedCarriers.value.includes(c))
 )
+
+// ── Drop Date range filter ──────────────────────────────────────────────
+const dropStart = ref<string>('')
+const dropEnd   = ref<string>('')
+
+const dropDateHeaderText = computed(() => {
+  if (!dropStart.value && !dropEnd.value) return 'Drop Date'
+  if (dropStart.value && !dropEnd.value)   return `Drop Date from ${dropStart.value}`
+  if (!dropStart.value && dropEnd.value)   return `Drop Date to ${dropEnd.value}`
+  return `Drop Date ${dropStart.value} – ${dropEnd.value}`
+})
+
+const clearDropDate = () => {
+  dropStart.value = ''
+  dropEnd.value = ''
+}
 
 // ── Shared filter application ───────────────────────────────────────────
 function applyFilters() {
@@ -70,6 +82,8 @@ function applyFilters() {
     excluded_pickup_locations: excludedPickupLocations.value.length ? excludedPickupLocations.value : undefined,
     excluded_dc_locations: excludedDcLocations.value.length ? excludedDcLocations.value : undefined,
     excluded_carriers: excludedCarriers.value.length ? excludedCarriers.value : undefined,
+    drop_start: dropStart.value || undefined,
+    drop_end: dropEnd.value || undefined,
     search: search.value.trim() || undefined,
   }, {
     preserveState: true,
@@ -78,57 +92,121 @@ function applyFilters() {
   })
 }
 
-watch([selectedStatuses, selectedPickupLocations, selectedDcLocations, selectedCarriers], applyFilters, { deep: true })
+watch(
+  [selectedStatuses, selectedPickupLocations, selectedDcLocations, selectedCarriers, dropStart, dropEnd],
+  applyFilters,
+  { deep: true }
+)
 
 // Search
 const search = ref('')
-
-watch(search, () => applyFilters())
+watch(search, applyFilters)
 
 // ── Dropdown visibility ─────────────────────────────────────────────────
-const showStatusFilter  = ref(false)
-const showPickupFilter  = ref(false)
-const showDcFilter      = ref(false)
-const showCarrierFilter = ref(false)
+const showStatusFilter   = ref(false)
+const showPickupFilter   = ref(false)
+const showDcFilter       = ref(false)
+const showCarrierFilter  = ref(false)
+const showDropDateFilter = ref(false)
 
-// Refs for outside-click detection
-const statusFilterRef   = ref<HTMLElement | null>(null)
-const pickupFilterRef   = ref<HTMLElement | null>(null)
-const dcFilterRef       = ref<HTMLElement | null>(null)
-const carrierFilterRef  = ref<HTMLElement | null>(null)
+// Header refs (for positioning & outside-click detection)
+const statusFilterRef    = ref<HTMLElement | null>(null)
+const pickupFilterRef    = ref<HTMLElement | null>(null)
+const dcFilterRef        = ref<HTMLElement | null>(null)
+const carrierFilterRef   = ref<HTMLElement | null>(null)
+const dropDateFilterRef  = ref<HTMLElement | null>(null)
 
-onClickOutside(statusFilterRef,   () => showStatusFilter.value  = false)
-onClickOutside(pickupFilterRef,   () => showPickupFilter.value  = false)
-onClickOutside(dcFilterRef,       () => showDcFilter.value      = false)
-onClickOutside(carrierFilterRef,  () => showCarrierFilter.value = false)
+// Dropdown root refs (to ignore clicks inside them)
+const statusDropdownRoot   = ref<HTMLElement | null>(null)
+const pickupDropdownRoot   = ref<HTMLElement | null>(null)
+const dcDropdownRoot       = ref<HTMLElement | null>(null)
+const carrierDropdownRoot  = ref<HTMLElement | null>(null)
+const dropDateDropdownRoot = ref<HTMLElement | null>(null)
 
-// ── Toggle functions ────────────────────────────────────────────────────
+// Position styles for fixed dropdowns
+const statusDropdownStyle   = ref({ top: '0px', left: '0px' })
+const pickupDropdownStyle   = ref({ top: '0px', left: '0px' })
+const dcDropdownStyle       = ref({ top: '0px', left: '0px' })
+const carrierDropdownStyle  = ref({ top: '0px', left: '0px' })
+const dropDateDropdownStyle = ref({ top: '0px', left: '0px' })
+
+// Update position when dropdown opens
+const updatePosition = (headerRef: any, styleRef: any) => {
+  if (!headerRef.value) return
+  const rect = headerRef.value.getBoundingClientRect()
+  styleRef.value = {
+    top: `${rect.bottom + window.scrollY + 8}px`, // +8px gap
+    left: `${rect.left + window.scrollX}px`,
+  }
+}
+
+watch(showStatusFilter,   val => val && nextTick(() => updatePosition(statusFilterRef,   statusDropdownStyle)))
+watch(showPickupFilter,   val => val && nextTick(() => updatePosition(pickupFilterRef,   pickupDropdownStyle)))
+watch(showDcFilter,       val => val && nextTick(() => updatePosition(dcFilterRef,       dcDropdownStyle)))
+watch(showCarrierFilter,  val => val && nextTick(() => updatePosition(carrierFilterRef,  carrierDropdownStyle)))
+watch(showDropDateFilter, val => val && nextTick(() => updatePosition(dropDateFilterRef, dropDateDropdownStyle)))
+
+// Outside click – ignore clicks inside the dropdown content
+onClickOutside(statusFilterRef,   () => showStatusFilter.value = false,   { ignore: [statusDropdownRoot] })
+onClickOutside(pickupFilterRef,   () => showPickupFilter.value = false,   { ignore: [pickupDropdownRoot] })
+onClickOutside(dcFilterRef,       () => showDcFilter.value = false,       { ignore: [dcDropdownRoot] })
+onClickOutside(carrierFilterRef,  () => showCarrierFilter.value = false,  { ignore: [carrierDropdownRoot] })
+onClickOutside(dropDateFilterRef, () => showDropDateFilter.value = false, { ignore: [dropDateDropdownRoot] })
+
+// Toggle functions with debug logs (remove logs later if not needed)
 const toggleStatusFilter = () => {
+  console.log('Status header clicked → toggling to', !showStatusFilter.value)
   showStatusFilter.value = !showStatusFilter.value
-  showPickupFilter.value = false
-  showDcFilter.value = false
-  showCarrierFilter.value = false
+  if (showStatusFilter.value) {
+    showPickupFilter.value = false
+    showDcFilter.value = false
+    showCarrierFilter.value = false
+    showDropDateFilter.value = false
+  }
 }
 
 const togglePickupFilter = () => {
+  console.log('Pickup header clicked → toggling to', !showPickupFilter.value)
   showPickupFilter.value = !showPickupFilter.value
-  showStatusFilter.value = false
-  showDcFilter.value = false
-  showCarrierFilter.value = false
+  if (showPickupFilter.value) {
+    showStatusFilter.value = false
+    showDcFilter.value = false
+    showCarrierFilter.value = false
+    showDropDateFilter.value = false
+  }
 }
 
 const toggleDcFilter = () => {
+  console.log('DC header clicked → toggling to', !showDcFilter.value)
   showDcFilter.value = !showDcFilter.value
-  showStatusFilter.value = false
-  showPickupFilter.value = false
-  showCarrierFilter.value = false
+  if (showDcFilter.value) {
+    showStatusFilter.value = false
+    showPickupFilter.value = false
+    showCarrierFilter.value = false
+    showDropDateFilter.value = false
+  }
 }
 
 const toggleCarrierFilter = () => {
+  console.log('Carrier header clicked → toggling to', !showCarrierFilter.value)
   showCarrierFilter.value = !showCarrierFilter.value
-  showStatusFilter.value = false
-  showPickupFilter.value = false
-  showDcFilter.value = false
+  if (showCarrierFilter.value) {
+    showStatusFilter.value = false
+    showPickupFilter.value = false
+    showDcFilter.value = false
+    showDropDateFilter.value = false
+  }
+}
+
+const toggleDropDateFilter = () => {
+  console.log('Drop Date header clicked → toggling to', !showDropDateFilter.value)
+  showDropDateFilter.value = !showDropDateFilter.value
+  if (showDropDateFilter.value) {
+    showStatusFilter.value = false
+    showPickupFilter.value = false
+    showDcFilter.value = false
+    showCarrierFilter.value = false
+  }
 }
 
 // ── Dynamic header text ─────────────────────────────────────────────────
@@ -337,7 +415,7 @@ const goToShow = (id: number) => {
 
       <!-- PBI Import Modal -->
       <div v-if="showPbiImportModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60">
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-2xl max-w-lg w-full mx-4">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-2xl max-w-lg w-full mx-4 overflow-hidden">
           <div class="p-6">
             <h2 class="text-xl font-bold mb-4 text-gray-900 dark:text-gray-100">
               Import Shipments from PBI XLSX
@@ -403,233 +481,325 @@ const goToShow = (id: number) => {
       />
 
       <!-- Table -->
-      <div>
-        <table class="w-full border-collapse bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/30">
-          <thead>
-            <tr class="bg-gray-100 dark:bg-gray-700 text-left">
-              <!-- Status filter header -->
-              <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300 cursor-pointer relative min-w-[160px]" ref="statusFilterRef">
-                <div @click="toggleStatusFilter" class="flex items-center justify-between">
-                  {{ statusHeaderText }}
-                  <span class="ml-1 text-xs">▼</span>
-                </div>
-
-                <div v-if="showStatusFilter" class="absolute top-full left-0 mt-1 w-80 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-xl z-50">
-                  <div class="p-4">
-                    <select v-model="selectedStatuses" multiple class="w-full h-48 border border-gray-300 dark:border-gray-600 rounded p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                      <option v-for="status in props.statuses" :key="status" :value="status">
-                        {{ status }}
-                      </option>
-                    </select>
-                  </div>
-                  <div class="border-t border-gray-200 dark:border-gray-700 p-3 flex justify-between items-center">
-                    <span class="text-sm text-gray-500 dark:text-gray-400">
-                      {{ selectedStatuses.length }} / {{ props.statuses.length }}
-                    </span>
-                    <button @click="selectedStatuses = [...props.statuses]" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-md text-sm transition-colors">
-                      Select all
-                    </button>
-                  </div>
-                </div>
-              </th>
-
-              <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300">BOL</th>
-              <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300">Shipment Number</th>
-
-              <!-- Pickup Location filter header -->
-              <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300 cursor-pointer relative min-w-[180px]" ref="pickupFilterRef">
-                <div @click="togglePickupFilter" class="flex items-center justify-between">
-                  {{ pickupHeaderText }}
-                  <span class="ml-1 text-xs">▼</span>
-                </div>
-
-                <div v-if="showPickupFilter" class="absolute top-full left-0 mt-1 w-80 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-xl z-50">
-                  <div class="p-4">
-                    <select v-model="selectedPickupLocations" multiple class="w-full h-48 border border-gray-300 dark:border-gray-600 rounded p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                      <option v-for="code in props.all_shipper_codes" :key="code" :value="code">
-                        {{ code }}
-                      </option>
-                    </select>
-                  </div>
-                  <div class="border-t border-gray-200 dark:border-gray-700 p-3 flex justify-between items-center">
-                    <span class="text-sm text-gray-500 dark:text-gray-400">
-                      {{ selectedPickupLocations.length }} / {{ props.all_shipper_codes.length }}
-                    </span>
-                    <button @click="selectedPickupLocations = [...props.all_shipper_codes]" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-md text-sm transition-colors">
-                      Select all
-                    </button>
-                  </div>
-                </div>
-              </th>
-
-              <!-- DC Location filter header -->
-              <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300 cursor-pointer relative min-w-[140px]" ref="dcFilterRef">
-                <div @click="toggleDcFilter" class="flex items-center justify-between">
-                  {{ dcHeaderText }}
-                  <span class="ml-1 text-xs">▼</span>
-                </div>
-
-                <div v-if="showDcFilter" class="absolute top-full left-0 mt-1 w-80 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-xl z-50">
-                  <div class="p-4">
-                    <select v-model="selectedDcLocations" multiple class="w-full h-48 border border-gray-300 dark:border-gray-600 rounded p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                      <option v-for="code in props.all_dc_codes" :key="code" :value="code">
-                        {{ code }}
-                      </option>
-                    </select>
-                  </div>
-                  <div class="border-t border-gray-200 dark:border-gray-700 p-3 flex justify-between items-center">
-                    <span class="text-sm text-gray-500 dark:text-gray-400">
-                      {{ selectedDcLocations.length }} / {{ props.all_dc_codes.length }}
-                    </span>
-                    <button @click="selectedDcLocations = [...props.all_dc_codes]" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-md text-sm transition-colors">
-                      Select all
-                    </button>
-                  </div>
-                </div>
-              </th>
-
-              <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300">Drop Date</th>
-              <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300">Pickup Date</th>
-              <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300">Delivery Date</th>
-
-              <!-- Carrier filter header -->
-              <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300 cursor-pointer relative min-w-[160px]" ref="carrierFilterRef">
-                <div @click="toggleCarrierFilter" class="flex items-center justify-between">
-                  {{ carrierHeaderText }}
-                  <span class="ml-1 text-xs">▼</span>
-                </div>
-
-                <div v-if="showCarrierFilter" class="absolute top-full left-0 mt-1 w-80 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-xl z-50">
-                  <div class="p-4">
-                    <select v-model="selectedCarriers" multiple class="w-full h-48 border border-gray-300 dark:border-gray-600 rounded p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                      <option v-for="name in props.all_carrier_names" :key="name" :value="name">
-                        {{ name }}
-                      </option>
-                    </select>
-                  </div>
-                  <div class="border-t border-gray-200 dark:border-gray-700 p-3 flex justify-between items-center">
-                    <span class="text-sm text-gray-500 dark:text-gray-400">
-                      {{ selectedCarriers.length }} / {{ props.all_carrier_names.length }}
-                    </span>
-                    <button @click="selectedCarriers = [...props.all_carrier_names]" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-md text-sm transition-colors">
-                      Select all
-                    </button>
-                  </div>
-                </div>
-              </th>
-
-              <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300">Trailer</th>
-              <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300 text-center">Actions</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-            <tr
-              v-for="shipment in shipments.data"
-              :key="shipment.id"
-              class="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer transition-colors"
-              @click="goToShow(shipment.id)"
-            >
-              <td class="px-6 py-4 capitalize text-gray-600 dark:text-gray-400">
-                {{ shipment.status }}
-              </td>
-              <td class="px-6 py-4 text-gray-600 dark:text-gray-400">
-                {{ shipment.bol || '—' }}
-              </td>
-              <td class="px-6 py-4 text-gray-900 dark:text-gray-100 font-medium">
-                {{ shipment.shipment_number }}
-              </td>
-              <td class="px-6 py-4 text-gray-600 dark:text-gray-400">
-                {{ shipment.pickup_location?.short_code || '—' }}
-              </td>
-              <td class="px-6 py-4 text-gray-600 dark:text-gray-400">
-                {{ shipment.dc_location?.short_code || '—' }}
-              </td>
-              <td class="px-6 py-4 text-gray-600 dark:text-gray-400 group relative cursor-help">
-                <span :title="getFullDateTime(shipment.drop_date)">
-                  {{ formatDate(shipment.drop_date) }}
-                </span>
-              </td>
-              <td class="px-6 py-4 text-gray-600 dark:text-gray-400 group relative cursor-help">
-                <span :title="getFullDateTime(shipment.pickup_date)">
-                  {{ formatDate(shipment.pickup_date) }}
-                </span>
-              </td>
-              <td class="px-6 py-4 text-gray-600 dark:text-gray-400 group relative cursor-help">
-                <span :title="getFullDateTime(shipment.delivery_date)">
-                  {{ formatDate(shipment.delivery_date) }}
-                </span>
-              </td>
-              <td class="px-6 py-4 text-gray-600 dark:text-gray-400">
-                {{ shipment.carrier?.name || '—' }}
-              </td>
-              <td class="px-6 py-4 text-gray-600 dark:text-gray-400">
-                {{ shipment.trailer || '—' }}
-              </td>
-              <td class="px-6 py-4 text-center space-x-5" @click.stop>
-                <a
-                  :href="route('admin.shipments.edit', shipment.id)"
-                  class="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 transition-colors"
-                  title="Edit Shipment"
-                  @click.stop
+      <div class="w-full">
+        <div class="overflow-x-auto">
+          <table class="w-full min-w-max border-collapse bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/30">
+            <thead>
+              <tr class="bg-gray-100 dark:bg-gray-700 text-left">
+                <!-- Status -->
+                <th
+                  class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300 cursor-pointer min-w-[160px] pointer-events-auto"
+                  ref="statusFilterRef"
+                  @click="toggleStatusFilter"
                 >
-                  <svg class="w-5.5 h-5.5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                  </svg>
-                </a>
+                  <div class="flex items-center justify-between select-none pointer-events-none">
+                    {{ statusHeaderText }}
+                    <span class="ml-1 text-xs">▼</span>
+                  </div>
+                </th>
 
-                <button
-                  @click.stop="destroy(shipment.id)"
-                  class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 transition-colors"
-                  title="Delete Shipment"
+                <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300">BOL</th>
+                <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300">Shipment Number</th>
+
+                <!-- Pickup Location -->
+                <th
+                  class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300 cursor-pointer min-w-[180px] pointer-events-auto"
+                  ref="pickupFilterRef"
+                  @click="togglePickupFilter"
                 >
-                  <svg class="w-5.5 h-5.5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                  </svg>
-                </button>
-              </td>
-            </tr>
+                  <div class="flex items-center justify-between select-none pointer-events-none">
+                    {{ pickupHeaderText }}
+                    <span class="ml-1 text-xs">▼</span>
+                  </div>
+                </th>
 
-            <!-- Empty state -->
-            <tr v-if="!shipments.data?.length">
-              <td colspan="11" class="px-6 py-16 text-center text-gray-500 dark:text-gray-400 text-lg font-medium">
-                No shipments found
-                <p class="mt-2 text-sm text-gray-400 dark:text-gray-500">
-                  Try adjusting search or filters.
-                </p>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+                <!-- DC -->
+                <th
+                  class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300 cursor-pointer min-w-[140px] pointer-events-auto"
+                  ref="dcFilterRef"
+                  @click="toggleDcFilter"
+                >
+                  <div class="flex items-center justify-between select-none pointer-events-none">
+                    {{ dcHeaderText }}
+                    <span class="ml-1 text-xs">▼</span>
+                  </div>
+                </th>
 
-        <!-- Pagination -->
-        <div v-if="shipments.data?.length" class="mt-6 flex flex-col sm:flex-row justify-between items-center gap-4 text-sm text-gray-700 dark:text-gray-300">
-          <div>
-            Showing {{ shipments.from || 0 }} to {{ shipments.to || 0 }} of {{ shipments.total || 0 }} shipments
+                <!-- Drop Date -->
+                <th
+                  class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300 cursor-pointer min-w-[220px] pointer-events-auto"
+                  ref="dropDateFilterRef"
+                  @click="toggleDropDateFilter"
+                >
+                  <div class="flex items-center justify-between select-none pointer-events-none">
+                    {{ dropDateHeaderText }}
+                    <span class="ml-1 text-xs">▼</span>
+                  </div>
+                </th>
+
+                <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300">Pickup Date</th>
+                <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300">Delivery Date</th>
+
+                <!-- Carrier -->
+                <th
+                  class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300 cursor-pointer min-w-[160px] pointer-events-auto"
+                  ref="carrierFilterRef"
+                  @click="toggleCarrierFilter"
+                >
+                  <div class="flex items-center justify-between select-none pointer-events-none">
+                    {{ carrierHeaderText }}
+                    <span class="ml-1 text-xs">▼</span>
+                  </div>
+                </th>
+
+                <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300">Trailer</th>
+                <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300 text-center">Actions</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+              <tr
+                v-for="shipment in shipments.data"
+                :key="shipment.id"
+                class="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer transition-colors"
+                @click="goToShow(shipment.id)"
+              >
+                <td class="px-6 py-4 capitalize text-gray-600 dark:text-gray-400">
+                  {{ shipment.status }}
+                </td>
+                <td class="px-6 py-4 text-gray-600 dark:text-gray-400">
+                  {{ shipment.bol || '—' }}
+                </td>
+                <td class="px-6 py-4 text-gray-900 dark:text-gray-100 font-medium">
+                  {{ shipment.shipment_number }}
+                </td>
+                <td class="px-6 py-4 text-gray-600 dark:text-gray-400">
+                  {{ shipment.pickup_location?.short_code || '—' }}
+                </td>
+                <td class="px-6 py-4 text-gray-600 dark:text-gray-400">
+                  {{ shipment.dc_location?.short_code || '—' }}
+                </td>
+                <td class="px-6 py-4 text-gray-600 dark:text-gray-400 group relative cursor-help">
+                  <span :title="getFullDateTime(shipment.drop_date)">
+                    {{ formatDate(shipment.drop_date) }}
+                  </span>
+                </td>
+                <td class="px-6 py-4 text-gray-600 dark:text-gray-400 group relative cursor-help">
+                  <span :title="getFullDateTime(shipment.pickup_date)">
+                    {{ formatDate(shipment.pickup_date) }}
+                  </span>
+                </td>
+                <td class="px-6 py-4 text-gray-600 dark:text-gray-400 group relative cursor-help">
+                  <span :title="getFullDateTime(shipment.delivery_date)">
+                    {{ formatDate(shipment.delivery_date) }}
+                  </span>
+                </td>
+                <td class="px-6 py-4 text-gray-600 dark:text-gray-400">
+                  {{ shipment.carrier?.name || '—' }}
+                </td>
+                <td class="px-6 py-4 text-gray-600 dark:text-gray-400">
+                  {{ shipment.trailer || '—' }}
+                </td>
+                <td class="px-6 py-4 text-center space-x-5" @click.stop>
+                  <a
+                    :href="route('admin.shipments.edit', shipment.id)"
+                    class="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 transition-colors"
+                    title="Edit Shipment"
+                    @click.stop
+                  >
+                    <svg class="w-5.5 h-5.5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                    </svg>
+                  </a>
+
+                  <button
+                    @click.stop="destroy(shipment.id)"
+                    class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 transition-colors"
+                    title="Delete Shipment"
+                  >
+                    <svg class="w-5.5 h-5.5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                    </svg>
+                  </button>
+                </td>
+              </tr>
+
+              <!-- Empty state -->
+              <tr v-if="!shipments.data?.length">
+                <td colspan="11" class="px-6 py-16 text-center text-gray-500 dark:text-gray-400 text-lg font-medium">
+                  No shipments found
+                  <p class="mt-2 text-sm text-gray-400 dark:text-gray-500">
+                    Try adjusting search or filters.
+                  </p>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Pagination -->
+      <div v-if="shipments.data?.length" class="mt-6 flex flex-col sm:flex-row justify-between items-center gap-4 text-sm text-gray-700 dark:text-gray-300">
+        <div>
+          Showing {{ shipments.from || 0 }} to {{ shipments.to || 0 }} of {{ shipments.total || 0 }} shipments
+        </div>
+
+        <div class="flex items-center space-x-2">
+          <button
+            :disabled="shipments.current_page === 1"
+            @click="router.get(route('admin.shipments.index', { page: shipments.current_page - 1 }), {}, { preserveState: true, preserveScroll: true })"
+            class="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            Previous
+          </button>
+
+          <span class="px-4 py-2 font-medium">
+            Page {{ shipments.current_page }} of {{ shipments.last_page }}
+          </span>
+
+          <button
+            :disabled="shipments.current_page === shipments.last_page"
+            @click="router.get(route('admin.shipments.index', { page: shipments.current_page + 1 }), {}, { preserveState: true, preserveScroll: true })"
+            class="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            Next
+          </button>
+        </div>
+      </div>
+
+      <!-- Teleported dropdowns -->
+      <Teleport to="body">
+        <!-- Status Dropdown -->
+        <div
+          v-if="showStatusFilter"
+          ref="statusDropdownRoot"
+          class="fixed z-[9999] bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-2xl"
+          :style="statusDropdownStyle"
+        >
+          <div class="p-4">
+            <select v-model="selectedStatuses" multiple class="w-full h-48 border border-gray-300 dark:border-gray-600 rounded p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <option v-for="status in props.statuses" :key="status" :value="status">
+                {{ status }}
+              </option>
+            </select>
           </div>
-
-          <div class="flex items-center space-x-2">
-            <button
-              :disabled="shipments.current_page === 1"
-              @click="router.get(route('admin.shipments.index', { page: shipments.current_page - 1 }), {}, { preserveState: true, preserveScroll: true })"
-              class="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              Previous
-            </button>
-
-            <span class="px-4 py-2 font-medium">
-              Page {{ shipments.current_page }} of {{ shipments.last_page }}
+          <div class="border-t border-gray-200 dark:border-gray-700 p-3 flex justify-between items-center">
+            <span class="text-sm text-gray-500 dark:text-gray-400">
+              {{ selectedStatuses.length }} / {{ props.statuses.length }}
             </span>
-
-            <button
-              :disabled="shipments.current_page === shipments.last_page"
-              @click="router.get(route('admin.shipments.index', { page: shipments.current_page + 1 }), {}, { preserveState: true, preserveScroll: true })"
-              class="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              Next
+            <button @click="selectedStatuses = [...props.statuses]" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-md text-sm transition-colors">
+              Select all
             </button>
           </div>
         </div>
-      </div>
+
+        <!-- Pickup Location Dropdown -->
+        <div
+          v-if="showPickupFilter"
+          ref="pickupDropdownRoot"
+          class="fixed z-[9999] bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-2xl"
+          :style="pickupDropdownStyle"
+        >
+          <div class="p-4">
+            <select v-model="selectedPickupLocations" multiple class="w-full h-48 border border-gray-300 dark:border-gray-600 rounded p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <option v-for="code in props.all_shipper_codes" :key="code" :value="code">
+                {{ code }}
+              </option>
+            </select>
+          </div>
+          <div class="border-t border-gray-200 dark:border-gray-700 p-3 flex justify-between items-center">
+            <span class="text-sm text-gray-500 dark:text-gray-400">
+              {{ selectedPickupLocations.length }} / {{ props.all_shipper_codes.length }}
+            </span>
+            <button @click="selectedPickupLocations = [...props.all_shipper_codes]" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-md text-sm transition-colors">
+              Select all
+            </button>
+          </div>
+        </div>
+
+        <!-- DC Dropdown -->
+        <div
+          v-if="showDcFilter"
+          ref="dcDropdownRoot"
+          class="fixed z-[9999] bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-2xl"
+          :style="dcDropdownStyle"
+        >
+          <div class="p-4">
+            <select v-model="selectedDcLocations" multiple class="w-full h-48 border border-gray-300 dark:border-gray-600 rounded p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <option v-for="code in props.all_dc_codes" :key="code" :value="code">
+                {{ code }}
+              </option>
+            </select>
+          </div>
+          <div class="border-t border-gray-200 dark:border-gray-700 p-3 flex justify-between items-center">
+            <span class="text-sm text-gray-500 dark:text-gray-400">
+              {{ selectedDcLocations.length }} / {{ props.all_dc_codes.length }}
+            </span>
+            <button @click="selectedDcLocations = [...props.all_dc_codes]" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-md text-sm transition-colors">
+              Select all
+            </button>
+          </div>
+        </div>
+
+        <!-- Carrier Dropdown -->
+        <div
+          v-if="showCarrierFilter"
+          ref="carrierDropdownRoot"
+          class="fixed z-[9999] bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-2xl"
+          :style="carrierDropdownStyle"
+        >
+          <div class="p-4">
+            <select v-model="selectedCarriers" multiple class="w-full h-48 border border-gray-300 dark:border-gray-600 rounded p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <option v-for="name in props.all_carrier_names" :key="name" :value="name">
+                {{ name }}
+              </option>
+            </select>
+          </div>
+          <div class="border-t border-gray-200 dark:border-gray-700 p-3 flex justify-between items-center">
+            <span class="text-sm text-gray-500 dark:text-gray-400">
+              {{ selectedCarriers.length }} / {{ props.all_carrier_names.length }}
+            </span>
+            <button @click="selectedCarriers = [...props.all_carrier_names]" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-md text-sm transition-colors">
+              Select all
+            </button>
+          </div>
+        </div>
+
+        <!-- Drop Date Dropdown -->
+        <div
+          v-if="showDropDateFilter"
+          ref="dropDateDropdownRoot"
+          class="fixed z-[9999] bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-2xl"
+          :style="dropDateDropdownStyle"
+        >
+          <div class="p-4 space-y-4">
+            <div>
+              <label class="block text-sm text-gray-600 dark:text-gray-400 mb-1">From</label>
+              <input
+                v-model="dropStart"
+                type="date"
+                class="w-full border border-gray-300 dark:border-gray-600 rounded p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label class="block text-sm text-gray-600 dark:text-gray-400 mb-1">To</label>
+              <input
+                v-model="dropEnd"
+                type="date"
+                :min="dropStart"
+                class="w-full border border-gray-300 dark:border-gray-600 rounded p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+          <div class="border-t border-gray-200 dark:border-gray-700 p-3 flex justify-between items-center">
+            <button @click="clearDropDate" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-md text-sm transition-colors">
+              Clear
+            </button>
+            <button @click="showDropDateFilter = false" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm transition-colors">
+              Close
+            </button>
+          </div>
+        </div>
+      </Teleport>
     </div>
   </AdminLayout>
 </template>

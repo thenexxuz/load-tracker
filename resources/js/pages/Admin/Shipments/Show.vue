@@ -10,7 +10,7 @@ defineProps<{
         bol: string | null
         po_number: string | null
         status: string
-        shipper_location: { short_code: string; name: string | null } | null
+        pickup_location: { short_code: string; name: string | null } | null
         dc_location: { short_code: string; name: string | null } | null
         carrier: { name: string; short_code: string } | null
         drop_date: string | null
@@ -94,7 +94,7 @@ const deleteShipment = async () => {
                     <div>
                         <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Shipper Location</dt>
                         <dd class="mt-1 text-gray-900 dark:text-gray-100">
-                            {{ shipment.shipper_location?.short_code || '—' }} - {{ shipment.shipper_location?.name || 'Unnamed' }}
+                            {{ shipment.pickup_location?.short_code || '—' }} - {{ shipment.pickup_location?.name || 'Unnamed' }}
                         </dd>
                     </div>
 
