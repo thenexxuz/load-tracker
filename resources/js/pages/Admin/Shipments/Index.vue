@@ -30,12 +30,13 @@ const props = defineProps<{
   statuses: string[]
   all_shipper_codes: string[]     // Pickup location short codes
   all_dc_codes: string[]          // DC location short codes
+  all_carrier_names: string[]     // Carrier names (or short_codes)
 }>()
 
 const page = usePage()
 
 // ── Status filter ───────────────────────────────────────────────────────
-const selectedStatuses = ref<string[]>([...props.statuses]) // all selected by default
+const selectedStatuses = ref<string[]>([...props.statuses])
 
 const excludedStatuses = computed(() =>
   props.statuses.filter(s => !selectedStatuses.value.includes(s))
@@ -55,12 +56,20 @@ const excludedDcLocations = computed(() =>
   props.all_dc_codes.filter(s => !selectedDcLocations.value.includes(s))
 )
 
+// ── Carrier filter ──────────────────────────────────────────────────────
+const selectedCarriers = ref<string[]>([...props.all_carrier_names])
+
+const excludedCarriers = computed(() =>
+  props.all_carrier_names.filter(c => !selectedCarriers.value.includes(c))
+)
+
 // ── Shared filter application ───────────────────────────────────────────
 function applyFilters() {
   router.post(route('admin.shipments.filter'), {
     excluded_statuses: excludedStatuses.value.length ? excludedStatuses.value : undefined,
     excluded_pickup_locations: excludedPickupLocations.value.length ? excludedPickupLocations.value : undefined,
     excluded_dc_locations: excludedDcLocations.value.length ? excludedDcLocations.value : undefined,
+    excluded_carriers: excludedCarriers.value.length ? excludedCarriers.value : undefined,
     search: search.value.trim() || undefined,
   }, {
     preserveState: true,
@@ -69,7 +78,7 @@ function applyFilters() {
   })
 }
 
-watch([selectedStatuses, selectedPickupLocations, selectedDcLocations], applyFilters, { deep: true })
+watch([selectedStatuses, selectedPickupLocations, selectedDcLocations, selectedCarriers], applyFilters, { deep: true })
 
 // Search
 const search = ref('')
@@ -80,33 +89,46 @@ watch(search, () => applyFilters())
 const showStatusFilter  = ref(false)
 const showPickupFilter  = ref(false)
 const showDcFilter      = ref(false)
+const showCarrierFilter = ref(false)
 
 // Refs for outside-click detection
 const statusFilterRef   = ref<HTMLElement | null>(null)
 const pickupFilterRef   = ref<HTMLElement | null>(null)
 const dcFilterRef       = ref<HTMLElement | null>(null)
+const carrierFilterRef  = ref<HTMLElement | null>(null)
 
-onClickOutside(statusFilterRef, () => showStatusFilter.value = false)
-onClickOutside(pickupFilterRef, () => showPickupFilter.value = false)
-onClickOutside(dcFilterRef,     () => showDcFilter.value = false)
+onClickOutside(statusFilterRef,   () => showStatusFilter.value  = false)
+onClickOutside(pickupFilterRef,   () => showPickupFilter.value  = false)
+onClickOutside(dcFilterRef,       () => showDcFilter.value      = false)
+onClickOutside(carrierFilterRef,  () => showCarrierFilter.value = false)
 
 // ── Toggle functions ────────────────────────────────────────────────────
 const toggleStatusFilter = () => {
   showStatusFilter.value = !showStatusFilter.value
   showPickupFilter.value = false
   showDcFilter.value = false
+  showCarrierFilter.value = false
 }
 
 const togglePickupFilter = () => {
   showPickupFilter.value = !showPickupFilter.value
   showStatusFilter.value = false
   showDcFilter.value = false
+  showCarrierFilter.value = false
 }
 
 const toggleDcFilter = () => {
   showDcFilter.value = !showDcFilter.value
   showStatusFilter.value = false
   showPickupFilter.value = false
+  showCarrierFilter.value = false
+}
+
+const toggleCarrierFilter = () => {
+  showCarrierFilter.value = !showCarrierFilter.value
+  showStatusFilter.value = false
+  showPickupFilter.value = false
+  showDcFilter.value = false
 }
 
 // ── Dynamic header text ─────────────────────────────────────────────────
@@ -132,6 +154,14 @@ const dcHeaderText = computed(() => {
   if (shown === total) return 'DC'
   if (shown === 0) return 'DC (none)'
   return `DC (${shown}/${total})`
+})
+
+const carrierHeaderText = computed(() => {
+  const total = props.all_carrier_names.length
+  const shown = selectedCarriers.value.length
+  if (shown === total) return 'Carrier'
+  if (shown === 0) return 'Carrier (none)'
+  return `Carrier (${shown}/${total})`
 })
 
 // ── PBI Import Modal ────────────────────────────────────────────────────
@@ -461,7 +491,33 @@ const goToShow = (id: number) => {
               <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300">Drop Date</th>
               <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300">Pickup Date</th>
               <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300">Delivery Date</th>
-              <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300">Carrier</th>
+
+              <!-- Carrier filter header -->
+              <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300 cursor-pointer relative min-w-[160px]" ref="carrierFilterRef">
+                <div @click="toggleCarrierFilter" class="flex items-center justify-between">
+                  {{ carrierHeaderText }}
+                  <span class="ml-1 text-xs">▼</span>
+                </div>
+
+                <div v-if="showCarrierFilter" class="absolute top-full left-0 mt-1 w-80 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-xl z-50">
+                  <div class="p-4">
+                    <select v-model="selectedCarriers" multiple class="w-full h-48 border border-gray-300 dark:border-gray-600 rounded p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                      <option v-for="name in props.all_carrier_names" :key="name" :value="name">
+                        {{ name }}
+                      </option>
+                    </select>
+                  </div>
+                  <div class="border-t border-gray-200 dark:border-gray-700 p-3 flex justify-between items-center">
+                    <span class="text-sm text-gray-500 dark:text-gray-400">
+                      {{ selectedCarriers.length }} / {{ props.all_carrier_names.length }}
+                    </span>
+                    <button @click="selectedCarriers = [...props.all_carrier_names]" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-md text-sm transition-colors">
+                      Select all
+                    </button>
+                  </div>
+                </div>
+              </th>
+
               <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300">Trailer</th>
               <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300 text-center">Actions</th>
             </tr>

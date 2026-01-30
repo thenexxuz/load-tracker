@@ -47,6 +47,22 @@ class ShipmentController extends Controller
             });
         }
 
+        // Exclude carriers
+        $excludedCarriers = $request->input('excluded_carriers', []);
+
+        // Special case: if user excluded ALL carriers → show only shipments with null carrier
+        if (is_array($excludedCarriers) && count($excludedCarriers) === count(Carrier::pluck('name')->unique()->toArray())) {
+            $query->whereNull('carrier_id');
+        }
+        // Normal case: exclude the selected carriers
+        elseif (!empty($excludedCarriers)) {
+            $query->whereNotIn('carrier_id', function ($sub) use ($excludedCarriers) {
+                $sub->select('id')
+                    ->from('carriers')
+                    ->whereIn('name', $excludedCarriers);
+            });
+        }
+
         $shipments = $query->latest()->paginate(15);
 
         return Inertia::render('Admin/Shipments/Index', [
@@ -54,6 +70,7 @@ class ShipmentController extends Controller
             'statuses' => Shipment::select('status')->distinct()->pluck('status')->sort()->values(),
             'all_shipper_codes' => Location::where('type', 'pickup')->pluck('short_code')->unique()->sort()->values(),
             'all_dc_codes' => Location::where('type', 'distribution_center')->pluck('short_code')->unique()->sort()->values(),
+            'all_carrier_names' => Carrier::pluck('name')->unique()->sort()->values(),
         ]);
     }
 
