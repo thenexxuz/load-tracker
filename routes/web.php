@@ -3,9 +3,11 @@
 use App\Http\Controllers\AuditController;
 use App\Http\Controllers\CarrierController;
 use App\Http\Controllers\LocationController;
+use App\Http\Controllers\MessageController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\RateController;
 use App\Http\Controllers\ShipmentController;
+use App\Http\Controllers\TemplateController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -32,6 +34,8 @@ Route::middleware(['auth', 'role:administrator|supervisor'])->prefix('admin')->n
     Route::post('carriers/import', [CarrierController::class, 'import'])->name('carriers.import');
     Route::get('carriers/export', [CarrierController::class, 'export'])->name('carriers.export');
     Route::resource('carriers', CarrierController::class);
+    // Template Routes
+    Route::resource('templates', TemplateController::class);
     // Location Routes
     Route::post('locations/import', [LocationController::class, 'import'])->name('locations.import');
     Route::get('locations/export', [LocationController::class, 'export'])->name('locations.export');

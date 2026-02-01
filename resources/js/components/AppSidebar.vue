@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3'
-import { BookOpen, Folder, LayoutGrid, Map, SearchIcon, Truck, TruckIcon, User, DollarSign } from 'lucide-vue-next';
+import { BookOpen, Folder, LayoutGrid, Map, SearchIcon, Truck, TruckIcon, User, DollarSign, AtSign, NotepadTextDashed } from 'lucide-vue-next';
 
 import NavFooter from '@/components/NavFooter.vue'
 import NavUser from '@/components/NavUser.vue'
@@ -25,6 +25,7 @@ const hasUserAccess = userRoles.includes('administrator')
 const hasAuditAccess = userRoles.includes('administrator') || userRoles.includes('supervisor')
 const hasRatesAccess = userRoles.includes('administrator') || userRoles.includes('supervisor')
 const hasCarrierAccess = userRoles.includes('administrator') || userRoles.includes('supervisor')
+const hasTemplateAccess = userRoles.includes('administrator') || userRoles.includes('supervisor')
 const hasLocationsAccess = userRoles.includes('administrator') || userRoles.includes('supervisor')
 const hasShipmentAccess = userRoles.includes('administrator') || userRoles.includes('supervisor') || userRoles.includes('truckload') || userRoles.includes('data-entry')
 
@@ -53,6 +54,13 @@ const mainNavItems: NavItem[] = [
             title: 'Carrier Management',
             href: route('admin.carriers.index'),
             icon: Truck,
+        }]
+        : []),
+    ...(hasTemplateAccess
+        ? [{
+            title: 'Template Management',
+            href: route('admin.templates.index'),
+            icon: NotepadTextDashed,
         }]
         : []),
     ...(hasRatesAccess
