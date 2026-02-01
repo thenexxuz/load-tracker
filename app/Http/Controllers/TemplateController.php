@@ -86,13 +86,16 @@ class TemplateController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255|unique:templates,name,' . $template->id,
-            'model_type' => 'required|in:App\Models\Carrier,App\Models\Location',
+            'model_type' => 'required|in:carrier,location',
             'model_id' => 'required|integer',
             'subject' => 'nullable|string|max:255',
             'message' => 'nullable|string',
         ]);
 
-        // Validate model existence
+        // Validate that model_id exists for the given model_type
+        $validated['model_type'] = $validated['model_type'] === 'carrier'
+            ? 'App\\Models\\Carrier'
+            : 'App\\Models\\Location';
         $modelClass = $validated['model_type'];
         if (!class_exists($modelClass) || !$modelClass::find($validated['model_id'])) {
             return back()->withErrors(['model_id' => 'Selected model does not exist.']);

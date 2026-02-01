@@ -135,4 +135,11 @@ class Shipment extends Model
     {
         return "This location has been {$eventName}";
     }
+
+    public function ppw()
+    {
+        return 'Format table for paperwork generation';
+    }
+
+    
 }

@@ -29,7 +29,7 @@ const tinyMceInit = {
   ],
   toolbar: 'undo redo | formatselect | ' +
     'bold italic underline color backcolor | alignleft aligncenter ' +
-    'alignright alignjustify | bullist numlist outdent indent | ' +
+    'alignright alignjustify | table bullist numlist outdent indent | ' +
     'removeformat | help | link image',
   content_style: 'body { font-family:Helvetica,Arial,sans-serif; font-size:14px }',
   placeholder: 'Type your message here...',

@@ -5,8 +5,10 @@ namespace App\Http\Controllers;
 use App\Models\Carrier;
 use App\Models\Location;
 use App\Models\Shipment;
+use App\Models\Template;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
 use Inertia\Inertia;
 use League\Csv\Writer;
@@ -194,7 +196,7 @@ class ShipmentController extends Controller
             'bol' => 'nullable|string|max:100',
             'po_number' => 'nullable|string|max:100',
             'status' => 'required|string',
-            'shipper_location_id' => 'required|exists:locations,id',
+            'pickup_location_id' => 'required|exists:locations,id',
             'dc_location_id' => 'nullable|exists:locations,id',
             'carrier_id' => 'nullable|exists:carriers,id',
             'drop_date' => ['nullable', 'date'],
@@ -433,5 +435,138 @@ class ShipmentController extends Controller
         return response($content)
             ->header('Content-Type', 'text/tab-separated-values; charset=utf-8')
             ->header('Content-Disposition', "attachment; filename=\"$filename\"");
+    }
+
+    public function sendPaperwork(Request $request, Shipment $shipment): \Inertia\Response
+    {
+        $shipment->load(['pickupLocation:id,short_code,name', 'dcLocation:id,short_code,name', 'carrier:id,name']);
+
+        $templates = Template::where('model_type', 'App\Models\Location')
+            ->where('model_id', $shipment->pickup_location_id)
+            ->get();
+
+        return Inertia::render('Admin/Shipments/SendPaperwork', [
+            'shipment' => $shipment,
+            'templates' => $templates,
+        ]);
+    }
+
+    /**
+     * Process SendPaperwork form and send the selected template to carrier emails.
+     */
+    public function processSendPaperwork(Request $request, Shipment $shipment): \Illuminate\Http\RedirectResponse
+    {
+        $data = $request->validate([
+            'template_id' => 'required|exists:templates,id',
+            'lrc_file' => 'nullable|file|mimes:pdf|max:10240', // 10MB max, PDF only
+            'bol_file' => 'nullable|file|mimes:pdf|max:10240',
+        ]);
+
+        $template = Template::findOrFail($data['template_id']);
+
+        $shipment->load(['pickupLocation', 'dcLocation', 'carrier']);
+
+        $replacements = [
+            'status' => $shipment->status ?? '',
+            'shipment_number' => $shipment->shipment_number ?? 'XXXX',
+            'bol' => $shipment->bol ?? 'XXXX',
+            'po_number' => $shipment->po_number ?? '',
+            'pickup_location' => optional($shipment->pickupLocation)->short_code ?? '',
+            'pickup_location_name' => optional($shipment->pickupLocation)->name ?? '',
+            'dc_location' => optional($shipment->dcLocation)->short_code ?? '',
+            'dc_location_name' => optional($shipment->dcLocation)->name ?? '',
+            'dc_location_address' => optional($shipment->dcLocation)->address ?? '',
+            'carrier_code' => optional($shipment->carrier)->short_code ?? '',
+            'trailer' => $shipment->trailer ?? 'XXXX',
+            'load_bar_qty' => $shipment->load_bar_qty ?? '0',
+            'rack_qty' => $shipment->rack_qty ?? '0',
+            'strap_qty' => $shipment->strap_qty ?? '0',
+            'drop_date' => $shipment->drop_date ? Carbon::parse($shipment->drop_date)->format('m/d/Y') : '',
+            'pickup_date' => $shipment->pickup_date ? Carbon::parse($shipment->pickup_date)->format('m/d/Y') : '',
+            'delivery_date' => $shipment->delivery_date ? Carbon::parse($shipment->delivery_date)->format('m/d/Y') : '',
+        ];
+
+        $renderPlaceholders = function (string $text) use ($replacements): string {
+            return preg_replace_callback('/\{\{?\s*([^\}\s]+)\s*\}?\}/', function ($matches) use ($replacements) {
+                $key = strtolower(trim($matches[1]));
+                return $replacements[$key] ?? $matches[0];
+            }, $text);
+        };
+
+        $subject = $renderPlaceholders((string) $template->subject);
+        $body = $renderPlaceholders((string) $template->message);
+
+        $recipients = [];
+
+        $carrier = $shipment->carrier;
+
+        if ($carrier && isset($carrier->emails) && !empty($carrier->emails)) {
+            $input = str_replace(',', ';', $carrier->emails);
+            $parts = array_map('trim', explode(';', $input));
+            $emails = [];
+
+            foreach ($parts as $part) {
+                if (empty($part))
+                    continue;
+
+                // "Name" <email@domain.com>
+                if (preg_match('/<([^>]+)>/', $part, $matches)) {
+                    $email = trim($matches[1]);
+                    if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                        $emails[] = $email;
+                    }
+                }
+                // Plain email
+                elseif (filter_var($part, FILTER_VALIDATE_EMAIL)) {
+                    $emails[] = $part;
+                }
+            }
+
+            $recipients = array_values(array_unique($emails));
+        }
+
+        if (empty($recipients)) {
+            return back()->withErrors(['recipients' => 'No valid recipient emails found for the shipment carrier.']);
+        }
+
+        try {
+            Mail::send([], [], function ($message) use ($recipients, $subject, $body, $request) {
+                $message->to($recipients);
+                $message->subject($subject);
+                $message->html($body);
+
+                // Attach LRC file if uploaded
+                if ($request->hasFile('lrc_file') && $request->file('lrc_file')->isValid()) {
+                    $message->attach(
+                        $request->file('lrc_file')->getRealPath(),
+                        [
+                            'as' => $request->file('lrc_file')->getClientOriginalName(),
+                            'mime' => $request->file('lrc_file')->getMimeType(),
+                        ]
+                    );
+                }
+
+                // Attach BOL file if uploaded
+                if ($request->hasFile('bol_file') && $request->file('bol_file')->isValid()) {
+                    $message->attach(
+                        $request->file('bol_file')->getRealPath(),
+                        [
+                            'as' => $request->file('bol_file')->getClientOriginalName(),
+                            'mime' => $request->file('bol_file')->getMimeType(),
+                        ]
+                    );
+                }
+            });
+
+            if ($shipment->isFillable('paperwork_sent')) {
+                $shipment->update(['paperwork_sent' => now()]);
+            }
+
+            return redirect()->route('admin.shipments.show', $shipment)
+                ->with('success', 'Paperwork sent successfully.');
+        } catch (\Exception $e) {
+            \Log::error('Paperwork email failed: ' . $e->getMessage());
+            return back()->withErrors(['email' => 'Failed to send email: ' . $e->getMessage()]);
+        }
     }
 }

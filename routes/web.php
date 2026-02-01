@@ -40,16 +40,21 @@ Route::middleware(['auth', 'role:administrator|supervisor'])->prefix('admin')->n
     Route::post('locations/import', [LocationController::class, 'import'])->name('locations.import');
     Route::get('locations/export', [LocationController::class, 'export'])->name('locations.export');
     Route::resource('locations', LocationController::class);
+    // Rate Routes
+    Route::resource('rates', RateController::class);
+});
+
+Route::middleware(['auth', 'role:administrator|supervisor|truckload'])->prefix('admin')->name('admin.')->group(function () {
     // Shipment Routes
     Route::post('shipments/pbi-import', [ShipmentController::class, 'pbiImport'])->name('shipments.pbi-import');
     Route::get('shipments/failed-tsv', [ShipmentController::class, 'downloadFailedTsv'])->name('shipments.download-failed-tsv');
+    Route::post('shipments/{shipment}/send-paperwork', [ShipmentController::class, 'processSendPaperwork'])->name('shipments.process-send-paperwork');
+    Route::get('shipments/{shipment}/send-paperwork', [ShipmentController::class, 'sendPaperwork'])->name('shipments.send-paperwork');
     Route::post('shipments/filter', [ShipmentController::class, 'index'])->name('shipments.filter');
     Route::get('shipments/filter', function () {
         return redirect()->route('admin.shipments.index');
     });
     Route::resource('shipments', ShipmentController::class);
-    // Rate Routes
-    Route::resource('rates', RateController::class);
 });
 
 require __DIR__.'/settings.php';

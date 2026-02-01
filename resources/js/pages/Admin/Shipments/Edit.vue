@@ -153,12 +153,13 @@ const submit = () => {
         position: 'top-end'
       })
     },
-    onError: () => {
+    onError: (response) => {
       Swal.fire({
         icon: 'error',
         title: 'Error',
         text: 'Please fix the errors in the form.'
       })
+      console.error('Update failed:', response)
     },
     onFinish: () => {
       form.processing = false
@@ -194,11 +195,15 @@ const submit = () => {
               class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none appearance-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
             >
               <option value="Pending">Pending</option>
+              <option value="Booked">Booked</option>
+              <option value="Checked In">Checked In</option>
               <option value="Picked Up">Picked Up</option>
+              <option value="Loading">Loading</option>
               <option value="In Transit">In Transit</option>
               <option value="Crossed Border">Crossed Border</option>
               <option value="Delivered">Delivered</option>
               <option value="Cancelled">Cancelled</option>
+              <option value="On Hold">On Hold (Does not show on reminder emails)</option>
             </select>
             <p v-if="form.errors.status" class="mt-1 text-sm text-red-600 dark:text-red-400">
               {{ form.errors.status }}

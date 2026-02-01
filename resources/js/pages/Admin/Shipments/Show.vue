@@ -159,7 +159,16 @@ const deleteShipment = async () => {
                             <div>On Site: {{ shipment.on_site ? 'Yes' : 'No' }}</div>
                             <div>Shipped: {{ shipment.shipped ? 'Yes' : 'No' }}</div>
                             <div>Recycling Sent: {{ shipment.recycling_sent ? 'Yes' : 'No' }}</div>
-                            <div>Paperwork Sent: {{ shipment.paperwork_sent ? 'Yes' : 'No' }}</div>
+                            <div>
+                                Paperwork Sent: {{ shipment.paperwork_sent ? 'Yes' : 'No' }}<br/>
+                                <a :href="route('admin.shipments.send-paperwork', shipment.id)" v-if="shipment.carrier && shipment.trailer">
+                                    <button
+                                        class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-md font-medium transition-colors"
+                                    >
+                                        Send Paperwork
+                                    </button>
+                                </a>
+                            </div>
                             <div>Delivery Alert Sent: {{ shipment.delivery_alert_sent ? 'Yes' : 'No' }}</div>
                         </dd>
                     </div>
