@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { Head } from '@inertiajs/vue3'
+import { Head, router } from '@inertiajs/vue3'
+import { computed } from 'vue'
 import AdminLayout from '@/layouts/AppLayout.vue'
 import Swal from 'sweetalert2'
-import { computed } from 'vue'
 
-const { shipment } = defineProps<{
+defineProps<{
   shipment: {
     id: number
     shipment_number: string
@@ -63,45 +63,24 @@ const deleteShipment = async () => {
   }
 }
 
-// Format dates using Carbon-like logic in Vue
+// Date formatting helper
 const formatDate = (date: string | null, withTime = false) => {
-    if (!date) return '—'
-  
-    // Parse as CST explicitly
-    const d = new Date(date.slice(0, -1))  // Remove 'Z' and set to CST
-  
-    if (isNaN(d.getTime())) return '—'
-  
-    const formatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'America/Chicago',  // CST / Central Time
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      ...(withTime && {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,  // 24-hour format
-      }),
-    })
-  
-    const parts = formatter.formatToParts(d)
-  
-    const month = parts.find(p => p.type === 'month')?.value ?? ''
-    const day   = parts.find(p => p.type === 'day')?.value ?? ''
-    const year  = parts.find(p => p.type === 'year')?.value ?? ''
-    const hour  = parts.find(p => p.type === 'hour')?.value ?? ''
-    const minute = parts.find(p => p.type === 'minute')?.value ?? ''
-  
-    if (!withTime) {
-      return `${month}/${day}/${year}`
-    }
-  
-    return `${month}/${day}/${year} ${hour}:${minute}`
+  if (!date) return '—'
+  const d = new Date(date)
+  if (isNaN(d.getTime())) return '—'
+
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  const year = d.getFullYear()
+
+  if (!withTime) {
+    return `${month}/${day}/${year}`
   }
 
-const dropDateFormatted = computed(() => formatDate(shipment.drop_date))
-const pickupDateFormatted = computed(() => formatDate(shipment.pickup_date, true))
-const deliveryDateFormatted = computed(() => formatDate(shipment.delivery_date, true))
+  const hours = String(d.getHours()).padStart(2, '0')
+  const minutes = String(d.getMinutes()).padStart(2, '0')
+  return `${month}/${day}/${year} ${hours}:${minutes}`
+}
 </script>
 
 <template>
@@ -153,40 +132,40 @@ const deliveryDateFormatted = computed(() => formatDate(shipment.delivery_date, 
             </dd>
           </div>
 
-          <!-- Dates in one row, 3 columns -->
+          <!-- Dates – one row, 3 columns -->
           <div class="col-span-full">
             <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Dates</dt>
             <dd class="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
                 <span class="block text-xs text-gray-500 dark:text-gray-400">Drop Date</span>
-                <span class="text-gray-900 dark:text-gray-100">{{ dropDateFormatted }}</span>
+                <span class="text-gray-900 dark:text-gray-100 font-medium">{{ formatDate(shipment.drop_date) }}</span>
               </div>
               <div>
                 <span class="block text-xs text-gray-500 dark:text-gray-400">Pickup Date</span>
-                <span class="text-gray-900 dark:text-gray-100">{{ pickupDateFormatted }}</span>
+                <span class="text-gray-900 dark:text-gray-100 font-medium">{{ formatDate(shipment.pickup_date, true) }}</span>
               </div>
               <div>
                 <span class="block text-xs text-gray-500 dark:text-gray-400">Delivery Date</span>
-                <span class="text-gray-900 dark:text-gray-100">{{ deliveryDateFormatted }}</span>
+                <span class="text-gray-900 dark:text-gray-100 font-medium">{{ formatDate(shipment.delivery_date, true) }}</span>
               </div>
             </dd>
           </div>
 
-          <!-- Quantities in one row, 3 columns -->
+          <!-- Quantities – one row, 3 columns -->
           <div class="col-span-full">
             <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Quantities</dt>
             <dd class="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
                 <span class="block text-xs text-gray-500 dark:text-gray-400">Rack Qty</span>
-                <span class="text-gray-900 dark:text-gray-100">{{ shipment.rack_qty }}</span>
+                <span class="text-gray-900 dark:text-gray-100 font-medium">{{ shipment.rack_qty }}</span>
               </div>
               <div>
                 <span class="block text-xs text-gray-500 dark:text-gray-400">Load Bar Qty</span>
-                <span class="text-gray-900 dark:text-gray-100">{{ shipment.load_bar_qty }}</span>
+                <span class="text-gray-900 dark:text-gray-100 font-medium">{{ shipment.load_bar_qty }}</span>
               </div>
               <div>
                 <span class="block text-xs text-gray-500 dark:text-gray-400">Strap Qty</span>
-                <span class="text-gray-900 dark:text-gray-100">{{ shipment.strap_qty }}</span>
+                <span class="text-gray-900 dark:text-gray-100 font-medium">{{ shipment.strap_qty }}</span>
               </div>
             </dd>
           </div>

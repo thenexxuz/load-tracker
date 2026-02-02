@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { Head, useForm, router } from '@inertiajs/vue3'
+import { Head, useForm } from '@inertiajs/vue3'
+import { ref } from 'vue'
 import AdminLayout from '@/layouts/AppLayout.vue'
 import Swal from 'sweetalert2'
 
@@ -12,36 +13,47 @@ const props = defineProps<{
 const form = useForm({
   status: 'Pending',
   bol: '',
-  shipper_location_id: null,
-  shipment_number: null,
-  dc_location_id: null,
-  drop_date: null,
-  pickup_date: null,
-  delivery_date: null,
+  shipment_number: null as number | null,
+  pickup_location_id: null as number | null,
+  dc_location_id: null as number | null,
+  drop_date: null as string | null,
+  pickup_date: null as string | null,
+  delivery_date: null as string | null,
   po_number: '',
   rack_qty: 0,
-  carrier_id: null,
+  carrier_id: null as number | null,
   trailer: '',
   load_bar_qty: 0,
   strap_qty: 0,
   drayage: '',
-  on_site_checked: false,
-  shipped_checked: false,
-  crossed_border: null,
-  recycling_sent_checked: false,
-  paperwork_sent_checked: false,
-  delivery_sent_checked: false,
+  on_site: null as string | null,
+  shipped: null as string | null,
+  crossed: null as string | null,          // new
+  recycling_sent: null as string | null,
+  paperwork_sent: null as string | null,
+  delivery_alert_sent: null as string | null,
+  seal_number: '',                         // new
+  drivers_id: '',                          // new
   consolidation_number: '',
   notes: '',
-  other: null,
+  other: '',
 })
+
+// Helper to set current timestamp when user "checks" a flag
+const setCurrentDate = (field: keyof typeof form) => {
+  form[field] = new Date().toISOString()
+}
+
+const clearDate = (field: keyof typeof form) => {
+  form[field] = null
+}
 
 const submit = () => {
   form.post(route('admin.shipments.store'), {
     onSuccess: () => {
       Swal.fire({
         icon: 'success',
-        title: 'Success!',
+        title: 'Created!',
         text: 'Shipment created successfully.',
         timer: 3000,
         showConfirmButton: false,
@@ -49,7 +61,6 @@ const submit = () => {
         position: 'top-end'
       })
       form.reset()
-      router.visit(route('admin.shipments.index'), { preserveState: true })
     },
     onError: () => {
       Swal.fire({
@@ -57,9 +68,6 @@ const submit = () => {
         title: 'Error',
         text: 'Please fix the errors in the form.'
       })
-    },
-    onFinish: () => {
-      form.processing = false
     }
   })
 }
@@ -79,7 +87,7 @@ const submit = () => {
         Please fix the errors below.
       </div>
 
-      <form @submit.prevent="submit" class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg dark:shadow-gray-900/30 border border-gray-200 dark:border-gray-700 max-w-4xl">
+      <form @submit.prevent="submit" class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg dark:shadow-gray-900/30 border border-gray-200 dark:border-gray-700 max-w-5xl">
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <!-- Status -->
           <div>
@@ -129,13 +137,13 @@ const submit = () => {
             </p>
           </div>
 
-          <!-- Shipper Location (only pickup type) -->
+          <!-- Shipper Location -->
           <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Shipper Location <span class="text-red-600 dark:text-red-400">*</span>
             </label>
             <select
-              v-model="form.shipper_location_id"
+              v-model="form.pickup_location_id"
               required
               class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none appearance-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
             >
@@ -144,12 +152,12 @@ const submit = () => {
                 {{ loc.short_code }} - {{ loc.name || 'Unnamed' }}
               </option>
             </select>
-            <p v-if="form.errors.shipper_location_id" class="mt-1 text-sm text-red-600 dark:text-red-400">
-              {{ form.errors.shipper_location_id }}
+            <p v-if="form.errors.pickup_location_id" class="mt-1 text-sm text-red-600 dark:text-red-400">
+              {{ form.errors.pickup_location_id }}
             </p>
           </div>
 
-          <!-- DC Location (only distribution_center type) -->
+          <!-- DC Location -->
           <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               DC Location <span class="text-red-600 dark:text-red-400">*</span>
@@ -294,52 +302,105 @@ const submit = () => {
             </p>
           </div>
 
-          <!-- Checkboxes for datetime flags -->
+          <!-- Seal Number (new) -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Seal Number</label>
+            <input
+              v-model="form.seal_number"
+              type="text"
+              class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
+            />
+            <p v-if="form.errors.seal_number" class="mt-1 text-sm text-red-600 dark:text-red-400">
+              {{ form.errors.seal_number }}
+            </p>
+          </div>
+
+          <!-- Drivers ID (new) -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Drivers ID</label>
+            <input
+              v-model="form.drivers_id"
+              type="text"
+              class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
+            />
+            <p v-if="form.errors.drivers_id" class="mt-1 text-sm text-red-600 dark:text-red-400">
+              {{ form.errors.drivers_id }}
+            </p>
+          </div>
+
+          <!-- Flags as datetime-local inputs -->
           <div class="col-span-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
-            <label class="flex items-center space-x-3 cursor-pointer">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">On Site</label>
               <input
-                type="checkbox"
-                v-model="form.on_site_checked"
-                class="h-5 w-5 text-blue-600 rounded border-gray-300 dark:border-gray-600 focus:ring-blue-500"
+                v-model="form.on_site"
+                type="datetime-local"
+                class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
               />
-              <span class="text-gray-700 dark:text-gray-300">On Site</span>
-            </label>
+              <p v-if="form.errors.on_site" class="mt-1 text-sm text-red-600 dark:text-red-400">
+                {{ form.errors.on_site }}
+              </p>
+            </div>
 
-            <label class="flex items-center space-x-3 cursor-pointer">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Shipped</label>
               <input
-                type="checkbox"
-                v-model="form.shipped_checked"
-                class="h-5 w-5 text-blue-600 rounded border-gray-300 dark:border-gray-600 focus:ring-blue-500"
+                v-model="form.shipped"
+                type="datetime-local"
+                class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
               />
-              <span class="text-gray-700 dark:text-gray-300">Shipped</span>
-            </label>
+              <p v-if="form.errors.shipped" class="mt-1 text-sm text-red-600 dark:text-red-400">
+                {{ form.errors.shipped }}
+              </p>
+            </div>
 
-            <label class="flex items-center space-x-3 cursor-pointer">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Crossed</label>
               <input
-                type="checkbox"
-                v-model="form.recycling_sent_checked"
-                class="h-5 w-5 text-blue-600 rounded border-gray-300 dark:border-gray-600 focus:ring-blue-500"
+                v-model="form.crossed"
+                type="datetime-local"
+                class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
               />
-              <span class="text-gray-700 dark:text-gray-300">Recycling Sent</span>
-            </label>
+              <p v-if="form.errors.crossed" class="mt-1 text-sm text-red-600 dark:text-red-400">
+                {{ form.errors.crossed }}
+              </p>
+            </div>
 
-            <label class="flex items-center space-x-3 cursor-pointer">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Recycling Sent</label>
               <input
-                type="checkbox"
-                v-model="form.paperwork_sent_checked"
-                class="h-5 w-5 text-blue-600 rounded border-gray-300 dark:border-gray-600 focus:ring-blue-500"
+                v-model="form.recycling_sent"
+                type="datetime-local"
+                class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
               />
-              <span class="text-gray-700 dark:text-gray-300">Paperwork Sent</span>
-            </label>
+              <p v-if="form.errors.recycling_sent" class="mt-1 text-sm text-red-600 dark:text-red-400">
+                {{ form.errors.recycling_sent }}
+              </p>
+            </div>
 
-            <label class="flex items-center space-x-3 cursor-pointer">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Paperwork Sent</label>
               <input
-                type="checkbox"
-                v-model="form.delivery_sent_checked"
-                class="h-5 w-5 text-blue-600 rounded border-gray-300 dark:border-gray-600 focus:ring-blue-500"
+                v-model="form.paperwork_sent"
+                type="datetime-local"
+                class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
               />
-              <span class="text-gray-700 dark:text-gray-300">Delivery Alert Sent</span>
-            </label>
+              <p v-if="form.errors.paperwork_sent" class="mt-1 text-sm text-red-600 dark:text-red-400">
+                {{ form.errors.paperwork_sent }}
+              </p>
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Delivery Alert Sent</label>
+              <input
+                v-model="form.delivery_alert_sent"
+                type="datetime-local"
+                class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
+              />
+              <p v-if="form.errors.delivery_alert_sent" class="mt-1 text-sm text-red-600 dark:text-red-400">
+                {{ form.errors.delivery_alert_sent }}
+              </p>
+            </div>
           </div>
 
           <!-- Consolidation Number -->
@@ -370,22 +431,19 @@ const submit = () => {
           </div>
         </div>
 
-        <div class="flex justify-end mt-8">
+        <div class="flex justify-end space-x-4 mt-8">
+          <a href="javascript:history.back()" class="px-6 py-3 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
+            Cancel
+          </a>
           <button
             type="submit"
             :disabled="form.processing"
-            class="bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-600 text-white px-8 py-3 rounded-md font-medium transition-colors disabled:opacity-50"
+            class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-md font-medium transition-colors disabled:opacity-50"
           >
             {{ form.processing ? 'Creating...' : 'Create Shipment' }}
           </button>
         </div>
       </form>
-
-      <div class="mt-8 text-center">
-        <a href="javascript:history.back()" class="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors">
-          ← Back to Shipments List
-        </a>
-      </div>
     </div>
   </AdminLayout>
 </template>

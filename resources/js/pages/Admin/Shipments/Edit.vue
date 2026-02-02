@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, useForm } from '@inertiajs/vue3'
-import { computed } from 'vue'
+import { ref } from 'vue'
 import AdminLayout from '@/layouts/AppLayout.vue'
 import Swal from 'sweetalert2'
 
@@ -24,10 +24,12 @@ const props = defineProps<{
     drayage: string | null
     on_site: string | null
     shipped: string | null
-    crossed_border: string | null
+    crossed: string | null          // ← new
     recycling_sent: string | null
     paperwork_sent: string | null
-    delivery_sent: string | null
+    delivery_alert_sent: string | null
+    seal_number: string | null      // ← new
+    drivers_id: string | null       // ← new
     consolidation_number: string | null
     notes: string | null
     other: object | null | string
@@ -37,33 +39,15 @@ const props = defineProps<{
   carriers: Array<{ id: number; name: string; short_code: string }>
 }>()
 
-// Helper to extract date-only string (YYYY-MM-DD) from ISO or any date string
-const toDateInput = (dateStr: string | null) => {
-  if (!dateStr) return ''
-  // Handle ISO format or any string with date part
-  const match = dateStr.match(/^(\d{4}-\d{2}-\d{2})/)
-  return match ? match[1] : ''
-}
-
-// Helper for datetime-local (YYYY-MM-DDTHH:mm)
-const toDateTimeInput = (dateStr: string | null) => {
-  if (!dateStr) return ''
-  try {
-    const date = new Date(dateStr)
-    if (isNaN(date.getTime())) return ''
-    return date.toISOString().slice(0, 16) // YYYY-MM-DDTHH:mm
-  } catch {
-    return ''
-  }
-}
-
-// Form setup with computed getters/setters for dates
 const form = useForm({
   status: props.shipment.status || 'Pending',
   bol: props.shipment.bol || '',
   shipment_number: props.shipment.shipment_number,
   pickup_location_id: props.shipment.pickup_location_id,
   dc_location_id: props.shipment.dc_location_id,
+  drop_date: props.shipment.drop_date || null,
+  pickup_date: props.shipment.pickup_date || null,
+  delivery_date: props.shipment.delivery_date || null,
   po_number: props.shipment.po_number || '',
   rack_qty: props.shipment.rack_qty || 0,
   carrier_id: props.shipment.carrier_id || null,
@@ -71,73 +55,37 @@ const form = useForm({
   load_bar_qty: props.shipment.load_bar_qty || 0,
   strap_qty: props.shipment.strap_qty || 0,
   drayage: props.shipment.drayage || '',
-  on_site_checked: !!props.shipment.on_site,
-  shipped_checked: !!props.shipment.shipped,
-  recycling_sent_checked: !!props.shipment.recycling_sent,
-  paperwork_sent_checked: !!props.shipment.paperwork_sent,
-  delivery_sent_checked: !!props.shipment.delivery_sent,
+  on_site: props.shipment.on_site || null,
+  shipped: props.shipment.shipped || null,
+  crossed: props.shipment.crossed || null,                // ← new
+  recycling_sent: props.shipment.recycling_sent || null,
+  paperwork_sent: props.shipment.paperwork_sent || null,
+  delivery_alert_sent: props.shipment.delivery_alert_sent || null,
+  seal_number: props.shipment.seal_number || '',          // ← new
+  drivers_id: props.shipment.drivers_id || '',            // ← new
   consolidation_number: props.shipment.consolidation_number || '',
   notes: props.shipment.notes || '',
   other: props.shipment.other ? JSON.stringify(props.shipment.other, null, 2) : '',
-  // Internal storage for original date strings (for submission)
-  _drop_date_raw: props.shipment.drop_date,
-  _pickup_date_raw: props.shipment.pickup_date,
-  _delivery_date_raw: props.shipment.delivery_date,
 })
 
-// Computed properties for date inputs (display formatted, store original on change)
-const dropDate = computed({
-  get: () => toDateInput(form._drop_date_raw),
-  set: (val: string) => {
-    form._drop_date_raw = val ? `${val}T00:00:00.000Z` : null // preserve as ISO-like
+// Helper to toggle datetime fields (sets current time when checked, null when unchecked)
+const toggleDate = (field: string, checked: boolean) => {
+  if (checked) {
+    form[field] = new Date().toISOString()
+  } else {
+    form[field] = null
   }
-})
+}
 
-const pickupDateTime = computed({
-  get: () => toDateTimeInput(form._pickup_date_raw),
-  set: (val: string) => {
-    form._pickup_date_raw = val ? `${val}:00.000Z` : null // add seconds
-  }
-})
-
-const deliveryDateTime = computed({
-  get: () => toDateTimeInput(form._delivery_date_raw),
-  set: (val: string) => {
-    form._delivery_date_raw = val ? `${val}:00.000Z` : null
-  }
-})
-
-// Submit handler – use raw values
 const submit = () => {
   const payload = {
     ...form.data(),
-    drop_date: form._drop_date_raw,
-    pickup_date: form._pickup_date_raw,
-    delivery_date: form._delivery_date_raw,
-    on_site: form.on_site_checked 
-      ? (props.shipment.on_site || new Date().toISOString()) 
-      : null,
-    shipped: form.shipped_checked 
-      ? (props.shipment.shipped || new Date().toISOString()) 
-      : null,
-    recycling_sent: form.recycling_sent_checked 
-      ? (props.shipment.recycling_sent || new Date().toISOString()) 
-      : null,
-    paperwork_sent: form.paperwork_sent_checked 
-      ? (props.shipment.paperwork_sent || new Date().toISOString()) 
-      : null,
-    delivery_sent: form.delivery_sent_checked 
-      ? (props.shipment.delivery_sent || new Date().toISOString()) 
-      : null,
-    // Clean up temp fields
-    on_site_checked: undefined,
-    shipped_checked: undefined,
-    recycling_sent_checked: undefined,
-    paperwork_sent_checked: undefined,
-    delivery_sent_checked: undefined,
-    _drop_date_raw: undefined,
-    _pickup_date_raw: undefined,
-    _delivery_date_raw: undefined,
+    on_site: form.on_site ? form.on_site : null,
+    shipped: form.shipped ? form.shipped : null,
+    crossed: form.crossed ? form.crossed : null,
+    recycling_sent: form.recycling_sent ? form.recycling_sent : null,
+    paperwork_sent: form.paperwork_sent ? form.paperwork_sent : null,
+    delivery_alert_sent: form.delivery_alert_sent ? form.delivery_alert_sent : null,
   }
 
   form.put(route('admin.shipments.update', props.shipment.id), {
@@ -153,13 +101,12 @@ const submit = () => {
         position: 'top-end'
       })
     },
-    onError: (response) => {
+    onError: () => {
       Swal.fire({
         icon: 'error',
         title: 'Error',
         text: 'Please fix the errors in the form.'
       })
-      console.error('Update failed:', response)
     },
     onFinish: () => {
       form.processing = false
@@ -195,15 +142,11 @@ const submit = () => {
               class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none appearance-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
             >
               <option value="Pending">Pending</option>
-              <option value="Booked">Booked</option>
-              <option value="Checked In">Checked In</option>
               <option value="Picked Up">Picked Up</option>
-              <option value="Loading">Loading</option>
               <option value="In Transit">In Transit</option>
               <option value="Crossed Border">Crossed Border</option>
               <option value="Delivered">Delivered</option>
               <option value="Cancelled">Cancelled</option>
-              <option value="On Hold">On Hold (Does not show on reminder emails)</option>
             </select>
             <p v-if="form.errors.status" class="mt-1 text-sm text-red-600 dark:text-red-400">
               {{ form.errors.status }}
@@ -293,11 +236,11 @@ const submit = () => {
             </p>
           </div>
 
-          <!-- Drop Date (date-only) -->
+          <!-- Drop Date -->
           <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Drop Date</label>
             <input
-              v-model="dropDate"
+              v-model="form.drop_date"
               type="date"
               class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
             />
@@ -306,11 +249,11 @@ const submit = () => {
             </p>
           </div>
 
-          <!-- Pickup Date (datetime-local) -->
+          <!-- Pickup Date -->
           <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Pickup Date</label>
             <input
-              v-model="pickupDateTime"
+              v-model="form.pickup_date"
               type="datetime-local"
               class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
             />
@@ -319,11 +262,11 @@ const submit = () => {
             </p>
           </div>
 
-          <!-- Delivery Date (datetime-local) -->
+          <!-- Delivery Date -->
           <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Delivery Date</label>
             <input
-              v-model="deliveryDateTime"
+              v-model="form.delivery_date"
               type="datetime-local"
               class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
             />
@@ -401,52 +344,111 @@ const submit = () => {
             </p>
           </div>
 
-          <!-- Checkboxes -->
+          <!-- Seal Number (new) -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Seal Number</label>
+            <input
+              v-model="form.seal_number"
+              type="text"
+              class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
+            />
+            <p v-if="form.errors.seal_number" class="mt-1 text-sm text-red-600 dark:text-red-400">
+              {{ form.errors.seal_number }}
+            </p>
+          </div>
+
+          <!-- Drivers ID (new) -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Drivers ID</label>
+            <input
+              v-model="form.drivers_id"
+              type="text"
+              class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
+            />
+            <p v-if="form.errors.drivers_id" class="mt-1 text-sm text-red-600 dark:text-red-400">
+              {{ form.errors.drivers_id }}
+            </p>
+          </div>
+
+          <!-- Flags as datetime inputs -->
           <div class="col-span-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
-            <label class="flex items-center space-x-3 cursor-pointer">
+            <!-- On Site -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">On Site</label>
               <input
-                type="checkbox"
-                v-model="form.on_site_checked"
-                class="h-5 w-5 text-blue-600 rounded border-gray-300 dark:border-gray-600 focus:ring-blue-500"
+                v-model="form.on_site"
+                type="datetime-local"
+                class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
               />
-              <span class="text-gray-700 dark:text-gray-300">On Site</span>
-            </label>
+              <p v-if="form.errors.on_site" class="mt-1 text-sm text-red-600 dark:text-red-400">
+                {{ form.errors.on_site }}
+              </p>
+            </div>
 
-            <label class="flex items-center space-x-3 cursor-pointer">
+            <!-- Shipped -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Shipped</label>
               <input
-                type="checkbox"
-                v-model="form.shipped_checked"
-                class="h-5 w-5 text-blue-600 rounded border-gray-300 dark:border-gray-600 focus:ring-blue-500"
+                v-model="form.shipped"
+                type="datetime-local"
+                class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
               />
-              <span class="text-gray-700 dark:text-gray-300">Shipped</span>
-            </label>
+              <p v-if="form.errors.shipped" class="mt-1 text-sm text-red-600 dark:text-red-400">
+                {{ form.errors.shipped }}
+              </p>
+            </div>
 
-            <label class="flex items-center space-x-3 cursor-pointer">
+            <!-- Crossed (new) -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Crossed</label>
               <input
-                type="checkbox"
-                v-model="form.recycling_sent_checked"
-                class="h-5 w-5 text-blue-600 rounded border-gray-300 dark:border-gray-600 focus:ring-blue-500"
+                v-model="form.crossed"
+                type="datetime-local"
+                class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
               />
-              <span class="text-gray-700 dark:text-gray-300">Recycling Sent</span>
-            </label>
+              <p v-if="form.errors.crossed" class="mt-1 text-sm text-red-600 dark:text-red-400">
+                {{ form.errors.crossed }}
+              </p>
+            </div>
 
-            <label class="flex items-center space-x-3 cursor-pointer">
+            <!-- Recycling Sent -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Recycling Sent</label>
               <input
-                type="checkbox"
-                v-model="form.paperwork_sent_checked"
-                class="h-5 w-5 text-blue-600 rounded border-gray-300 dark:border-gray-600 focus:ring-blue-500"
+                v-model="form.recycling_sent"
+                type="datetime-local"
+                class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
               />
-              <span class="text-gray-700 dark:text-gray-300">Paperwork Sent</span>
-            </label>
+              <p v-if="form.errors.recycling_sent" class="mt-1 text-sm text-red-600 dark:text-red-400">
+                {{ form.errors.recycling_sent }}
+              </p>
+            </div>
 
-            <label class="flex items-center space-x-3 cursor-pointer">
+            <!-- Paperwork Sent -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Paperwork Sent</label>
               <input
-                type="checkbox"
-                v-model="form.delivery_sent_checked"
-                class="h-5 w-5 text-blue-600 rounded border-gray-300 dark:border-gray-600 focus:ring-blue-500"
+                v-model="form.paperwork_sent"
+                type="datetime-local"
+                class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
               />
-              <span class="text-gray-700 dark:text-gray-300">Delivery Alert Sent</span>
-            </label>
+              <p v-if="form.errors.paperwork_sent" class="mt-1 text-sm text-red-600 dark:text-red-400">
+                {{ form.errors.paperwork_sent }}
+              </p>
+            </div>
+
+            <!-- Delivery Alert Sent -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Delivery Alert Sent</label>
+              <input
+                v-model="form.delivery_alert_sent"
+                type="datetime-local"
+                class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
+              />
+              <p v-if="form.errors.delivery_alert_sent" class="mt-1 text-sm text-red-600 dark:text-red-400">
+                {{ form.errors.delivery_alert_sent }}
+              </p>
+            </div>
           </div>
 
           <!-- Consolidation Number -->

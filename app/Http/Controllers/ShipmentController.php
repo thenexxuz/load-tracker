@@ -207,11 +207,14 @@ class ShipmentController extends Controller
             'strap_qty' => 'integer|min:0',
             'trailer' => 'nullable|string|max:50',
             'drayage' => 'nullable|string',
-            'on_site' => 'nullable|boolean',
-            'shipped' => 'nullable|boolean',
-            'recycling_sent' => 'nullable|boolean',
-            'paperwork_sent' => 'nullable|boolean',
-            'delivery_alert_sent' => 'nullable|boolean',
+            'on_site' => 'nullable|date',
+            'shipped' => 'nullable|date',
+            'recycling_sent' => 'nullable|date',
+            'paperwork_sent' => 'nullable|date',
+            'delivery_alert_sent' => 'nullable|date',
+            'crossed' => 'nullable|date',
+            'seal_number' => 'nullable|string|max:255',
+            'drivers_id' => 'nullable|string|max:255',
         ], $messages);
 
         $shipment->update($validated);

@@ -33,6 +33,9 @@ class Shipment extends Model
         'drayage',
         'on_site',
         'shipped',
+        'crossed',
+        'seal_number',
+        'drivers_id',
         'recycling_sent',
         'paperwork_sent',
         'delivery_alert_sent',
@@ -42,12 +45,12 @@ class Shipment extends Model
         'drop_date' => 'date',
         'pickup_date' => 'datetime',
         'delivery_date' => 'datetime',
-        'on_site' => 'boolean',
-        'shipped' => 'boolean',
-        'recycling_sent' => 'boolean',
-        'paperwork_sent' => 'boolean',
-        'delivery_alert_sent' => 'boolean',
-        'drayage' => 'boolean',
+        'on_site' => 'datetime',
+        'shipped' => 'datetime',
+        'crossed' => 'datetime',
+        'recycling_sent' => 'datetime',
+        'paperwork_sent' => 'datetime',
+        'delivery_alert_sent' => 'datetime',
     ];
 
     protected static function booted()
@@ -123,6 +126,9 @@ class Shipment extends Model
                 'drayage',
                 'on_site',
                 'shipped',
+                'crossed',
+                'seal_number',
+                'drivers_id',
                 'recycling_sent',
                 'paperwork_sent',
                 'delivery_alert_sent',
@@ -141,5 +147,13 @@ class Shipment extends Model
         return 'Format table for paperwork generation';
     }
 
-    
+    public function getOnSiteFormattedAttribute()
+    {
+        return $this->on_site ? $this->on_site->format('m/d/Y H:i') : null;
+    }
+
+    public function getShippedFormattedAttribute()
+    {
+        return $this->shipped ? $this->shipped->format('m/d/Y H:i') : null;
+    }
 }
