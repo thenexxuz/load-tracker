@@ -36,7 +36,7 @@ const tinyMceInit = {
     'insertdatetime','media','table','help','wordcount'
   ],
   toolbar: 'undo redo | formatselect | ' +
-    'bold italic underline color backcolor | alignleft aligncenter ' +
+    'bold italic underline forecolor backcolor | alignleft aligncenter ' +
     'alignright alignjustify | table bullist numlist outdent indent | ' +
     'removeformat | help | link image',
   content_style: 'body { font-family:Helvetica,Arial,sans-serif; font-size:14px }',
