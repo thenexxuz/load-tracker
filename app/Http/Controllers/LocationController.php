@@ -339,7 +339,7 @@ class LocationController extends Controller
             }
 
             // Cache key unique per pair
-            $cacheKey = 'mapbox_distance_dc_rec:' . md5($dc->id . '|' . $rec->id);
+            $cacheKey = 'mapbox_distance_dc_rec:' . md5($dc->getFullAddressAttribute() . '|' . $rec->getFullAddressAttribute());
 
             $distance = Cache::remember($cacheKey, now()->addDays(7), function () use ($dc, $rec) {
                 return $this->calculateDistance($dc->address, $rec->address);
@@ -347,12 +347,15 @@ class LocationController extends Controller
             // $distance = $this->calculateDistance($dc->getFullAddressAttribute(), $rec->getFullAddressAttribute());
 
             $distances[] = [
+                'dc_id' => $dc->id,
                 'dc_short_code' => $dc->short_code,
+                'rec_id' => $rec->id,
                 'rec_short_code' => $rec->short_code,
                 'distance_km' => $distance['km'] ?? null,
                 'distance_miles' => $distance['miles'] ?? null,
                 'duration_text' => $distance['duration_text'] ?? '—',
                 'duration_minutes' => $distance['duration_minutes'] ?? null,
+                'route_coords' => $distance['route_coords'] ?? [],
             ];
         }
 
@@ -408,7 +411,7 @@ class LocationController extends Controller
             'geometries' => 'geojson',
             'overview' => 'full',
         ]);
-dd($directionsResponse->body());
+
         if (!$directionsResponse->successful() || empty($directionsResponse['routes'])) {
             Log::warning("Directions failed between {$originAddress} and {$destinationAddress}");
             return ['error' => 'Failed to get route'];
@@ -424,6 +427,7 @@ dd($directionsResponse->body());
             'miles' => round(($meters / 1000) * 0.621371, 1),
             'duration_text' => $this->secondsToHumanTime($seconds),
             'duration_minutes' => round($seconds / 60),
+            'route_coords' => $route['geometry']['coordinates'] ?? [],
         ];
     }
 
@@ -439,5 +443,37 @@ dd($directionsResponse->body());
             $parts[] = $minutes . ' min';
 
         return implode(' ', $parts) ?: '< 1 min';
+    }
+
+    public function recyclingDistanceMap($dcId, $recId)
+    {
+        $dc = Location::findOrFail($dcId);
+        $rec = Location::findOrFail($recId);
+
+        // Ensure they are the correct types (optional safety)
+        if ($dc->type !== 'distribution_center' || $rec->type !== 'recycling') {
+            abort(404, 'Invalid location types');
+        }
+
+        // Get the route coordinates (reuse your existing logic)
+        $distance = $this->calculateDistance($dc->address, $rec->address);
+
+        if (isset($distance['error'])) {
+            return Inertia::render('Admin/Locations/RecyclingDistanceMap', [
+                'error' => $distance['error'],
+                'dc' => $dc->only(['id', 'short_code', 'address']),
+                'rec' => $rec->only(['id', 'short_code', 'address']),
+            ]);
+        }
+
+        return Inertia::render('Admin/Locations/RecyclingDistanceMap', [
+            'dc' => $dc->only(['id', 'short_code', 'address']),
+            'rec' => $rec->only(['id', 'short_code', 'address']),
+            'distance_km' => $distance['km'] ?? null,
+            'distance_miles' => $distance['miles'] ?? null,
+            'duration_text' => $distance['duration_text'] ?? null,
+            'route_coords' => $distance['route_coords'] ?? [],  // [[lng, lat], ...]
+            'mapbox_token' => config('services.mapbox.key'),
+        ]);
     }
 }
