@@ -103,7 +103,7 @@ const submit = () => {
               <option value="Picked Up">Picked Up</option>
               <option value="In Transit">In Transit</option>
               <option value="Crossed Border">Crossed Border</option>
-              <option value="Checked In">Delivered</option>
+              <option value="Checked In">Checked In</option>
               <option value="Delivered">Delivered</option>
               <option value="Cancelled">Cancelled</option>
             </select>
