@@ -454,6 +454,142 @@ class ShipmentController extends Controller
         ]);
     }
 
+    public function generateTable(Shipment $shipment, array $columns)
+    {
+        $html = <<<HTML
+<table style="border-collapse: collapse; width: 100%; border-width: 1px; border-color: #000000;" border="1">
+    <tbody>
+        <tr style="background-color: #0b5394;color: #ecf0f1;text-align: center;">
+HTML;
+
+        foreach ($columns as $column) {
+            switch (strtolower(trim($column))) {
+                case 'status':
+                    $html .= '<td><strong>Status</strong></td>';
+                    break;
+                case 'bol':
+                    $html .= '<td><strong>BOL</strong></td>';
+                    break;
+                case 'pickup_location':
+                    $html .= '<td><strong>Pickup Location</strong></td>';
+                    break;
+                case 'shipment_number':
+                    $html .= '<td><strong>Shipment Number</strong></td>';
+                    break;
+                case 'dc_location':
+                    $html .= '<td><strong>DC Location</strong></td>';
+                    break;
+                case 'drop_date':
+                    $html .= '<td><strong>Drop Date</strong></td>';
+                    break;
+                case 'pickup_date':
+                    $html .= '<td><strong>Pickup Date</strong></td>';
+                    break;
+                case 'delivery_date':
+                    $html .= '<td><strong>Delivery Date</strong></td>';
+                    break;
+                case 'po_number':
+                    $html .= '<td><strong>PO</strong></td>';
+                    break;
+                case 'rack_qty':
+                    $html .= '<td><strong>Rack Qty</strong></td>';
+                    break;
+                case 'carrier_code':
+                    $html .= '<td><strong>Carrier</strong></td>';
+                    break;
+                case 'trailer':
+                    $html .= '<td><strong>Trailer</strong></td>';
+                    break;
+                case 'load_bar_qty':
+                    $html .= '<td><strong>Load Bars</strong></td>';
+                    break;
+                case 'strap_qty':
+                    $html .= '<td><strong>Straps</strong></td>';
+                    break;
+                case 'dc_location_address':
+                    $html .= '<td><strong>Delivery Address</strong></td>';
+                    break;
+                    default:
+                    // Ignore unknown columns
+                    break;
+            }
+        }
+        $html .= <<<HTML
+        </tr>
+        <tr style="border-color: #000000; background-color: #ffffff; color: #000000;">
+HTML;
+        if ($shipment->isConsolidation()) {
+            $shipment->load('consolidationShipments');
+            $shipments = $shipment->consolidationShipments;  
+            foreach($shipments as $consolShipment) {
+                foreach ($columns as $column) {
+                    switch (strtolower(trim($column))) {
+                        case 'status':
+                            $html .= '<td>' . ($consolShipment->status ?? '') . '</td>';
+                            break;
+                        case 'bol':
+                            $html .= '<td>' . ($consolShipment->bol ?? '') . '</td>';
+                            break;
+                        case 'pickup_location':
+                            $html .= '<td>' . (optional($consolShipment->pickupLocation)->short_code ?? '') . '</td>';
+                            break;
+                        case 'shipment_number':
+                            $html .= '<td>' . ($consolShipment->shipment_number ?? '') . '</td>';
+                            break;
+                        case 'dc_location':
+                            $html .= '<td>' . (optional($consolShipment->dcLocation)->short_code ?? '') . '</td>';
+                            break;
+                        case 'drop_date':
+                            $html .= '<td>' . (Carbon::parse($consolShipment->drop_date)->format('m/d/Y') ?? '') . '</td>';
+                            break;
+                        case 'pickup_date':
+                            $html .= '<td>' . (Carbon::parse($consolShipment->pickup_date)->format('m/d/Y') ?? '') . '</td>';
+                            break;
+                        case 'delivery_date':
+                            $html .= '<td>' . (Carbon::parse($consolShipment->delivery_date)->format('m/d/Y') ?? '') . '</td>';
+                            break;
+                        case 'po_number':
+                            $html .= '<td>' . ($consolShipment->po_number ?? '') . '</td>';
+                            break;
+                        case 'rack_qty':
+                            $html .= '<td>' . ($consolShipment->rack_qty ?? '') . '</td>';
+                            break;
+                        case 'carrier_code':
+                            $html .= '<td>' . (optional($consolShipment->carrier)->short_code ?? '') . '</td>';
+                            break;
+                        case 'trailer':
+                            $html .= '<td>' . ($consolShipment->trailer ?? '') . '</td>';
+                            break;
+                        case 'load_bar_qty':
+                            $html .= '<td>' . ($consolShipment->load_bar_qty ?? '') . '</td>';
+                            break;
+                        case 'strap_qty':
+                            $html .= '<td>' . ($consolShipment->strap_qty ?? '') . '</td>';
+                            break;
+                        case 'dc_location_address':
+                            $html .= '<td>' . (optional($consolShipment->dcLocation)->address ?? '') . '</td>';
+                            break;
+                        default:
+                            // Ignore unknown columns
+                            break;
+                    }
+                }
+            }
+
+        }
+        $html .= <<<HTML
+        </tr>
+    </tbody>
+</table>
+HTML;
+
+        $shipment->load(['pickupLocation', 'dcLocation', 'carrier']);
+
+        $tableHtml = view('shipments.partials.msft_table_1', ['shipment' => $shipment])->render();
+
+        return response()->json(['table_html' => $tableHtml]);
+    }
+
     /**
      * Process SendPaperwork form and send the selected template to carrier emails.
      */
@@ -470,6 +606,7 @@ class ShipmentController extends Controller
         $shipment->load(['pickupLocation', 'dcLocation', 'carrier']);
 
         $replacements = [
+            'table' => '',
             'status' => $shipment->status ?? '',
             'shipment_number' => $shipment->shipment_number ?? 'XXXX',
             'bol' => $shipment->bol ?? 'XXXX',

@@ -8,6 +8,10 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use League\Csv\Reader;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Carbon;
+use Log;
 
 class LocationController extends Controller
 {
@@ -309,5 +313,131 @@ class LocationController extends Controller
         return response($tsv)
             ->header('Content-Type', 'text/tab-separated-values')
             ->header('Content-Disposition', "attachment; filename=\"$filename\"");
+    }
+
+    public function recyclingDistances()
+    {
+        $dcLocations = Location::where('type', 'distribution_center')
+            ->with('recyclingLocation:id,short_code,address,city,state,zip')
+            ->get(['id', 'short_code', 'address', 'city', 'state', 'zip', 'recycling_location_id']);
+
+        $distances = [];
+
+        foreach ($dcLocations as $dc) {
+            $rec = $dc->recyclingLocation;
+            if (!$rec) {
+                Log::info("No recycling location assigned to DC: {$dc->short_code}");
+                $distances[] = [
+                    'dc_short_code' => $dc->short_code,
+                    'rec_short_code' => '—',
+                    'distance_km' => null,
+                    'distance_miles' => null,
+                    'duration_text' => 'No recycling assigned',
+                    'duration_minutes' => null,
+                ];
+                continue;
+            }
+
+            // Cache key unique per pair
+            $cacheKey = 'mapbox_distance_dc_rec:' . md5($dc->id . '|' . $rec->id);
+
+            $distance = Cache::remember($cacheKey, now()->addDays(7), function () use ($dc, $rec) {
+                return $this->calculateDistance($dc->address, $rec->address);
+            });
+            // $distance = $this->calculateDistance($dc->getFullAddressAttribute(), $rec->getFullAddressAttribute());
+
+            $distances[] = [
+                'dc_short_code' => $dc->short_code,
+                'rec_short_code' => $rec->short_code,
+                'distance_km' => $distance['km'] ?? null,
+                'distance_miles' => $distance['miles'] ?? null,
+                'duration_text' => $distance['duration_text'] ?? '—',
+                'duration_minutes' => $distance['duration_minutes'] ?? null,
+            ];
+        }
+
+        return Inertia::render('Admin/Locations/RecyclingDistance', [
+            'distances' => $distances,
+        ]);
+    }
+    private function calculateDistance($originAddress, $destinationAddress)
+    {
+        $token = config('services.mapbox.key');
+
+        if (!$token) {
+            Log::error('Mapbox token not configured');
+            return ['error' => 'Mapbox token missing'];
+        }
+
+        // Geocode origin
+        $originResponse = Http::get("https://api.mapbox.com/geocoding/v5/mapbox.places/" . urlencode($originAddress) . ".json", [
+            'access_token' => $token,
+            'limit' => 1,
+            'types' => 'address',
+            'country' => 'us', // change if needed
+        ]);
+
+        if (!$originResponse->successful() || empty($originResponse['features'])) {
+            Log::warning("Geocode failed for origin: {$originAddress}");
+            return ['error' => 'Failed to geocode origin'];
+        }
+
+        $originCoords = $originResponse['features'][0]['center']; // [lng, lat]
+
+
+        // Geocode destination
+        $destResponse = Http::get("https://api.mapbox.com/geocoding/v5/mapbox.places/" . urlencode($destinationAddress) . ".json", [
+            'access_token' => $token,
+            'limit' => 1,
+            'types' => 'address',
+            'country' => 'us',
+        ]);
+
+        if (!$destResponse->successful() || empty($destResponse['features'])) {
+            Log::warning("Geocode failed for destination: {$destinationAddress}");
+            return ['error' => 'Failed to geocode destination'];
+        }
+
+        $destCoords = $destResponse['features'][0]['center'];
+
+        // Get driving directions
+        $coords = implode(',',$originCoords).';'. implode(',', $destCoords); // lng1,lat1;lng2,lat2
+
+        $directionsResponse = Http::get("https://api.mapbox.com/directions/v5/mapbox/driving/{$coords}", [
+            'access_token' => $token,
+            'geometries' => 'geojson',
+            'overview' => 'full',
+        ]);
+dd($directionsResponse->body());
+        if (!$directionsResponse->successful() || empty($directionsResponse['routes'])) {
+            Log::warning("Directions failed between {$originAddress} and {$destinationAddress}");
+            return ['error' => 'Failed to get route'];
+        }
+
+        $route = $directionsResponse['routes'][0];
+
+        $meters = $route['distance'];
+        $seconds = $route['duration'];
+
+        return [
+            'km' => round($meters / 1000, 1),
+            'miles' => round(($meters / 1000) * 0.621371, 1),
+            'duration_text' => $this->secondsToHumanTime($seconds),
+            'duration_minutes' => round($seconds / 60),
+        ];
+    }
+
+    private function secondsToHumanTime($seconds)
+    {
+        $hours = floor($seconds / 3600);
+        $minutes = floor(($seconds % 3600) / 60);
+
+        $parts = [];
+        if ($hours > 0)
+            $parts[] = $hours . ' hr';
+        if ($minutes > 0)
+            $parts[] = $minutes . ' min';
+
+        return implode(' ', $parts) ?: '< 1 min';
     }
 }

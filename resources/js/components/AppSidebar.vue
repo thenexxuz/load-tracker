@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { Link, usePage } from '@inertiajs/vue3'
+import { route } from 'ziggy-js'
 import {
   BookOpen,
   Folder,
@@ -13,6 +14,7 @@ import {
   DollarSign,
   AtSign,
   NotepadTextDashed,
+  Ruler,
 } from 'lucide-vue-next'
 
 import NavFooter from '@/components/NavFooter.vue'
@@ -42,7 +44,12 @@ const hasTemplateAccess = userRoles.includes('administrator') || userRoles.inclu
 const hasLocationsAccess = userRoles.includes('administrator') || userRoles.includes('supervisor')
 const hasShipmentAccess = userRoles.includes('administrator') || userRoles.includes('supervisor') || userRoles.includes('truckload') || userRoles.includes('data-entry')
 
-const collapsed = ref(false) // Track collapsed state
+const collapsed = ref(false)
+
+// Check if current page is any location-related route
+const isOnLocations = computed(() => {
+  return route().current('admin.locations.*')
+})
 
 const mainNavItems: NavItem[] = [
   {
@@ -92,6 +99,13 @@ const mainNavItems: NavItem[] = [
         icon: Map,
       }]
     : []),
+  ...(hasLocationsAccess && isOnLocations.value
+    ? [{
+        title: 'Recycling Distance',
+        href: route('admin.locations.recycling-distances'),
+        icon: Ruler,
+      }]
+    : []),
   ...(hasShipmentAccess
     ? [{
         title: 'Shipments',
@@ -126,19 +140,16 @@ const footerNavItems: NavItem[] = []
             as-child
             :class="{
               'justify-center': collapsed,
-              'justify-start space-x-6': !collapsed
+              'justify-start space-x-3': !collapsed
             }"
           >
-            <Link :href="item.href" class="flex aspect-square size-8 items-center justify-center rounded-md">
-              <!-- Centered icon wrapper -->
-              <div class="p-0.5 ps-1.5 flex items-center justify-center">
+            <Link :href="item.href" class="flex items-center">
+              <div class="flex-shrink-0 flex items-center justify-center w-6 h-6">
                 <component :is="item.icon" class="w-5 h-5" />
               </div>
-
-              <!-- Text hidden when collapsed -->
               <span
                 v-show="!collapsed"
-                class="mb-0.5 truncate leading-tight font-semibold"
+                class="ml-3 truncate text-base font-medium"
               >
                 {{ item.title }}
               </span>
@@ -158,9 +169,11 @@ const footerNavItems: NavItem[] = []
 </template>
 
 <style scoped>
+/* Ensure perfect centering when collapsed */
 .sidebar-collapsed .sidebar-menu-button {
   padding-left: 0 !important;
   padding-right: 0 !important;
+  justify-content: center !important;
 }
 
 .sidebar-collapsed .sidebar-menu-button svg {

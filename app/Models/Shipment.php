@@ -30,6 +30,7 @@ class Shipment extends Model
         'load_bar_qty',
         'strap_qty',
         'trailer',
+        'consolidation_number',
         'drayage',
         'on_site',
         'shipped',
@@ -123,6 +124,7 @@ class Shipment extends Model
                 'load_bar_qty',
                 'strap_qty',
                 'trailer',
+                'consolidation_number',
                 'drayage',
                 'on_site',
                 'shipped',
@@ -155,5 +157,16 @@ class Shipment extends Model
     public function getShippedFormattedAttribute()
     {
         return $this->shipped ? $this->shipped->format('m/d/Y H:i') : null;
+    }
+
+    public function isConsolidation()
+    {
+        return $this?->consolidation_number ?? false;
+    }
+
+    public function consolidationShipments()
+    {
+        return $this->hasMany(Shipment::class, 'consolidation_number', 'consolidation_number')
+            ->where('id', '!=', $this->id);
     }
 }
