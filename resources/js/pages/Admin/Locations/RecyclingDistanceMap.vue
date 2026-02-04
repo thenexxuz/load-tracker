@@ -129,9 +129,9 @@ onUnmounted(() => {
         <div>
           <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400">Distance</h3>
           <p class="text-xl font-semibold text-gray-900 dark:text-gray-100">
-            {{ distance_km ? distance_km.toFixed(1) + ' km' : '—' }}
+            {{ distance_miles ? distance_miles.toFixed(1) + ' mi' : '—' }}
             <span class="text-sm text-gray-500 dark:text-gray-400">
-              ({{ distance_miles ? distance_miles.toFixed(1) + ' mi' : '—' }})
+              ({{ distance_km ? distance_km.toFixed(1) + ' km' : '—' }})
             </span>
           </p>
         </div>

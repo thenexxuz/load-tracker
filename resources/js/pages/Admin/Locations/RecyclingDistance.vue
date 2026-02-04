@@ -95,10 +95,10 @@ const changePerPage = (e: Event) => {
                   Recycling Short Code
                 </th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  Distance (km)
+                  Distance (miles)
                 </th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  Distance (miles)
+                  Distance (km)
                 </th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Estimated Duration
@@ -136,10 +136,10 @@ const changePerPage = (e: Event) => {
                   </span>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                  {{ item.distance_km ? item.distance_km.toFixed(1) + ' km' : '—' }}
+                  {{ item.distance_miles ? item.distance_miles.toFixed(1) + ' mi' : '—' }}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                  {{ item.distance_miles ? item.distance_miles.toFixed(1) + ' mi' : '—' }}
+                  {{ item.distance_km ? item.distance_km.toFixed(1) + ' km' : '—' }}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                   <Link
