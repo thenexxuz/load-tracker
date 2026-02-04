@@ -378,86 +378,59 @@ class LocationController extends Controller
     public function recyclingDistances(Request $request)
     {
         $perPage = $request->input('per_page', 15);
-        $dcLocations = Location::where('type', 'distribution_center')->with('recyclingLocation:id,short_code,address')->paginate($perPage);
+        $recyclingId = $request->input('recycling_id');
 
-        $distances = [];
+        $query = Location::where('type', 'distribution_center')
+            ->with('recyclingLocation:id,short_code,address');
 
-        foreach ($dcLocations as $dc) {
+        // Filter by specific recycling location
+        if ($recyclingId === 'none') {
+            $query->whereNull('recycling_location_id');
+        } elseif ($recyclingId && is_numeric($recyclingId)) {
+            $query->where('recycling_location_id', $recyclingId);
+        }
+        // else: no filter → show all
+
+        $dcLocations = $query->paginate($perPage);
+
+        $distances = $dcLocations->through(function ($dc) {
             $rec = $dc->recyclingLocation;
 
             if (!$rec) {
-                $distances[] = [
+                return [
                     'dc_id' => $dc->id,
                     'dc_short_code' => $dc->short_code,
-                    'rec_short_code' => '—',
+                    'rec_id' => null,
+                    'rec_short_code' => null,
                     'distance_km' => null,
                     'distance_miles' => null,
                     'duration_text' => 'No recycling assigned',
                     'route_coords' => [],
                 ];
-                continue;
             }
 
-            // Look up pre-calculated distance
             $distanceRecord = LocationDistance::where('dc_id', $dc->id)
                 ->where('recycling_id', $rec->id)
                 ->first();
 
-            if (!$distanceRecord) {
-                // Optional: calculate on-the-fly if missing (and save)
-                $distanceData = $this->calculateDistance($dc->address, $rec->address);
-
-                if (isset($distanceData['error'])) {
-                    \Log::warning("Distance calculation failed for DC {$dc->id} to Recycling {$rec->id}: " . $distanceData['error']);
-                    $distances[] = [
-                        'dc_id' => $dc->id,
-                        'dc_short_code' => $dc->short_code,
-                        'rec_id' => $rec->id,
-                        'rec_short_code' => $rec->short_code,
-                        'distance_km' => null,
-                        'distance_miles' => null,
-                        'duration_text' => 'Calculation failed',
-                        'route_coords' => [],
-                    ];
-                    continue;
-                }
-
-                // Save the new record
-                $distanceRecord = LocationDistance::create([
-                    'dc_id' => $dc->id,
-                    'recycling_id' => $rec->id,
-                    'distance_km' => $distanceData['km'],
-                    'distance_miles' => $distanceData['miles'],
-                    'duration_text' => $distanceData['duration_text'],
-                    'duration_minutes' => $distanceData['duration_minutes'],
-                    'route_coords' => $distanceData['route_coords'] ?? [],
-                    'calculated_at' => now(),
-                ]);
-            }
-
-            $distances[] = [
+            return [
                 'dc_id' => $dc->id,
                 'dc_short_code' => $dc->short_code,
                 'rec_id' => $rec->id,
                 'rec_short_code' => $rec->short_code,
-                'distance_km' => $distanceRecord->distance_km,
-                'distance_miles' => $distanceRecord->distance_miles,
-                'duration_text' => $distanceRecord->duration_text,
-                'route_coords' => $distanceRecord->route_coords ?? [],
+                'distance_km' => $distanceRecord?->distance_km,
+                'distance_miles' => $distanceRecord?->distance_miles,
+                'duration_text' => $distanceRecord?->duration_text,
+                'route_coords' => $distanceRecord?->route_coords ?? [],
             ];
-        }
-
-        // Create a paginated response using LengthAwarePaginator
-        $paginatedDistances = new \Illuminate\Pagination\LengthAwarePaginator(
-            $distances,
-            $dcLocations->total(),
-            $dcLocations->perPage(),
-            $dcLocations->currentPage(),
-            ['path' => $request->url(), 'query' => $request->query()]
-        );
+        });
 
         return Inertia::render('Admin/Locations/RecyclingDistance', [
-            'distances' => $paginatedDistances,
+            'distances' => $distances,
+            'recycling_locations' => Location::where('type', 'recycling')
+                ->select('id', 'short_code')
+                ->orderBy('short_code')
+                ->get(),
         ]);
     }
 

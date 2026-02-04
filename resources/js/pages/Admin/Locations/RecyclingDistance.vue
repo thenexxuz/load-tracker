@@ -1,14 +1,15 @@
 <script setup lang="ts">
 import { Head, Link, router } from '@inertiajs/vue3'
 import AdminLayout from '@/layouts/AppLayout.vue'
+import { ref, watch } from 'vue'
 
 const props = defineProps<{
   distances: {
     data: Array<{
       dc_id: number
       dc_short_code: string
-      rec_id: number
-      rec_short_code: string
+      rec_id: number | null
+      rec_short_code: string | null
       distance_km: number | null
       distance_miles: number | null
       duration_text: string | null
@@ -22,9 +23,13 @@ const props = defineProps<{
     to: number | null
     links: Array<{ url: string | null; label: string; active: boolean }>
   }
+  recycling_locations: Array<{ id: number; short_code: string }> // ← added from backend
 }>()
 
-// Change page (previous/next or page number)
+// Selected recycling filter (null = All, -1 = No Recycling Assigned)
+const selectedRecycling = ref<string | number>('all')
+
+// Change page
 const changePage = (url: string | null) => {
   if (url) {
     router.visit(url, {
@@ -34,21 +39,31 @@ const changePage = (url: string | null) => {
   }
 }
 
-// Change items per page
+// Change per page
 const changePerPage = (e: Event) => {
-  const target = e.target as HTMLSelectElement
-  const value = parseInt(target.value)
+  const value = (e.target as HTMLSelectElement).value
+  router.get(
+    route('admin.locations.recycling-distances'),
+    { per_page: value, recycling_id: selectedRecycling.value === 'all' ? null : selectedRecycling.value },
+    { preserveState: true, preserveScroll: true, replace: true }
+  )
+}
+
+// Watch filter change → reload with filter param
+watch(selectedRecycling, (value) => {
+  let recyclingId = null
+  if (value === -1) {
+    recyclingId = 'none' // special value for no recycling
+  } else if (value !== 'all') {
+    recyclingId = value
+  }
 
   router.get(
     route('admin.locations.recycling-distances'),
-    { per_page: value },
-    {
-      preserveState: true,
-      preserveScroll: true,
-      replace: true,
-    }
+    { recycling_id: recyclingId, page: 1 }, // reset to page 1 on filter change
+    { preserveState: true, preserveScroll: true, replace: true }
   )
-}
+})
 </script>
 
 <template>
@@ -60,8 +75,28 @@ const changePerPage = (e: Event) => {
         Recycling Distances
       </h1>
 
-      <!-- Per Page Selector + Summary -->
+      <!-- Filters & Per Page -->
       <div class="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <!-- Recycling Filter -->
+        <div class="flex items-center space-x-3">
+          <label class="text-sm text-gray-700 dark:text-gray-300">Filter by Recycling:</label>
+          <select
+            v-model="selectedRecycling"
+            class="border border-gray-300 dark:border-gray-600 rounded-md px-3 py-1 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option :value="'all'">All Recycling Locations</option>
+            <option :value="-1">No Recycling Assigned</option>
+            <option
+              v-for="rec in recycling_locations"
+              :key="rec.id"
+              :value="rec.id"
+            >
+              {{ rec.short_code }}
+            </option>
+          </select>
+        </div>
+
+        <!-- Per Page -->
         <div class="flex items-center space-x-3">
           <label class="text-sm text-gray-700 dark:text-gray-300">Items per page:</label>
           <select
@@ -75,10 +110,6 @@ const changePerPage = (e: Event) => {
             <option :value="50">50</option>
             <option :value="100">100</option>
           </select>
-        </div>
-
-        <div class="text-sm text-gray-600 dark:text-gray-400">
-          Showing {{ distances.from ?? 0 }}–{{ distances.to ?? 0 }} of {{ distances.total }} entries
         </div>
       </div>
 
@@ -108,7 +139,7 @@ const changePerPage = (e: Event) => {
             <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
               <tr
                 v-for="item in distances.data"
-                :key="item.dc_id + '-' + item.rec_id"
+                :key="item.dc_id + '-' + (item.rec_id ?? 'none')"
                 class="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
               >
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
@@ -132,7 +163,7 @@ const changePerPage = (e: Event) => {
                     {{ item.rec_short_code }}
                   </Link>
                   <span v-else class="text-gray-900 dark:text-gray-100">
-                    {{ item.rec_short_code }}
+                    {{ item.rec_short_code || 'None' }}
                   </span>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
