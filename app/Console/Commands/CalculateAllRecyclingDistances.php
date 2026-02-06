@@ -15,7 +15,7 @@ class CalculateAllRecyclingDistances extends Command
      *
      * @var string
      */
-    protected $signature = 'app:calculate-all-recycling-distances';
+    protected $signature = 'locations:calculate-recycling-distances';
 
     /**
      * The console command description.

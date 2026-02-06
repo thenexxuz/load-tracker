@@ -4,43 +4,53 @@ namespace App\Http\Controllers;
 
 use App\Models\Location;
 use App\Models\LocationDistance;
+use App\Models\Shipment;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Str;
 use Inertia\Inertia;
-use League\Csv\Reader;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Carbon;
-use Log;
+use Illuminate\Support\Facades\Log;
 
 class LocationController extends Controller
 {
-    public function index()
+    /**
+     * Display a listing of locations.
+     */
+    public function index(Request $request)
     {
-        $locations = Location::query()
-            ->with('recyclingLocation:id,short_code,name')
-            ->when(request('search'), fn ($q, $search) => $q->where('name', 'like', "%{$search}%")
-                ->orWhere('short_code', 'like', "%{$search}%")
-                ->orWhere('type', 'like', "%{$search}%"))
-            ->orderBy('name')
-            ->paginate(15);
+        $validated = $request->validate([
+            'per_page' => 'nullable|integer|min:1|max:25',
+            'search'   => 'nullable|string|max:500',
+        ]);
+
+        $query = Location::query()
+            ->with('recyclingLocation:id,short_code');
+
+        // Search
+        if ($search = $request->input('search')) {
+            $query->where(function ($q) use ($search) {
+                $q->where('address', 'like', "%{$search}%")
+                    ->orWhere('city', 'like', "%{$search}%")
+                    ->orWhere('state', 'like', "%{$search}%")
+                    ->orWhere('zip', 'like', "%{$search}%")
+                    ->orWhere('country', 'like', "%{$search}%")
+                    ->orWhere('short_code', 'like', "%{$search}%")
+                    ->orWhere('name', 'like', "%{$search}%")
+                    ->orWhere('type', 'like', "%{$search}%");
+            });
+        }
+
+        $locations = $query->paginate($validated['per_page'] ?? 15 );
 
         return Inertia::render('Admin/Locations/Index', [
             'locations' => $locations,
-            'filters' => request()->only('search'),
         ]);
     }
 
+    /**
+     * Show the form for creating a new location.
+     */
     public function create()
     {
-        $availableRecyclingLocations = Location::where('type', 'recycling')
-            ->select('id', 'short_code', 'name')
-            ->get();
-
-        return Inertia::render('Admin/Locations/Create', [
-            'availableRecyclingLocations' => $availableRecyclingLocations,
-        ]);
+        return Inertia::render('Admin/Locations/Create');
     }
 
     /**
@@ -49,35 +59,28 @@ class LocationController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'short_code' => ['required', 'string', 'max:20', 'unique:locations,short_code'],
-            'name' => ['nullable', 'string', 'max:255'],
-            'address' => ['required', 'string'],
-            'city' => ['nullable', 'string', 'max:100'],
-            'state' => ['nullable', 'string', 'size:2'],
-            'zip' => ['nullable', 'string', 'max:10'],
-            'country' => ['required', 'string', 'size:2'],
-            'email' => ['nullable', 'email', 'max:255'],
-            'expected_arrival_time' => ['nullable', 'string'],
-            'type' => ['required', 'in:pickup,distribution_center,recycling'],
-            'latitude' => ['nullable', 'numeric', 'between:-90,90'],
-            'longitude' => ['nullable', 'numeric', 'between:-180,180'],
-            'is_active' => ['boolean'],
-            'recycling_location_id' => ['nullable', 'exists:locations,id'],
+            'short_code' => 'required|string|max:50|unique:locations',
+            'name'       => 'nullable|string|max:255',
+            'type'       => 'required|in:distribution_center,recycling,other',
+            'address'    => 'nullable|string|max:255',
+            'city'       => 'nullable|string|max:255',
+            'state'      => 'nullable|string|max:255',
+            'zip'        => 'nullable|string|max:20',
+            'country'    => 'nullable|string|max:255',
+            'latitude'   => 'nullable|numeric|between:-90,90',
+            'longitude'  => 'nullable|numeric|between:-180,180',
+            // Add other validation rules as needed
         ]);
-        $validated['country'] = $validated['country'] ?? 'US';
 
-        // Enforce business rule: only distribution centers can have a recycling location
-        if ($validated['type'] !== 'distribution_center') {
-            $validated['recycling_location_id'] = null;
-        }
-
-        // Create the location
-        $location = Location::create($validated);
+        Location::create($validated);
 
         return redirect()->route('admin.locations.index')
-            ->with('success', 'Location created successfully.');
+                         ->with('success', 'Location created successfully.');
     }
 
+    /**
+     * Display the specified location.
+     */
     public function show(Location $location)
     {
         $location->load('recyclingLocation');
@@ -87,309 +90,85 @@ class LocationController extends Controller
         ]);
     }
 
+    /**
+     * Show the form for editing the specified location.
+     */
     public function edit(Location $location)
     {
-        $location->load('recyclingLocation:id,short_code,name');
-
-        $availableRecyclingLocations = Location::where('type', 'recycling')
-            ->select('id', 'short_code', 'name')
-            ->get();
-
         return Inertia::render('Admin/Locations/Edit', [
             'location' => $location,
-            'availableRecyclingLocations' => $availableRecyclingLocations,
         ]);
-    }
-
-    public function update(Request $request, Location $location)
-    {
-        $validated = $request->validate([
-            'short_code' => 'required|string|max:20|unique:locations,short_code,'.$location->id,
-            'name' => 'nullable|string|max:255',
-            'address' => 'required|string',
-            'city' => 'nullable|string|max:100',
-            'state' => 'nullable|string|max:2',
-            'zip' => 'nullable|string|max:10',
-            'country' => 'string|max:2',
-            'email' => ['nullable', 'email', 'max:255'],
-            'expected_arrival_time' => ['nullable', 'string'],
-            'type' => 'required|in:pickup,distribution_center,recycling',
-            'latitude' => 'nullable|numeric|between:-90,90',
-            'longitude' => 'nullable|numeric|between:-180,180',
-            'is_active' => 'boolean',
-            'recycling_location_id' => 'nullable',
-        ]);
-
-        $location->update($validated);
-
-        // Helper to check if address changed
-        $addressFields = ['address', 'city', 'state', 'zip', 'country'];
-        $addressChanged = $location->wasChanged($addressFields);
-
-        if ($location->type === 'distribution_center') {
-            // For DC: check if recycling changed or address changed
-            $recyclingChanged = $location->wasChanged('recycling_location_id') || $oldRecyclingId !== $location->recycling_location_id;
-
-            if ($recyclingChanged || $addressChanged) {
-                $this->recalculateDistanceForDc($location);
-            }
-        } elseif ($location->type === 'recycling') {
-            // For recycling: if address changed, recalculate for all linked DCs
-            if ($addressChanged) {
-                $linkedDcs = Location::where('type', 'distribution_center')
-                    ->where('recycling_location_id', $location->id)
-                    ->get();
-
-                foreach ($linkedDcs as $dc) {
-                    $this->recalculateDistanceForDc($dc);
-                }
-            }
-        }
-
-        return redirect()->route('admin.locations.show', $location)->with('success', 'Location updated successfully.');
     }
 
     /**
-     * Recalculate and update distance for a given DC
+     * Update the specified location in storage.
      */
-    private function recalculateDistanceForDc(Location $dc)
+    public function update(Request $request, Location $location)
     {
-        $rec = $dc->recyclingLocation;
+        $validated = $request->validate([
+            'short_code' => 'required|string|max:50|unique:locations,short_code,' . $location->id,
+            'name'       => 'nullable|string|max:255',
+            'type'       => 'required|in:distribution_center,recycling,other',
+            'address'    => 'nullable|string|max:255',
+            'city'       => 'nullable|string|max:255',
+            'state'      => 'nullable|string|max:255',
+            'zip'        => 'nullable|string|max:20',
+            'country'    => 'nullable|string|max:255',
+            'latitude'   => 'nullable|numeric|between:-90,90',
+            'longitude'  => 'nullable|numeric|between:-180,180',
+            'recycling_location_id' => 'nullable|exists:locations,id|prohibited_if:type,recycling',
+        ]);
 
-        if (!$rec) {
-            // Optional: delete any existing distance if recycling removed
-            LocationDistance::where('dc_id', $dc->id)->delete();
-            return;
+        $oldRecyclingId = $location->recycling_location_id;
+        $addressFields = ['address', 'city', 'state', 'zip', 'country'];
+        $addressChanged = $location->wasChanged($addressFields);
+
+        $location->update($validated);
+
+        // Recalculate distances if relevant fields changed
+        if ($location->type === 'distribution_center') {
+            $recyclingChanged = $location->wasChanged('recycling_location_id') || $oldRecyclingId !== $location->recycling_location_id;
+
+            if ($recyclingChanged || $addressChanged) {
+                $this->recalculateDistancesForDc($location);
+            }
+        } elseif ($location->type === 'recycling') {
+            if ($addressChanged) {
+                $this->recalculateDistancesForRecycling($location);
+            }
         }
 
-        $distanceData = $this->calculateDistance($dc->address, $rec->address);
-
-        if (isset($distanceData['error'])) {
-            \Log::warning("Failed to recalculate distance for DC {$dc->id} to Recycling {$rec->id}: " . $distanceData['error']);
-            return;
-        }
-
-        LocationDistance::updateOrCreate(
-            [
-                'dc_id' => $dc->id,
-                'recycling_id' => $rec->id,
-            ],
-            [
-                'distance_km' => $distanceData['km'],
-                'distance_miles' => $distanceData['miles'],
-                'duration_text' => $distanceData['duration_text'],
-                'duration_minutes' => $distanceData['duration_minutes'],
-                'route_coords' => $distanceData['route_coords'] ?? [],
-                'calculated_at' => now(),
-            ]
-        );
+        return redirect()->route('admin.locations.show', $location)
+                         ->with('success', 'Location updated successfully.');
     }
 
+    /**
+     * Remove the specified location from storage.
+     */
     public function destroy(Location $location)
     {
         $location->delete();
 
         return redirect()->route('admin.locations.index')
-            ->with('success', 'Location deleted successfully.');
+                         ->with('success', 'Location deleted successfully.');
     }
 
-    public function import(Request $request)
-    {
-        $request->validate([
-            'file' => 'required|file|mimes:txt,tsv|max:10240', // max 10MB
-        ]);
-
-        $file = $request->file('file');
-
-        try {
-            $csv = Reader::createFromPath($file->getRealPath(), 'r');
-            $csv->setDelimiter("\t");
-            $csv->setHeaderOffset(0); // First row = headers
-
-            $records = $csv->getRecords();
-
-            $imported = 0;
-            $errors = [];
-
-            foreach ($records as $offset => $row) {
-                $data = (array) $row;
-
-                // Validate each row
-                $validator = Validator::make($data, [
-                    'short_code' => ['required', 'string', 'max:20'],
-                    'name' => ['nullable', 'string', 'max:255'],
-                    'address' => ['required', 'string'],
-                    'city' => ['nullable', 'string', 'max:100'],
-                    'state' => ['nullable', 'string', 'size:2'],
-                    'zip' => ['nullable', 'string', 'max:10'],
-                    'country' => ['required', 'string', 'size:2'],
-                    'type' => ['required', 'in:pickup,distribution_center,recycling'],
-                    'latitude' => ['nullable', 'numeric', 'between:-90,90'],
-                    'longitude' => ['nullable', 'numeric', 'between:-180,180'],
-                    'is_active' => ['nullable', 'boolean'],
-                    'email' => ['nullable', 'email', 'max:255'],
-                    'expected_arrival_time' => ['nullable', 'string'],
-                    'recycling_short_code' => ['nullable', 'string', 'max:20'],
-                ]);
-
-                if ($validator->fails()) {
-                    $errors[] = 'Row '.($offset + 2).': '.implode(', ', $validator->errors()->all());
-
-                    continue;
-                }
-
-                // Normalize country
-                $data['country'] = strtoupper($data['country'] ?? 'US');
-
-                // Handle recycling relationship (only for distribution_center)
-                $recyclingLocationId = null;
-                if ($data['type'] === 'distribution_center' && ! empty($data['recycling_short_code'])) {
-                    $recyclingLocation = Location::where('short_code', $data['recycling_short_code'])->first();
-                    if ($recyclingLocation) {
-                        $recyclingLocationId = $recyclingLocation->id;
-                    } else {
-                        $errors[] = 'Row '.($offset + 2).": Recycling location with short_code '{$data['recycling_short_code']}' not found.";
-
-                        continue;
-                    }
-                }
-
-                // Business rule: force null if not distribution_center
-                if ($data['type'] !== 'distribution_center') {
-                    $recyclingLocationId = null;
-                }
-
-                // Prepare data for create/update
-                $importData = [
-                    'guid' => (string) Str::uuid(),
-                    'name' => $data['name'] ?? null,
-                    'address' => $data['address'],
-                    'city' => $data['city'] ?? null,
-                    'state' => $data['state'] ?? null,
-                    'zip' => $data['zip'] ?? null,
-                    'country' => $data['country'],
-                    'type' => $data['type'],
-                    'latitude' => $data['latitude'] ? (float) $data['latitude'] : null,
-                    'longitude' => $data['longitude'] ? (float) $data['longitude'] : null,
-                    'is_active' => filter_var($data['is_active'] ?? true, FILTER_VALIDATE_BOOLEAN),
-                    'email' => $data['email'] ?? null,
-                    'expected_arrival_time' => $data['expected_arrival_time'] ?? null,
-                    'recycling_location_id' => $recyclingLocationId,
-                ];
-
-                // Create or update based on short_code
-                Location::updateOrCreate(
-                    ['short_code' => $data['short_code']],
-                    $importData
-                );
-
-                $imported++;
-            }
-
-            if ($imported === 0 && ! empty($errors)) {
-                return back()->withErrors(['file' => 'No valid rows imported. Errors: '.implode('; ', $errors)]);
-            }
-
-            $message = "$imported location(s) imported/updated successfully.";
-            if (! empty($errors)) {
-                $message .= ' '.count($errors).' rows skipped due to errors.';
-            }
-
-            return redirect()->route('admin.locations.index')
-                ->with('success', $message);
-
-        } catch (\Exception $e) {
-            return back()->withErrors(['file' => 'Failed to process file: '.$e->getMessage()]);
-        }
-    }
-
-    public function export(Request $request)
-    {
-        $query = Location::query()
-            ->with('recyclingLocation:id,short_code') // only need short_code
-            ->when($request->search, fn ($q, $search) => $q->where('name', 'like', "%{$search}%")
-                ->orWhere('short_code', 'like', "%{$search}%"));
-
-        $locations = $query->get([
-            'short_code',
-            'name',
-            'address',
-            'city',
-            'state',
-            'zip',
-            'country',
-            'type',
-            'latitude',
-            'longitude',
-            'is_active',
-            'email',
-            'expected_arrival_time',
-            'recycling_location_id', // we'll replace with short_code below
-        ]);
-
-        // Transform to include recycling_short_code instead of ID
-        $exportData = $locations->map(function ($loc) {
-            return [
-                'short_code' => $loc->short_code,
-                'name' => $loc->name ?? '',
-                'address' => $loc->address,
-                'city' => $loc->city ?? '',
-                'state' => $loc->state ?? '',
-                'zip' => $loc->zip ?? '',
-                'country' => $loc->country,
-                'type' => $loc->type,
-                'latitude' => $loc->latitude,
-                'longitude' => $loc->longitude,
-                'is_active' => $loc->is_active ? '1' : '0',
-                'email' => $loc->email ?? '',
-                'expected_arrival_time' => $loc->expected_arrival_time ?? '',
-                'recycling_short_code' => $loc->recyclingLocation?->short_code ?? '', // ← Added!
-            ];
-        });
-
-        // Generate TSV content
-        $headers = [
-            'short_code', 'name', 'address', 'city', 'state', 'zip', 'country',
-            'type', 'latitude', 'longitude', 'is_active', 'email', 'expected_arrival_time',
-            'recycling_short_code', // Make sure importer knows this is the short code
-        ];
-
-        $tsv = implode("\t", $headers)."\n";
-
-        foreach ($exportData as $row) {
-            $tsv .= implode("\t", array_map(function ($value) {
-                // Escape tabs and quotes, wrap in quotes if needed
-                $value = str_replace(["\t", "\n", "\r"], ['\\t', '\\n', '\\r'], $value);
-                if (str_contains($value, "\t") || str_contains($value, '"') || str_contains($value, "\n")) {
-                    $value = '"'.str_replace('"', '""', $value).'"';
-                }
-
-                return $value;
-            }, $row))."\n";
-        }
-
-        $filename = 'locations_export_'.now()->format('Y-m-d_His').'.tsv';
-
-        return response($tsv)
-            ->header('Content-Type', 'text/tab-separated-values')
-            ->header('Content-Disposition', "attachment; filename=\"$filename\"");
-    }
-
+    /**
+     * Display distances from DCs to their recycling locations.
+     */
     public function recyclingDistances(Request $request)
     {
         $perPage = $request->input('per_page', 15);
         $recyclingId = $request->input('recycling_id');
 
         $query = Location::where('type', 'distribution_center')
-            ->with('recyclingLocation:id,short_code,address');
+                         ->with('recyclingLocation:id,short_code,address');
 
-        // Filter by specific recycling location
         if ($recyclingId === 'none') {
             $query->whereNull('recycling_location_id');
         } elseif ($recyclingId && is_numeric($recyclingId)) {
             $query->where('recycling_location_id', $recyclingId);
         }
-        // else: no filter → show all
 
         $dcLocations = $query->paginate($perPage);
 
@@ -398,155 +177,167 @@ class LocationController extends Controller
 
             if (!$rec) {
                 return [
-                    'dc_id' => $dc->id,
-                    'dc_short_code' => $dc->short_code,
-                    'rec_id' => null,
-                    'rec_short_code' => null,
-                    'distance_km' => null,
-                    'distance_miles' => null,
-                    'duration_text' => 'No recycling assigned',
-                    'route_coords' => [],
+                    'dc_id'           => $dc->id,
+                    'dc_short_code'   => $dc->short_code,
+                    'rec_id'          => null,
+                    'rec_short_code'  => null,
+                    'distance_km'     => null,
+                    'distance_miles'  => null,
+                    'duration_text'   => 'No recycling assigned',
+                    'route_coords'    => [],
                 ];
             }
 
-            $distanceRecord = LocationDistance::where('dc_id', $dc->id)
-                ->where('recycling_id', $rec->id)
-                ->first();
+            $distance = $dc->distanceTo($rec);
 
             return [
-                'dc_id' => $dc->id,
-                'dc_short_code' => $dc->short_code,
-                'rec_id' => $rec->id,
-                'rec_short_code' => $rec->short_code,
-                'distance_km' => $distanceRecord?->distance_km,
-                'distance_miles' => $distanceRecord?->distance_miles,
-                'duration_text' => $distanceRecord?->duration_text,
-                'route_coords' => $distanceRecord?->route_coords ?? [],
+                'dc_id'           => $dc->id,
+                'dc_short_code'   => $dc->short_code,
+                'rec_id'          => $rec->id,
+                'rec_short_code'  => $rec->short_code,
+                'distance_km'     => $distance['km'] ?? null,
+                'distance_miles'  => $distance['miles'] ?? null,
+                'duration_text'   => $distance['duration_text'] ?? '—',
+                'route_coords'    => $distance['route_coords'] ?? [],
             ];
         });
 
+        $recyclingLocations = Location::where('type', 'recycling')
+            ->select('id', 'short_code')
+            ->orderBy('short_code')
+            ->get();
+
         return Inertia::render('Admin/Locations/RecyclingDistance', [
-            'distances' => $distances,
-            'recycling_locations' => Location::where('type', 'recycling')
-                ->select('id', 'short_code')
-                ->orderBy('short_code')
-                ->get(),
+            'distances'           => $distances,
+            'recycling_locations' => $recyclingLocations,
         ]);
     }
 
-    private function calculateDistance($originAddress, $destinationAddress)
+    /**
+     * Show the multi-location route planner page.
+     */
+    public function multiRoute()
     {
-        $token = config('services.mapbox.key');
+        $locations = Location::select('id', 'short_code', 'address', 'type')
+            ->orderBy('short_code')
+            ->get();
 
-        if (!$token) {
-            Log::error('Mapbox token not configured');
-            return ['error' => 'Mapbox token missing'];
-        }
-
-        // Geocode origin
-        $originResponse = Http::get("https://api.mapbox.com/geocoding/v5/mapbox.places/" . urlencode($originAddress) . ".json", [
-            'access_token' => $token,
-            'limit' => 1,
-            'types' => 'address',
-            'country' => 'us', // change if needed
+        return Inertia::render('Admin/Locations/MultiLocationRoute', [
+            'locations'    => $locations,
+            'mapbox_token' => config('services.mapbox.key'),
         ]);
-
-        if (!$originResponse->successful() || empty($originResponse['features'])) {
-            Log::warning("Geocode failed for origin: {$originAddress}");
-            return ['error' => 'Failed to geocode origin'];
-        }
-
-        $originCoords = $originResponse['features'][0]['center']; // [lng, lat]
-
-
-        // Geocode destination
-        $destResponse = Http::get("https://api.mapbox.com/geocoding/v5/mapbox.places/" . urlencode($destinationAddress) . ".json", [
-            'access_token' => $token,
-            'limit' => 1,
-            'types' => 'address',
-            'country' => 'us',
-        ]);
-
-        if (!$destResponse->successful() || empty($destResponse['features'])) {
-            Log::warning("Geocode failed for destination: {$destinationAddress}");
-            return ['error' => 'Failed to geocode destination'];
-        }
-
-        $destCoords = $destResponse['features'][0]['center'];
-
-        // Get driving directions
-        $coords = implode(',',$originCoords).';'. implode(',', $destCoords); // lng1,lat1;lng2,lat2
-
-        $directionsResponse = Http::get("https://api.mapbox.com/directions/v5/mapbox/driving/{$coords}", [
-            'access_token' => $token,
-            'geometries' => 'geojson',
-            'overview' => 'full',
-        ]);
-
-        if (!$directionsResponse->successful() || empty($directionsResponse['routes'])) {
-            Log::warning("Directions failed between {$originAddress} and {$destinationAddress}");
-            return ['error' => 'Failed to get route'];
-        }
-
-        $route = $directionsResponse['routes'][0];
-
-        $meters = $route['distance'];
-        $seconds = $route['duration'];
-
-        return [
-            'km' => round($meters / 1000, 1),
-            'miles' => round(($meters / 1000) * 0.621371, 1),
-            'duration_text' => $this->secondsToHumanTime($seconds),
-            'duration_minutes' => round($seconds / 60),
-            'route_coords' => $route['geometry']['coordinates'] ?? [],
-        ];
     }
 
-    private function secondsToHumanTime($seconds)
+    /**
+     * Calculate multi-location route (called via POST from frontend).
+     */
+    public function calculateMultiRoute(Request $request)
+    {
+        $validated = $request->validate([
+            'location_ids' => 'required|array|min:2',
+            'location_ids.*' => 'exists:locations,id',
+        ]);
+
+        $locationIds = $validated['location_ids'];
+
+        // Sort for consistent caching (order matters for route)
+        sort($locationIds);
+        $cacheKey = 'mapbox_multi_route:' . md5(implode('|', $locationIds));
+
+        $routeData = \Cache::remember($cacheKey, now()->addDays(7), function () use ($locationIds) {
+            $locations = Location::whereIn('id', $locationIds)
+                ->select('id', 'short_code', 'address', 'latitude', 'longitude')
+                ->get()
+                ->keyBy('id');
+
+            $allRouteCoords = [];
+            $totalKm = 0.0;
+            $totalSeconds = 0;
+
+            for ($i = 0; $i < count($locationIds) - 1; $i++) {
+                $fromId = $locationIds[$i];
+                $toId   = $locationIds[$i + 1];
+
+                $from = $locations[$fromId];
+                $to   = $locations[$toId];
+
+                if (!$from || !$to) {
+                    return ['error' => 'Missing location data'];
+                }
+
+                $distance = $from->distanceTo($to);
+
+                if (isset($distance['error'])) {
+                    return $distance;
+                }
+
+                $totalKm += $distance['km'] ?? 0;
+                $totalSeconds += ($distance['duration_minutes'] ?? 0) * 60;
+
+                $segmentCoords = $distance['route_coords'] ?? [];
+                if ($i > 0 && !empty($segmentCoords)) {
+                    array_shift($segmentCoords); // remove duplicate connecting point
+                }
+
+                $allRouteCoords = array_merge($allRouteCoords, $segmentCoords);
+            }
+
+            return Inertia::render('Admin/Locations/MultiLocationRoute', [
+                'locations'    => $locations,
+                'mapbox_token' => config('services.mapbox.key'),
+                'route_data'   => [
+                    'total_km' => round($totalKm, 1),
+                    'total_miles' => round($totalKm * 0.621371, 1),
+                    'total_duration' => $this->secondsToHumanTime($totalSeconds),
+                    'route_coords' => $allRouteCoords,
+                ],
+            ]);
+        });
+
+        return response()->json($routeData);
+    }
+
+    /**
+     * Helper to convert seconds to human-readable time.
+     */
+    private function secondsToHumanTime(int $seconds): string
     {
         $hours = floor($seconds / 3600);
         $minutes = floor(($seconds % 3600) / 60);
 
         $parts = [];
-        if ($hours > 0)
-            $parts[] = $hours . ' hr';
-        if ($minutes > 0)
-            $parts[] = $minutes . ' min';
+        if ($hours > 0) $parts[] = $hours . ' hr';
+        if ($minutes > 0) $parts[] = $minutes . ' min';
 
         return implode(' ', $parts) ?: '< 1 min';
     }
 
-    public function recyclingDistanceMap($dcId, $recId)
+    /**
+     * Recalculate distances for a DC when its recycling or address changes.
+     */
+    private function recalculateDistancesForDc(Location $dc)
     {
-        $dc = Location::findOrFail($dcId);
-        $rec = Location::findOrFail($recId);
+        $rec = $dc->recyclingLocation;
 
-        // Ensure they are the correct types (optional safety)
-        if ($dc->type !== 'distribution_center' || $rec->type !== 'recycling') {
-            abort(404, 'Invalid location types');
+        if (!$rec) {
+            LocationDistance::where('dc_id', $dc->id)->delete();
+            return;
         }
 
-        // Get the route coordinates (reuse your existing logic)
-        $distance = $this->calculateDistance($dc->address, $rec->address);
+        $dc->distanceTo($rec, true); // force recalculation
+    }
 
-        if (isset($distance['error'])) {
-            return Inertia::render('Admin/Locations/RecyclingDistanceMap', [
-                'error' => $distance['error'],
-                'dc' => $dc->only(['id', 'short_code', 'address']),
-                'rec' => $rec->only(['id', 'short_code', 'address']),
-            ]);
+    /**
+     * Recalculate distances for all DCs linked to a changed recycling location.
+     */
+    private function recalculateDistancesForRecycling(Location $recycling)
+    {
+        $linkedDcs = Location::where('type', 'distribution_center')
+            ->where('recycling_location_id', $recycling->id)
+            ->get();
+
+        foreach ($linkedDcs as $dc) {
+            $dc->distanceTo($recycling, true);
         }
-
-        return Inertia::render('Admin/Locations/RecyclingDistanceMap', [
-            'dc' => $dc->only(['id', 'short_code', 'address']),
-            'rec' => $rec->only(['id', 'short_code', 'address']),
-            'dc_sc' => $dc->short_code,
-            'rec_sc' => $rec->short_code,
-            'distance_km' => $distance['km'] ?? null,
-            'distance_miles' => $distance['miles'] ?? null,
-            'duration_text' => $distance['duration_text'] ?? null,
-            'route_coords' => $distance['route_coords'] ?? [],  // [[lng, lat], ...]
-            'mapbox_token' => config('services.mapbox.key'),
-        ]);
     }
 }

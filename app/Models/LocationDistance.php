@@ -23,8 +23,8 @@ class LocationDistance extends Model
      * @var array<string>
      */
     protected $fillable = [
-        'dc_id',
-        'recycling_id',
+        'from_location_id',
+        'to_location_id',
         'distance_km',
         'distance_miles',
         'duration_text',
@@ -47,7 +47,7 @@ class LocationDistance extends Model
     ];
 
     /**
-     * The attributes that should be hidden for serialization.
+     * The attributes that should be hidden for arrays/JSON.
      *
      * @var array<string>
      */
@@ -57,43 +57,39 @@ class LocationDistance extends Model
     ];
 
     /**
-     * Get the distribution center location.
+     * Get the originating (from) location.
      */
-    public function dc(): BelongsTo
+    public function fromLocation(): BelongsTo
     {
-        return $this->belongsTo(Location::class, 'dc_id');
+        return $this->belongsTo(Location::class, 'from_location_id');
     }
 
     /**
-     * Get the recycling location.
+     * Get the destination (to) location.
      */
-    public function recycling(): BelongsTo
+    public function toLocation(): BelongsTo
     {
-        return $this->belongsTo(Location::class, 'recycling_id');
+        return $this->belongsTo(Location::class, 'to_location_id');
     }
 
     /**
-     * Scope a query to only include recently calculated distances.
-     */
-    public function scopeRecent($query, $days = 7)
-    {
-        return $query->where('calculated_at', '>=', now()->subDays($days));
-    }
-
-    /**
-     * Accessor for formatted distance string.
+     * Get a display-friendly distance string.
+     *
+     * @return string
      */
     public function getDistanceDisplayAttribute(): string
     {
-        if ($this->distance_km === null) {
+        if (is_null($this->distance_km)) {
             return '—';
         }
 
-        return $this->distance_km . ' km (' . $this->distance_miles . ' mi)';
+        return round($this->distance_km, 1) . ' km (' . round($this->distance_miles, 1) . ' mi)';
     }
 
     /**
-     * Accessor for formatted duration.
+     * Get a display-friendly duration string.
+     *
+     * @return string
      */
     public function getDurationDisplayAttribute(): string
     {
@@ -101,10 +97,35 @@ class LocationDistance extends Model
     }
 
     /**
-     * Check if the distance is outdated (older than 30 days, for example).
+     * Determine if this distance record is outdated.
+     *
+     * @param int $days Days after which a record is considered stale
+     * @return bool
      */
-    public function isOutdated(): bool
+    public function isOutdated(int $days = 30): bool
     {
-        return $this->calculated_at && $this->calculated_at->lt(now()->subDays(30));
+        return $this->calculated_at && $this->calculated_at->lt(now()->subDays($days));
+    }
+
+    /**
+     * Scope: Only include records that are not outdated.
+     */
+    public function scopeFresh($query, int $days = 30)
+    {
+        return $query->where('calculated_at', '>=', now()->subDays($days));
+    }
+
+    /**
+     * Scope: Filter by a specific from/to location pair.
+     */
+    public function scopeBetween($query, Location $from, Location $to)
+    {
+        return $query->where(function ($q) use ($from, $to) {
+            $q->where('from_location_id', $from->id)
+                ->where('to_location_id', $to->id);
+        })->orWhere(function ($q) use ($from, $to) {
+            $q->where('from_location_id', $to->id)
+                ->where('to_location_id', $from->id);
+        });
     }
 }

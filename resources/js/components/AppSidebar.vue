@@ -15,6 +15,7 @@ import {
   AtSign,
   NotepadTextDashed,
   Ruler,
+  Locate,
 } from 'lucide-vue-next'
 
 import NavFooter from '@/components/NavFooter.vue'
@@ -97,6 +98,13 @@ const mainNavItems: NavItem[] = [
         title: 'Location Management',
         href: route('admin.locations.index'),
         icon: Map,
+      }]
+    : []),
+  ...(hasLocationsAccess && isOnLocations.value
+    ? [{
+        title: 'Calculate Multi-Location Route',
+        href: route('admin.locations.multi-route'),
+        icon: Locate,
       }]
     : []),
   ...(hasLocationsAccess && isOnLocations.value

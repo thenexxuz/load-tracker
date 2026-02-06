@@ -242,6 +242,34 @@ watch(
                         </p>
                     </div>
 
+                    <div class="col-span-full grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Latitude</label>
+                            <input
+                            v-model="form.latitude"
+                            type="number"
+                            step="any"
+                            class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
+                            />
+                            <p v-if="form.errors.latitude" class="mt-1 text-sm text-red-600 dark:text-red-400">
+                            {{ form.errors.latitude }}
+                            </p>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Longitude</label>
+                            <input
+                            v-model="form.longitude"
+                            type="number"
+                            step="any"
+                            class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
+                            />
+                            <p v-if="form.errors.longitude" class="mt-1 text-sm text-red-600 dark:text-red-400">
+                            {{ form.errors.longitude }}
+                            </p>
+                        </div>
+                    </div>
+
                     <!-- Email (NEW) -->
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">

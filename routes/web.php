@@ -39,6 +39,8 @@ Route::middleware(['auth', 'role:administrator|supervisor'])->prefix('admin')->n
     // Location Routes
     Route::get('locations/recycling-distances', [LocationController::class, 'recyclingDistances'])->name('locations.recycling-distances');
     Route::get('locations/recycling-distances/{dc_id}/{rec_id}/map', [LocationController::class, 'recyclingDistanceMap'])->name('locations.recycling-distance-map');
+    Route::get('locations/multi-route', [LocationController::class, 'multiRoute'])->name('locations.multi-route');
+    Route::post('locations/multi-route', [LocationController::class, 'calculateMultiRoute'])->name('locations.multi-route-calculate');
     Route::post('locations/import', [LocationController::class, 'import'])->name('locations.import');
     Route::get('locations/export', [LocationController::class, 'export'])->name('locations.export');
     Route::resource('locations', LocationController::class);
