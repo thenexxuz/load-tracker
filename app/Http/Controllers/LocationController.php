@@ -7,6 +7,7 @@ use App\Models\LocationDistance;
 use App\Models\Shipment;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 class LocationController extends Controller
@@ -240,11 +241,12 @@ class LocationController extends Controller
 
         $locationIds = $validated['location_ids'];
 
-        // Sort for consistent caching (order matters for route)
-        sort($locationIds);
-        $cacheKey = 'mapbox_multi_route:' . md5(implode('|', $locationIds));
+        // IMPORTANT: Do NOT sort $locationIds — keep user-selected order
+        // This ensures the route starts at first selected location and ends at last
+        $cacheKey = 'mapbox_multi_route:' . md5(implode('|', $locationIds)); // ordered sequence
 
-        $routeData = \Cache::remember($cacheKey, now()->addDays(7), function () use ($locationIds) {
+        $routeData = Cache::remember($cacheKey, now()->addDays(7), function () use ($locationIds) {
+            // Load locations preserving the original order
             $locations = Location::whereIn('id', $locationIds)
                 ->select('id', 'short_code', 'address', 'latitude', 'longitude')
                 ->get()
@@ -254,17 +256,19 @@ class LocationController extends Controller
             $totalKm = 0.0;
             $totalSeconds = 0;
 
+            // Process segments in user-selected order
             for ($i = 0; $i < count($locationIds) - 1; $i++) {
                 $fromId = $locationIds[$i];
-                $toId   = $locationIds[$i + 1];
+                $toId = $locationIds[$i + 1];
 
-                $from = $locations[$fromId];
-                $to   = $locations[$toId];
+                $from = $locations[$fromId] ?? null;
+                $to = $locations[$toId] ?? null;
 
                 if (!$from || !$to) {
-                    return ['error' => 'Missing location data'];
+                    return ['error' => 'Missing location data for segment'];
                 }
 
+                // Use model method (reuses cached or calculates new)
                 $distance = $from->distanceTo($to);
 
                 if (isset($distance['error'])) {
@@ -275,26 +279,106 @@ class LocationController extends Controller
                 $totalSeconds += ($distance['duration_minutes'] ?? 0) * 60;
 
                 $segmentCoords = $distance['route_coords'] ?? [];
+
+                // Remove duplicate starting point from subsequent segments
                 if ($i > 0 && !empty($segmentCoords)) {
-                    array_shift($segmentCoords); // remove duplicate connecting point
+                    array_shift($segmentCoords);
                 }
 
                 $allRouteCoords = array_merge($allRouteCoords, $segmentCoords);
             }
 
-            return Inertia::render('Admin/Locations/MultiLocationRoute', [
-                'locations'    => $locations,
-                'mapbox_token' => config('services.mapbox.key'),
-                'route_data'   => [
-                    'total_km' => round($totalKm, 1),
-                    'total_miles' => round($totalKm * 0.621371, 1),
-                    'total_duration' => $this->secondsToHumanTime($totalSeconds),
-                    'route_coords' => $allRouteCoords,
-                ],
-            ]);
+            // Final safety: prevent any accidental closure (last point == first)
+            if (count($allRouteCoords) > 2) {
+                $first = $allRouteCoords[0];
+                $last = end($allRouteCoords);
+                if ($first[0] === $last[0] && $first[1] === $last[1]) {
+                    array_pop($allRouteCoords);
+                }
+            }
+
+            // Final validation
+            if (count($allRouteCoords) < 2) {
+                return ['error' => 'Invalid route coordinates after processing'];
+            }
+
+            return [
+                'total_km' => round($totalKm, 1),
+                'total_miles' => round($totalKm * 0.621371, 1),
+                'total_duration' => $this->secondsToHumanTime($totalSeconds),
+                'route_coords' => $allRouteCoords,
+            ];
         });
 
-        return response()->json($routeData);
+        // Load all locations for dropdown
+        $allLocations = Location::select('id', 'short_code', 'address', 'type')
+            ->orderBy('short_code')
+            ->get();
+
+        return Inertia::render('Admin/Locations/MultiLocationRoute', [
+            'locations' => $allLocations,
+            'route_data' => $routeData,
+            'mapbox_token' => config('services.mapbox.key'),
+        ]);
+    }
+
+    /**
+     * Core logic to compute multi-route (extracted so it can be called without closure issues).
+     */
+    private function computeMultiRoute(array $locationIds): array
+    {
+        $locations = Location::whereIn('id', $locationIds)
+            ->select('id', 'short_code', 'address', 'latitude', 'longitude')
+            ->get()
+            ->keyBy('id');
+
+        $allRouteCoords = [];
+        $totalKm = 0.0;
+        $totalSeconds = 0;
+
+        for ($i = 0; $i < count($locationIds) - 1; $i++) {
+            $fromId = $locationIds[$i];
+            $toId = $locationIds[$i + 1];
+
+            $from = $locations[$fromId] ?? null;
+            $to = $locations[$toId] ?? null;
+
+            if (!$from || !$to) {
+                return ['error' => 'Missing location data'];
+            }
+
+            $distance = $from->distanceTo($to);
+
+            if (isset($distance['error'])) {
+                return $distance;
+            }
+
+            $totalKm += $distance['km'] ?? 0;
+            $totalSeconds += ($distance['duration_minutes'] ?? 0) * 60;
+
+            $segmentCoords = $distance['route_coords'] ?? [];
+            if ($i > 0 && !empty($segmentCoords)) {
+                array_shift($segmentCoords); // remove duplicate connecting point
+            }
+
+            $allRouteCoords = array_merge($allRouteCoords, $segmentCoords);
+        }
+
+        // Safety: Ensure no accidental closure
+        if (count($allRouteCoords) > 2) {
+            $first = $allRouteCoords[0];
+            $last = end($allRouteCoords);
+            if ($first[0] === $last[0] && $first[1] === $last[1]) {
+                array_pop($allRouteCoords);
+            }
+        }
+
+        return [
+            'total_km' => round($totalKm, 1),
+            'total_miles' => round($totalKm * 0.621371, 1),
+            'total_duration' => $this->secondsToHumanTime($totalSeconds),
+            'route_coords' => $allRouteCoords,
+        ];
     }
 
     /**
