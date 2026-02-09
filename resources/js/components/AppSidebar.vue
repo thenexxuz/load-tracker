@@ -18,6 +18,7 @@ import {
   Locate,
 } from 'lucide-vue-next'
 
+import NavMain from '@/components/NavMain.vue'
 import NavFooter from '@/components/NavFooter.vue'
 import NavUser from '@/components/NavUser.vue'
 import {
@@ -127,52 +128,28 @@ const footerNavItems: NavItem[] = []
 </script>
 
 <template>
-  <Sidebar collapsible="icon" variant="inset" v-model:collapsed="collapsed">
-    <SidebarHeader>
-      <SidebarMenu>
-        <SidebarMenuItem>
-          <SidebarMenuButton size="lg" as-child>
-            <Link :href="dashboard()">
-              <AppLogo />
-            </Link>
-          </SidebarMenuButton>
-        </SidebarMenuItem>
-      </SidebarMenu>
-    </SidebarHeader>
+  <Sidebar collapsible="icon" variant="inset">
+      <SidebarHeader>
+          <SidebarMenu>
+              <SidebarMenuItem>
+                  <SidebarMenuButton size="lg" as-child>
+                      <Link :href="dashboard()">
+                          <AppLogo />
+                      </Link>
+                  </SidebarMenuButton>
+              </SidebarMenuItem>
+          </SidebarMenu>
+      </SidebarHeader>
 
-    <SidebarContent>
-      <SidebarMenu>
-        <SidebarMenuItem v-for="item in mainNavItems" :key="item.title">
-          <SidebarMenuButton
-            size="lg"
-            as-child
-            :class="{
-              'justify-center': collapsed,
-              'justify-start space-x-3': !collapsed
-            }"
-          >
-            <Link :href="item.href" class="flex items-center">
-              <div class="flex-shrink-0 flex items-center justify-center w-6 h-6">
-                <component :is="item.icon" class="w-5 h-5" />
-              </div>
-              <span
-                v-show="!collapsed"
-                class="ml-3 truncate text-base font-medium"
-              >
-                {{ item.title }}
-              </span>
-            </Link>
-          </SidebarMenuButton>
-        </SidebarMenuItem>
-      </SidebarMenu>
-    </SidebarContent>
+      <SidebarContent>
+          <NavMain :items="mainNavItems" />
+      </SidebarContent>
 
-    <SidebarFooter>
-      <NavFooter :items="footerNavItems" />
-      <NavUser />
-    </SidebarFooter>
+      <SidebarFooter>
+          <NavFooter :items="footerNavItems" />
+          <NavUser />
+      </SidebarFooter>
   </Sidebar>
-
   <slot />
 </template>
 
