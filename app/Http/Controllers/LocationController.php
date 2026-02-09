@@ -216,6 +216,26 @@ class LocationController extends Controller
         ]);
     }
 
+    public function recyclingDistanceMap($dc_id, $rec_id)
+    {
+        // Validate IDs exist
+        $dc = Location::findOrFail($dc_id);
+        $rec = Location::findOrFail($rec_id);
+
+        // Build ordered array: DC first, Recycling second
+        $locationIds = [$dc->id, $rec->id];
+
+        $locations = Location::select('id', 'short_code', 'address', 'type')
+            ->orderBy('short_code')
+            ->get();
+
+        return Inertia::render('Admin/Locations/MultiLocationRoute', [
+            'locations' => $locations,
+            'preselected' => implode(',', $locationIds),
+            'mapbox_token' => config('services.mapbox.key'),
+        ]);
+    }
+
     /**
      * Show the multi-location route planner page.
      */
