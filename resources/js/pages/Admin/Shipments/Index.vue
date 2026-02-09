@@ -155,9 +155,8 @@ onClickOutside(dcFilterRef,       () => showDcFilter.value = false,       { igno
 onClickOutside(carrierFilterRef,  () => showCarrierFilter.value = false,  { ignore: [carrierDropdownRoot] })
 onClickOutside(dropDateFilterRef, () => showDropDateFilter.value = false, { ignore: [dropDateDropdownRoot] })
 
-// Toggle functions with debug logs (remove logs later if not needed)
+// Toggle functions
 const toggleStatusFilter = () => {
-  console.log('Status header clicked → toggling to', !showStatusFilter.value)
   showStatusFilter.value = !showStatusFilter.value
   if (showStatusFilter.value) {
     showPickupFilter.value = false
@@ -168,7 +167,6 @@ const toggleStatusFilter = () => {
 }
 
 const togglePickupFilter = () => {
-  console.log('Pickup header clicked → toggling to', !showPickupFilter.value)
   showPickupFilter.value = !showPickupFilter.value
   if (showPickupFilter.value) {
     showStatusFilter.value = false
@@ -179,7 +177,6 @@ const togglePickupFilter = () => {
 }
 
 const toggleDcFilter = () => {
-  console.log('DC header clicked → toggling to', !showDcFilter.value)
   showDcFilter.value = !showDcFilter.value
   if (showDcFilter.value) {
     showStatusFilter.value = false
@@ -190,7 +187,6 @@ const toggleDcFilter = () => {
 }
 
 const toggleCarrierFilter = () => {
-  console.log('Carrier header clicked → toggling to', !showCarrierFilter.value)
   showCarrierFilter.value = !showCarrierFilter.value
   if (showCarrierFilter.value) {
     showStatusFilter.value = false
@@ -201,7 +197,6 @@ const toggleCarrierFilter = () => {
 }
 
 const toggleDropDateFilter = () => {
-  console.log('Drop Date header clicked → toggling to', !showDropDateFilter.value)
   showDropDateFilter.value = !showDropDateFilter.value
   if (showDropDateFilter.value) {
     showStatusFilter.value = false
@@ -494,22 +489,17 @@ const changePerPage = (e: Event) => {
         </div>
       </div>
 
-      <!-- Search -->
-      
-
-      
+      <!-- Filters & Search -->
       <div class="mb-6 flex flex-col sm:flex-row sm:items-center gap-4">
-        <!-- Recycling Filter -->
         <div class="flex-1">
           <input
             v-model="search"
             type="text"
             placeholder="Search by shipment number, BOL or PO..."
-            class="w-full mb-6 w-full max-w-md border border-gray-300 dark:border-gray-600 rounded-md p-2.5 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            class="w-full border border-gray-300 dark:border-gray-600 rounded-md p-2.5 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:outline-none"
           />
         </div>
 
-        <!-- Per Page -->
         <div class="flex items-center space-x-3">
           <label class="text-sm text-gray-700 dark:text-gray-300">Items per page:</label>
           <select
@@ -525,11 +515,10 @@ const changePerPage = (e: Event) => {
         </div>
       </div>
 
-
       <!-- Table -->
       <div class="w-full">
-        <div class="overflow-x-auto">
-          <table class="w-full min-w-max border-collapse bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/30">
+        <div class="overflow-x-auto rounded-t-lg">
+          <table class="w-full min-w-max border-collapse bg-white dark:bg-gray-800 shadow-md dark:shadow-gray-900/30">
             <thead>
               <tr class="bg-gray-100 dark:bg-gray-700 text-left">
                 <!-- Status -->
@@ -652,7 +641,7 @@ const changePerPage = (e: Event) => {
                     title="Edit Shipment"
                     @click.stop
                   >
-                    <svg class="w-5.5 h-5.5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg class="w-5 h-5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                     </svg>
                   </a>
@@ -662,7 +651,7 @@ const changePerPage = (e: Event) => {
                     class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 transition-colors"
                     title="Delete Shipment"
                   >
-                    <svg class="w-5.5 h-5.5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg class="w-5 h-5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
                     </svg>
                   </button>
@@ -683,170 +672,167 @@ const changePerPage = (e: Event) => {
         </div>
       </div>
 
-      <!-- Pagination -->
-      <div v-if="shipments.data?.length" class="mt-6 flex flex-col sm:flex-row justify-between items-center gap-4 text-sm text-gray-700 dark:text-gray-300">
-        <div>
-          Showing {{ shipments.from || 0 }} to {{ shipments.to || 0 }} of {{ shipments.total || 0 }} shipments
+      <!-- Pagination – restyled to match app-wide style -->
+      <div v-if="shipments.data?.length" class="px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-800 rounded-b-lg">
+        <!-- Showing info -->
+        <div class="text-sm text-gray-700 dark:text-gray-300 mb-4 sm:mb-0">
+          Showing {{ shipments.from ?? 0 }}–{{ shipments.to ?? 0 }} of {{ shipments.total }} entries
         </div>
 
-        <!-- Pagination -->
-        <div v-if="shipments.data.length" class="px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
-        
-          <!-- Pagination buttons -->
-          <div class="flex flex-wrap items-center gap-1 sm:gap-2">
-            <div class="flex flex-wrap items-center gap-1 sm:gap-2">
-              <button
-                v-for="(link, index) in shipments.links"
-                :key="index"
-                :disabled="!link.url"
-                @click="changePage(link.url)"
-                class="px-3 py-2 rounded-md text-sm font-medium transition-colors"
-                :class="{
-                  'bg-blue-600 text-white': link.active,
-                  'bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700': !link.active && link.url,
-                  'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed': !link.url && !link.active
-                }"
-                v-html="link.label"
-              ></button>
-            </div>
-          </div>
+        <!-- Pagination buttons -->
+        <div class="flex flex-wrap items-center gap-1 sm:gap-2 rounded-b-lg">
+          <!-- Page numbers -->
+          <template v-for="(link, index) in shipments.links" :key="index">
+            <button
+              v-if="link.label !== 'Previous' && link.label !== 'Next'"
+              :disabled="!link.url"
+              @click="changePage(link.url)"
+              class="px-3 py-2 rounded-md text-sm font-medium transition-colors"
+              :class="{
+                'bg-blue-600 text-white': link.active,
+                'bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700': !link.active && link.url,
+                'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed': !link.url
+              }"
+              v-html="link.label"
+            ></button>
+          </template>
+        </div>
+      </div>
+    </div>
+
+    <!-- Teleported dropdowns -->
+    <Teleport to="body">
+      <!-- Status Dropdown -->
+      <div
+        v-if="showStatusFilter"
+        ref="statusDropdownRoot"
+        class="fixed z-[9999] bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-2xl"
+        :style="statusDropdownStyle"
+      >
+        <div class="p-4">
+          <select v-model="selectedStatuses" multiple class="w-full h-48 border border-gray-300 dark:border-gray-600 rounded p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option v-for="status in props.statuses" :key="status" :value="status">
+              {{ status }}
+            </option>
+          </select>
+        </div>
+        <div class="border-t border-gray-200 dark:border-gray-700 p-3 flex justify-between items-center">
+          <span class="text-sm text-gray-500 dark:text-gray-400">
+            {{ selectedStatuses.length }} / {{ props.statuses.length }}
+          </span>
+          <button @click="selectedStatuses = [...props.statuses]" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-md text-sm transition-colors">
+            Select all
+          </button>
         </div>
       </div>
 
-      <!-- Teleported dropdowns -->
-      <Teleport to="body">
-        <!-- Status Dropdown -->
-        <div
-          v-if="showStatusFilter"
-          ref="statusDropdownRoot"
-          class="fixed z-[9999] bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-2xl"
-          :style="statusDropdownStyle"
-        >
-          <div class="p-4">
-            <select v-model="selectedStatuses" multiple class="w-full h-48 border border-gray-300 dark:border-gray-600 rounded p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
-              <option v-for="status in props.statuses" :key="status" :value="status">
-                {{ status }}
-              </option>
-            </select>
-          </div>
-          <div class="border-t border-gray-200 dark:border-gray-700 p-3 flex justify-between items-center">
-            <span class="text-sm text-gray-500 dark:text-gray-400">
-              {{ selectedStatuses.length }} / {{ props.statuses.length }}
-            </span>
-            <button @click="selectedStatuses = [...props.statuses]" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-md text-sm transition-colors">
-              Select all
-            </button>
-          </div>
+      <!-- Pickup Location Dropdown -->
+      <div
+        v-if="showPickupFilter"
+        ref="pickupDropdownRoot"
+        class="fixed z-[9999] bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-2xl"
+        :style="pickupDropdownStyle"
+      >
+        <div class="p-4">
+          <select v-model="selectedPickupLocations" multiple class="w-full h-48 border border-gray-300 dark:border-gray-600 rounded p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option v-for="code in props.all_shipper_codes" :key="code" :value="code">
+              {{ code }}
+            </option>
+          </select>
         </div>
+        <div class="border-t border-gray-200 dark:border-gray-700 p-3 flex justify-between items-center">
+          <span class="text-sm text-gray-500 dark:text-gray-400">
+            {{ selectedPickupLocations.length }} / {{ props.all_shipper_codes.length }}
+          </span>
+          <button @click="selectedPickupLocations = [...props.all_shipper_codes]" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-md text-sm transition-colors">
+            Select all
+          </button>
+        </div>
+      </div>
 
-        <!-- Pickup Location Dropdown -->
-        <div
-          v-if="showPickupFilter"
-          ref="pickupDropdownRoot"
-          class="fixed z-[9999] bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-2xl"
-          :style="pickupDropdownStyle"
-        >
-          <div class="p-4">
-            <select v-model="selectedPickupLocations" multiple class="w-full h-48 border border-gray-300 dark:border-gray-600 rounded p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
-              <option v-for="code in props.all_shipper_codes" :key="code" :value="code">
-                {{ code }}
-              </option>
-            </select>
-          </div>
-          <div class="border-t border-gray-200 dark:border-gray-700 p-3 flex justify-between items-center">
-            <span class="text-sm text-gray-500 dark:text-gray-400">
-              {{ selectedPickupLocations.length }} / {{ props.all_shipper_codes.length }}
-            </span>
-            <button @click="selectedPickupLocations = [...props.all_shipper_codes]" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-md text-sm transition-colors">
-              Select all
-            </button>
-          </div>
+      <!-- DC Dropdown -->
+      <div
+        v-if="showDcFilter"
+        ref="dcDropdownRoot"
+        class="fixed z-[9999] bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-2xl"
+        :style="dcDropdownStyle"
+      >
+        <div class="p-4">
+          <select v-model="selectedDcLocations" multiple class="w-full h-48 border border-gray-300 dark:border-gray-600 rounded p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option v-for="code in props.all_dc_codes" :key="code" :value="code">
+              {{ code }}
+            </option>
+          </select>
         </div>
+        <div class="border-t border-gray-200 dark:border-gray-700 p-3 flex justify-between items-center">
+          <span class="text-sm text-gray-500 dark:text-gray-400">
+            {{ selectedDcLocations.length }} / {{ props.all_dc_codes.length }}
+          </span>
+          <button @click="selectedDcLocations = [...props.all_dc_codes]" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-md text-sm transition-colors">
+            Select all
+          </button>
+        </div>
+      </div>
 
-        <!-- DC Dropdown -->
-        <div
-          v-if="showDcFilter"
-          ref="dcDropdownRoot"
-          class="fixed z-[9999] bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-2xl"
-          :style="dcDropdownStyle"
-        >
-          <div class="p-4">
-            <select v-model="selectedDcLocations" multiple class="w-full h-48 border border-gray-300 dark:border-gray-600 rounded p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
-              <option v-for="code in props.all_dc_codes" :key="code" :value="code">
-                {{ code }}
-              </option>
-            </select>
-          </div>
-          <div class="border-t border-gray-200 dark:border-gray-700 p-3 flex justify-between items-center">
-            <span class="text-sm text-gray-500 dark:text-gray-400">
-              {{ selectedDcLocations.length }} / {{ props.all_dc_codes.length }}
-            </span>
-            <button @click="selectedDcLocations = [...props.all_dc_codes]" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-md text-sm transition-colors">
-              Select all
-            </button>
-          </div>
+      <!-- Carrier Dropdown -->
+      <div
+        v-if="showCarrierFilter"
+        ref="carrierDropdownRoot"
+        class="fixed z-[9999] bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-2xl"
+        :style="carrierDropdownStyle"
+      >
+        <div class="p-4">
+          <select v-model="selectedCarriers" multiple class="w-full h-48 border border-gray-300 dark:border-gray-600 rounded p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option v-for="name in props.all_carrier_names" :key="name" :value="name">
+              {{ name }}
+            </option>
+          </select>
         </div>
+        <div class="border-t border-gray-200 dark:border-gray-700 p-3 flex justify-between items-center">
+          <span class="text-sm text-gray-500 dark:text-gray-400">
+            {{ selectedCarriers.length }} / {{ props.all_carrier_names.length }}
+          </span>
+          <button @click="selectedCarriers = [...props.all_carrier_names]" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-md text-sm transition-colors">
+            Select all
+          </button>
+        </div>
+      </div>
 
-        <!-- Carrier Dropdown -->
-        <div
-          v-if="showCarrierFilter"
-          ref="carrierDropdownRoot"
-          class="fixed z-[9999] bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-2xl"
-          :style="carrierDropdownStyle"
-        >
-          <div class="p-4">
-            <select v-model="selectedCarriers" multiple class="w-full h-48 border border-gray-300 dark:border-gray-600 rounded p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
-              <option v-for="name in props.all_carrier_names" :key="name" :value="name">
-                {{ name }}
-              </option>
-            </select>
+      <!-- Drop Date Dropdown -->
+      <div
+        v-if="showDropDateFilter"
+        ref="dropDateDropdownRoot"
+        class="fixed z-[9999] bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-2xl"
+        :style="dropDateDropdownStyle"
+      >
+        <div class="p-4 space-y-4">
+          <div>
+            <label class="block text-sm text-gray-600 dark:text-gray-400 mb-1">From</label>
+            <input
+              v-model="dropStart"
+              type="date"
+              class="w-full border border-gray-300 dark:border-gray-600 rounded p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
           </div>
-          <div class="border-t border-gray-200 dark:border-gray-700 p-3 flex justify-between items-center">
-            <span class="text-sm text-gray-500 dark:text-gray-400">
-              {{ selectedCarriers.length }} / {{ props.all_carrier_names.length }}
-            </span>
-            <button @click="selectedCarriers = [...props.all_carrier_names]" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-md text-sm transition-colors">
-              Select all
-            </button>
-          </div>
-        </div>
-
-        <!-- Drop Date Dropdown -->
-        <div
-          v-if="showDropDateFilter"
-          ref="dropDateDropdownRoot"
-          class="fixed z-[9999] bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-2xl"
-          :style="dropDateDropdownStyle"
-        >
-          <div class="p-4 space-y-4">
-            <div>
-              <label class="block text-sm text-gray-600 dark:text-gray-400 mb-1">From</label>
-              <input
-                v-model="dropStart"
-                type="date"
-                class="w-full border border-gray-300 dark:border-gray-600 rounded p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label class="block text-sm text-gray-600 dark:text-gray-400 mb-1">To</label>
-              <input
-                v-model="dropEnd"
-                type="date"
-                :min="dropStart"
-                class="w-full border border-gray-300 dark:border-gray-600 rounded p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-          </div>
-          <div class="border-t border-gray-200 dark:border-gray-700 p-3 flex justify-between items-center">
-            <button @click="clearDropDate" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-md text-sm transition-colors">
-              Clear
-            </button>
-            <button @click="showDropDateFilter = false" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm transition-colors">
-              Close
-            </button>
+          <div>
+            <label class="block text-sm text-gray-600 dark:text-gray-400 mb-1">To</label>
+            <input
+              v-model="dropEnd"
+              type="date"
+              :min="dropStart"
+              class="w-full border border-gray-300 dark:border-gray-600 rounded p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
           </div>
         </div>
-      </Teleport>
-    </div>
+        <div class="border-t border-gray-200 dark:border-gray-700 p-3 flex justify-between items-center">
+          <button @click="clearDropDate" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-md text-sm transition-colors">
+            Clear
+          </button>
+          <button @click="showDropDateFilter = false" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm transition-colors">
+            Close
+          </button>
+        </div>
+      </div>
+    </Teleport>
   </AdminLayout>
 </template>

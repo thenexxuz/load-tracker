@@ -24,6 +24,8 @@ const props = defineProps<{
     from: number
     to: number
     total: number
+    per_page: number
+    links: Array<{ url: string | null; label: string; active: boolean }>
   }
 }>()
 
@@ -68,6 +70,26 @@ const destroy = async (id: number) => {
 const goToShow = (id: number) => {
   router.visit(route('admin.templates.show', id))
 }
+
+// Change page
+const changePage = (url: string | null) => {
+  if (url) {
+    router.visit(url, {
+      preserveState: true,
+      preserveScroll: true,
+    })
+  }
+}
+
+// Change per page
+const changePerPage = (e: Event) => {
+  const value = (e.target as HTMLSelectElement).value
+  router.get(
+    route('admin.templates.index'),
+    { search: search.value || null, per_page: value, page: 1 },
+    { preserveState: true, preserveScroll: true, replace: true }
+  )
+}
 </script>
 
 <template>
@@ -89,7 +111,7 @@ const goToShow = (id: number) => {
 
       <!-- Table -->
       <div class="overflow-x-auto">
-        <table class="w-full border-collapse bg-white dark:bg-gray-800 rounded-lg overflow-hidden shadow-md dark:shadow-gray-900/30">
+        <table class="w-full border-collapse bg-white dark:bg-gray-800 rounded-t-lg overflow-hidden shadow-md dark:shadow-gray-900/30">
           <thead>
             <tr class="bg-gray-100 dark:bg-gray-700 text-left">
               <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300">Name</th>
@@ -148,32 +170,30 @@ const goToShow = (id: number) => {
         </table>
       </div>
 
-      <!-- Pagination -->
-      <div v-if="templates.data?.length" class="mt-6 flex flex-col sm:flex-row justify-between items-center gap-4 text-sm text-gray-700 dark:text-gray-300">
-        <div>
-          Showing {{ templates.from || 0 }} to {{ templates.to || 0 }} of {{ templates.total || 0 }} templates
+      <!-- Pagination – restyled to match app-wide style -->
+      <div v-if="templates.data?.length" class="px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-800 rounded-b-lg">
+        <!-- Showing info -->
+        <div class="text-sm text-gray-700 dark:text-gray-300 mb-4 sm:mb-0">
+          Showing {{ templates.from ?? 0 }}–{{ templates.to ?? 0 }} of {{ templates.total }} entries
         </div>
 
-        <div class="flex items-center space-x-2">
-          <button
-            :disabled="templates.current_page === 1"
-            @click="router.get(route('admin.templates.index', { page: templates.current_page - 1 }), {}, { preserveState: true, preserveScroll: true })"
-            class="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            Previous
-          </button>
-
-          <span class="px-4 py-2 font-medium">
-            Page {{ templates.current_page }} of {{ templates.last_page }}
-          </span>
-
-          <button
-            :disabled="templates.current_page === templates.last_page"
-            @click="router.get(route('admin.templates.index', { page: templates.current_page + 1 }), {}, { preserveState: true, preserveScroll: true })"
-            class="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            Next
-          </button>
+        <!-- Pagination buttons -->
+        <div class="flex flex-wrap items-center gap-1 sm:gap-2">
+          <!-- Page numbers -->
+          <template v-for="(link, index) in templates.links" :key="index">
+            <button
+              v-if="link.label !== 'Previous' && link.label !== 'Next'"
+              :disabled="!link.url"
+              @click="changePage(link.url)"
+              class="px-3 py-2 rounded-md text-sm font-medium transition-colors"
+              :class="{
+                'bg-blue-600 text-white': link.active,
+                'bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700': !link.active && link.url,
+                'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed': !link.url
+              }"
+              v-html="link.label"
+            ></button>
+          </template>
         </div>
       </div>
     </div>

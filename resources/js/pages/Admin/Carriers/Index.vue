@@ -303,17 +303,15 @@ const changePerPage = (e: Event) => {
       </div>
 
       <div class="mb-6 flex flex-col sm:flex-row sm:items-center gap-4">
-        <!-- Recycling Filter -->
         <div class="flex-1">
           <input
             v-model="search"
             type="text"
             placeholder="Search by name, code, contact or email..."
-            class="w-full mb-6 w-full max-w-md border border-gray-300 dark:border-gray-600 rounded-md p-2.5 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            class="w-full border border-gray-300 dark:border-gray-600 rounded-md p-2.5 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:outline-none"
           />
         </div>
 
-        <!-- Per Page -->
         <div class="flex items-center space-x-3">
           <label class="text-sm text-gray-700 dark:text-gray-300">Items per page:</label>
           <select
@@ -344,7 +342,7 @@ const changePerPage = (e: Event) => {
 
       <!-- Table -->
       <div v-else class="overflow-x-auto">
-        <table class="w-full border-collapse bg-white dark:bg-gray-800 rounded-lg overflow-hidden shadow-md dark:shadow-gray-900/30">
+        <table class="w-full border-collapse bg-white dark:bg-gray-800 rounded-t-lg overflow-hidden shadow-md dark:shadow-gray-900/30">
           <thead>
             <tr class="bg-gray-100 dark:bg-gray-700 text-left">
               <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300">Short Code</th>
@@ -386,7 +384,7 @@ const changePerPage = (e: Event) => {
                   class="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 transition-colors"
                   title="Edit Carrier"
                 >
-                  <svg class="w-5.5 h-5.5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg class="w-5 h-5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                   </svg>
                 </a>
@@ -396,7 +394,7 @@ const changePerPage = (e: Event) => {
                   class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 transition-colors"
                   title="Delete Carrier"
                 >
-                  <svg class="w-5.5 h-5.5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg class="w-5 h-5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
                   </svg>
                 </button>
@@ -404,32 +402,32 @@ const changePerPage = (e: Event) => {
             </tr>
           </tbody>
         </table>
+      </div>
 
-        <!-- Pagination -->
-        <div v-if="carriers.data.length" class="px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
-          <!-- Showing info -->
-          <div class="text-sm text-gray-700 dark:text-gray-300 mb-4 sm:mb-0">
-            Showing {{ carriers.from ?? 0 }}–{{ carriers.to ?? 0 }} of {{ carriers.total }} entries
-          </div>
+      <!-- Pagination – restyled to match app-wide style -->
+      <div v-if="carriers.data?.length" class="px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-800 rounded-b-lg">
+        <!-- Showing info -->
+        <div class="text-sm text-gray-700 dark:text-gray-300 mb-4 sm:mb-0">
+          Showing {{ carriers.from ?? 0 }}–{{ carriers.to ?? 0 }} of {{ carriers.total }} entries
+        </div>
 
-          <!-- Pagination buttons -->
-          <div class="flex flex-wrap items-center gap-1 sm:gap-2">
-            <div class="flex flex-wrap items-center gap-1 sm:gap-2">
-              <button
-                v-for="(link, index) in carriers.links"
-                :key="index"
-                :disabled="!link.url"
-                @click="changePage(link.url)"
-                class="px-3 py-2 rounded-md text-sm font-medium transition-colors"
-                :class="{
-                  'bg-blue-600 text-white': link.active,
-                  'bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700': !link.active && link.url,
-                  'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed': !link.url && !link.active
-                }"
-                v-html="link.label"
-              ></button>
-            </div>
-          </div>
+        <!-- Pagination buttons -->
+        <div class="flex flex-wrap items-center gap-1 sm:gap-2">
+          <!-- Page numbers -->
+          <template v-for="(link, index) in carriers.links" :key="index">
+            <button
+              v-if="link.label !== 'Previous' && link.label !== 'Next'"
+              :disabled="!link.url"
+              @click="changePage(link.url)"
+              class="px-3 py-2 rounded-md text-sm font-medium transition-colors"
+              :class="{
+                'bg-blue-600 text-white': link.active,
+                'bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700': !link.active && link.url,
+                'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed': !link.url
+              }"
+              v-html="link.label"
+            ></button>
+          </template>
         </div>
       </div>
     </div>
