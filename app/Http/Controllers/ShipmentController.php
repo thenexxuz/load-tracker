@@ -18,6 +18,11 @@ class ShipmentController extends Controller
 {
     public function index(Request $request)
     {
+        $validated = $request->validate([
+            'per_page' => 'nullable|integer|min:1|max:25',
+            'search' => 'nullable|string|max:500',
+        ]);
+
         $query = Shipment::query()
             ->with(['pickupLocation', 'dcLocation', 'carrier']);
 
@@ -83,7 +88,7 @@ class ShipmentController extends Controller
             $query->whereDate('drop_date', '<=', $dropEnd);
         }
 
-        $shipments = $query->latest()->paginate(15);
+        $shipments = $query->latest()->paginate($validated['per_page'] ?? 15)->withQueryString();
 
         return Inertia::render('Admin/Shipments/Index', [
             'shipments' => $shipments,

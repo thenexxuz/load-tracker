@@ -9,7 +9,7 @@ import 'vue-multiselect/dist/vue-multiselect.css'
 
 const props = defineProps<{
   locations: Array<{ id: number; short_code: string; address: string; type: string }>
-  preselected?: string | null  // comma-separated IDs from query
+  preselected?: string | null
   mapbox_token: string
 }>()
 

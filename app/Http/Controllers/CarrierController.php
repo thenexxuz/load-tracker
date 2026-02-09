@@ -7,19 +7,26 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
+use Inertia\Response;
 use League\Csv\Reader;
 
 class CarrierController extends Controller
 {
-    public function index()
+    public function index(Request $request): Response
     {
+        $validated = $request->validate([
+            'per_page' => 'nullable|integer|min:1|max:25',
+            'search' => 'nullable|string|max:500',
+        ]);
+
         $carriers = Carrier::query()
             ->when(request('search'), fn ($q, $search) => $q->where('name', 'like', "%{$search}%")
                 ->orWhere('short_code', 'like', "%{$search}%")
                 ->orWhere('contact_name', 'like', "%{$search}%")
                 ->orWhere('emails', 'like', "%{$search}%"))
             ->orderBy('name')
-            ->paginate(15);
+            ->paginate($validated['per_page'] ?? 15)
+            ->withQueryString();
 
         return Inertia::render('Admin/Carriers/Index', [
             'carriers' => $carriers,

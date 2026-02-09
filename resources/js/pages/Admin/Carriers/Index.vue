@@ -22,6 +22,8 @@ const props = defineProps<{
     from: number
     to: number
     total: number
+    per_page: number
+    links: Array<{ url: string | null; label: string; active: boolean }>
   }
   filters: Record<string, any>
 }>()
@@ -182,6 +184,26 @@ const getEmailInfo = (emails: string | null) => {
 
   return { count, tooltip }
 }
+
+// Change page
+const changePage = (url: string | null) => {
+  if (url) {
+    router.visit(url, {
+      preserveState: true,
+      preserveScroll: true,
+    })
+  }
+}
+
+// Change per page
+const changePerPage = (e: Event) => {
+  const value = (e.target as HTMLSelectElement).value
+  router.get(
+    route('admin.carriers.index'),
+    { search: search.value || null, per_page: value, page: 1 },
+    { preserveState: true, preserveScroll: true, replace: true }
+  )
+}
 </script>
 
 <template>
@@ -280,13 +302,32 @@ const getEmailInfo = (emails: string | null) => {
         </div>
       </div>
 
-      <!-- Search -->
-      <input
-        v-model="search"
-        type="text"
-        placeholder="Search by name, code, contact or email..."
-        class="mb-6 w-full max-w-md border border-gray-300 dark:border-gray-600 rounded-md p-2.5 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-      />
+      <div class="mb-6 flex flex-col sm:flex-row sm:items-center gap-4">
+        <!-- Recycling Filter -->
+        <div class="flex-1">
+          <input
+            v-model="search"
+            type="text"
+            placeholder="Search by name, code, contact or email..."
+            class="w-full mb-6 w-full max-w-md border border-gray-300 dark:border-gray-600 rounded-md p-2.5 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+          />
+        </div>
+
+        <!-- Per Page -->
+        <div class="flex items-center space-x-3">
+          <label class="text-sm text-gray-700 dark:text-gray-300">Items per page:</label>
+          <select
+            @change="changePerPage"
+            :value="carriers.per_page"
+            class="border border-gray-300 dark:border-gray-600 rounded-md px-3 py-1 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option :value="10">10</option>
+            <option :value="15">15</option>
+            <option :value="20">20</option>
+            <option :value="25">25</option>
+          </select>
+        </div>
+      </div>
 
       <!-- Empty state -->
       <div
@@ -365,31 +406,29 @@ const getEmailInfo = (emails: string | null) => {
         </table>
 
         <!-- Pagination -->
-        <div class="mt-6 flex flex-col sm:flex-row justify-between items-center gap-4 text-sm text-gray-700 dark:text-gray-300">
-          <div>
-            Showing {{ carriers.from || 0 }} to {{ carriers.to || 0 }} of {{ carriers.total || 0 }} carriers
+        <div v-if="carriers.data.length" class="px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+          <!-- Showing info -->
+          <div class="text-sm text-gray-700 dark:text-gray-300 mb-4 sm:mb-0">
+            Showing {{ carriers.from ?? 0 }}–{{ carriers.to ?? 0 }} of {{ carriers.total }} entries
           </div>
 
-          <div class="flex items-center space-x-2">
-            <button
-              :disabled="carriers.current_page === 1"
-              @click="router.get(route('admin.carriers.index', { page: carriers.current_page - 1 }), {}, { preserveState: true, preserveScroll: true })"
-              class="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              Previous
-            </button>
-
-            <span class="px-4 py-2 font-medium">
-              Page {{ carriers.current_page }} of {{ carriers.last_page }}
-            </span>
-
-            <button
-              :disabled="carriers.current_page === carriers.last_page"
-              @click="router.get(route('admin.carriers.index', { page: carriers.current_page + 1 }), {}, { preserveState: true, preserveScroll: true })"
-              class="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              Next
-            </button>
+          <!-- Pagination buttons -->
+          <div class="flex flex-wrap items-center gap-1 sm:gap-2">
+            <div class="flex flex-wrap items-center gap-1 sm:gap-2">
+              <button
+                v-for="(link, index) in carriers.links"
+                :key="index"
+                :disabled="!link.url"
+                @click="changePage(link.url)"
+                class="px-3 py-2 rounded-md text-sm font-medium transition-colors"
+                :class="{
+                  'bg-blue-600 text-white': link.active,
+                  'bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700': !link.active && link.url,
+                  'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed': !link.url && !link.active
+                }"
+                v-html="link.label"
+              ></button>
+            </div>
           </div>
         </div>
       </div>

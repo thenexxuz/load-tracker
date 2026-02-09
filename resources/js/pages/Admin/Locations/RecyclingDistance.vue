@@ -106,9 +106,8 @@ watch(selectedRecycling, (value) => {
           >
             <option :value="10">10</option>
             <option :value="15">15</option>
+            <option :value="20">20</option>
             <option :value="25">25</option>
-            <option :value="50">50</option>
-            <option :value="100">100</option>
           </select>
         </div>
       </div>
@@ -204,31 +203,21 @@ watch(selectedRecycling, (value) => {
 
           <!-- Pagination buttons -->
           <div class="flex flex-wrap items-center gap-1 sm:gap-2">
-            <!-- Previous -->
-            <button
-              :disabled="!distances.links[0]?.url"
-              @click="changePage(distances.links[0]?.url)"
-              class="px-3 py-2 rounded-md text-sm font-medium transition-colors"
-              :class="{
-                'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed': !distances.links[0]?.url,
-                'bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700': distances.links[0]?.url
-              }"
-            >
-              Previous
-            </button>
-
-            <!-- Next -->
-            <button
-              :disabled="!distances.links[distances.links.length - 1]?.url"
-              @click="changePage(distances.links[distances.links.length - 1]?.url)"
-              class="px-3 py-2 rounded-md text-sm font-medium transition-colors"
-              :class="{
-                'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed': !distances.links[distances.links.length - 1]?.url,
-                'bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700': distances.links[distances.links.length - 1]?.url
-              }"
-            >
-              Next
-            </button>
+            <div class="flex flex-wrap items-center gap-1 sm:gap-2">
+              <button
+                v-for="(link, index) in distances.links"
+                :key="index"
+                :disabled="!link.url"
+                @click="changePage(link.url)"
+                class="px-3 py-2 rounded-md text-sm font-medium transition-colors"
+                :class="{
+                  'bg-blue-600 text-white': link.active,
+                  'bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700': !link.active && link.url,
+                  'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed': !link.url && !link.active
+                }"
+                v-html="link.label"
+              ></button>
+            </div>
           </div>
         </div>
       </div>
