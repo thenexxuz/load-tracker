@@ -17,7 +17,7 @@ const props = defineProps<{
         type: 'pickup' | 'distribution_center' | 'recycling'
         latitude: number | null
         longitude: number | null
-        is_active: boolean
+        is_active: boolean | number | string  // allow any incoming type
         recycling_location_id: number | null
         email: string | null
         expected_arrival_time: string | null
@@ -28,6 +28,9 @@ const props = defineProps<{
         name: string | null
     }>
 }>()
+
+// Force is_active to be a strict boolean
+const isActiveInitial = !!props.location.is_active; // !! converts 1/"1"/true to true, 0/null/false to false
 
 const form = useForm({
     short_code: props.location.short_code,
@@ -40,7 +43,7 @@ const form = useForm({
     type: props.location.type,
     latitude: props.location.latitude,
     longitude: props.location.longitude,
-    is_active: props.location.is_active,
+    is_active: isActiveInitial,  // strict boolean here
     recycling_location_id: props.location.recycling_location_id ?? null,
     email: props.location.email || '',
     expected_arrival_time: props.location.expected_arrival_time,
@@ -242,35 +245,36 @@ watch(
                         </p>
                     </div>
 
+                    <!-- Latitude & Longitude -->
                     <div class="col-span-full grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Latitude</label>
                             <input
-                            v-model="form.latitude"
-                            type="number"
-                            step="any"
-                            class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
+                                v-model="form.latitude"
+                                type="number"
+                                step="any"
+                                class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
                             />
                             <p v-if="form.errors.latitude" class="mt-1 text-sm text-red-600 dark:text-red-400">
-                            {{ form.errors.latitude }}
+                                {{ form.errors.latitude }}
                             </p>
                         </div>
 
                         <div>
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Longitude</label>
                             <input
-                            v-model="form.longitude"
-                            type="number"
-                            step="any"
-                            class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
+                                v-model="form.longitude"
+                                type="number"
+                                step="any"
+                                class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
                             />
                             <p v-if="form.errors.longitude" class="mt-1 text-sm text-red-600 dark:text-red-400">
-                            {{ form.errors.longitude }}
+                                {{ form.errors.longitude }}
                             </p>
                         </div>
                     </div>
 
-                    <!-- Email (NEW) -->
+                    <!-- Email -->
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                             Email
@@ -291,7 +295,7 @@ watch(
                         </p>
                     </div>
 
-                    <!-- Expected Arrival Time (NEW) -->
+                    <!-- Expected Arrival Time -->
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                             Expected Arrival Time
@@ -359,7 +363,7 @@ watch(
                         </p>
                     </div>
 
-                    <!-- Active Toggle -->
+                    <!-- Active Toggle – FIXED: just v-model -->
                     <div class="mb-8">
                         <label class="flex items-center space-x-3 cursor-pointer">
                             <input
@@ -368,8 +372,8 @@ watch(
                                 class="h-5 w-5 text-green-600 focus:ring-green-500 border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700"
                             />
                             <span class="text-gray-700 dark:text-gray-300 font-medium">
-                Active Location
-              </span>
+                                Active Location
+                            </span>
                         </label>
                     </div>
                 </div>

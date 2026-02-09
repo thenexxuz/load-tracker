@@ -8,6 +8,7 @@ use App\Models\Shipment;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class LocationController extends Controller
@@ -62,7 +63,7 @@ class LocationController extends Controller
         $validated = $request->validate([
             'short_code' => 'required|string|max:50|unique:locations',
             'name'       => 'nullable|string|max:255',
-            'type'       => 'required|in:distribution_center,recycling,other',
+            'type'       => 'required|in:distribution_center,recycling,pickup',
             'address'    => 'nullable|string|max:255',
             'city'       => 'nullable|string|max:255',
             'state'      => 'nullable|string|max:255',
@@ -88,6 +89,7 @@ class LocationController extends Controller
 
         return Inertia::render('Admin/Locations/Show', [
             'location' => $location,
+            'mapbox_token' => config('services.mapbox.key'),
         ]);
     }
 
@@ -109,7 +111,7 @@ class LocationController extends Controller
         $validated = $request->validate([
             'short_code' => 'required|string|max:50|unique:locations,short_code,' . $location->id,
             'name'       => 'nullable|string|max:255',
-            'type'       => 'required|in:distribution_center,recycling,other',
+            'type'       => 'required|in:distribution_center,recycling,pickup',
             'address'    => 'nullable|string|max:255',
             'city'       => 'nullable|string|max:255',
             'state'      => 'nullable|string|max:255',
@@ -230,7 +232,7 @@ class LocationController extends Controller
     }
 
     /**
-     * Calculate multi-location route (called via POST from frontend).
+     * Calculate multi-location route using all waypoints at once (open path, no loop).
      */
     public function calculateMultiRoute(Request $request)
     {
@@ -241,76 +243,70 @@ class LocationController extends Controller
 
         $locationIds = $validated['location_ids'];
 
-        // IMPORTANT: Do NOT sort $locationIds — keep user-selected order
-        // This ensures the route starts at first selected location and ends at last
-        $cacheKey = 'mapbox_multi_route:' . md5(implode('|', $locationIds)); // ordered sequence
+        // Preserve the exact order from the frontend (no sorting)
+        $cacheKey = 'mapbox_multi_route:' . md5(implode('|', $locationIds));
 
         $routeData = Cache::remember($cacheKey, now()->addDays(7), function () use ($locationIds) {
-            // Load locations preserving the original order
+            // Load locations in the requested order
             $locations = Location::whereIn('id', $locationIds)
                 ->select('id', 'short_code', 'address', 'latitude', 'longitude')
                 ->get()
                 ->keyBy('id');
 
-            $allRouteCoords = [];
-            $totalKm = 0.0;
-            $totalSeconds = 0;
-
-            // Process segments in user-selected order
-            for ($i = 0; $i < count($locationIds) - 1; $i++) {
-                $fromId = $locationIds[$i];
-                $toId = $locationIds[$i + 1];
-
-                $from = $locations[$fromId] ?? null;
-                $to = $locations[$toId] ?? null;
-
-                if (!$from || !$to) {
-                    return ['error' => 'Missing location data for segment'];
+            // Build waypoints array with exact coordinates
+            $waypoints = [];
+            foreach ($locationIds as $id) {
+                $loc = $locations[$id] ?? null;
+                if (!$loc) {
+                    return ['error' => 'Missing location data'];
                 }
 
-                // Use model method (reuses cached or calculates new)
-                $distance = $from->distanceTo($to);
-
-                if (isset($distance['error'])) {
-                    return $distance;
+                if (!$loc->latitude || !$loc->longitude) {
+                    return ['error' => "Location {$loc->short_code} has no coordinates"];
                 }
 
-                $totalKm += $distance['km'] ?? 0;
-                $totalSeconds += ($distance['duration_minutes'] ?? 0) * 60;
-
-                $segmentCoords = $distance['route_coords'] ?? [];
-
-                // Remove duplicate starting point from subsequent segments
-                if ($i > 0 && !empty($segmentCoords)) {
-                    array_shift($segmentCoords);
-                }
-
-                $allRouteCoords = array_merge($allRouteCoords, $segmentCoords);
+                $waypoints[] = [$loc->longitude, $loc->latitude]; // Mapbox: [lng, lat]
             }
 
-            // Final safety: prevent any accidental closure (last point == first)
-            if (count($allRouteCoords) > 2) {
-                $first = $allRouteCoords[0];
-                $last = end($allRouteCoords);
-                if ($first[0] === $last[0] && $first[1] === $last[1]) {
-                    array_pop($allRouteCoords);
-                }
+            // If only 2 points, we can still use directions API (or fallback to straight line if preferred)
+            if (count($waypoints) < 2) {
+                return ['error' => 'Not enough locations for a route'];
             }
 
-            // Final validation
-            if (count($allRouteCoords) < 2) {
-                return ['error' => 'Invalid route coordinates after processing'];
+            // Build Mapbox Directions URL with all waypoints
+            $coordString = implode(';', array_map(fn($c) => implode(',', $c), $waypoints));
+
+            $token = config('services.mapbox.key');
+            if (!$token) {
+                return ['error' => 'Mapbox token not configured'];
             }
+
+            $response = Http::get("https://api.mapbox.com/directions/v5/mapbox/driving/{$coordString}", [
+                'access_token' => $token,
+                'geometries' => 'geojson',
+                'overview' => 'full',
+                'steps' => 'false',
+            ]);
+
+            if (!$response->successful() || empty($response['routes'])) {
+                return ['error' => 'Failed to calculate multi-point route'];
+            }
+
+            $route = $response['routes'][0];
+
+            $meters = $route['distance'];
+            $seconds = $route['duration'];
 
             return [
-                'total_km' => round($totalKm, 1),
-                'total_miles' => round($totalKm * 0.621371, 1),
-                'total_duration' => $this->secondsToHumanTime($totalSeconds),
-                'route_coords' => $allRouteCoords,
+                'total_km' => round($meters / 1000, 1),
+                'total_miles' => round(($meters / 1000) * 0.621371, 1),
+                'total_duration' => $this->secondsToHumanTime($seconds),
+                'route_coords' => $route['geometry']['coordinates'] ?? [],
+                'waypoints' => $waypoints,  // exact [lng, lat] for each stop
             ];
         });
 
-        // Load all locations for dropdown
+        // Load all locations for the dropdown
         $allLocations = Location::select('id', 'short_code', 'address', 'type')
             ->orderBy('short_code')
             ->get();

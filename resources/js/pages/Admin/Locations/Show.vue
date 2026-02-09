@@ -1,208 +1,208 @@
 <script setup lang="ts">
-import { Head, router } from '@inertiajs/vue3'
-import Swal from 'sweetalert2'
-
+import { Head, Link } from '@inertiajs/vue3'
 import AdminLayout from '@/layouts/AppLayout.vue'
-
+import { onMounted, ref, onUnmounted } from 'vue'
+import mapboxgl from 'mapbox-gl'
+import 'mapbox-gl/dist/mapbox-gl.css'
 
 const props = defineProps<{
-    location: {
-        id: number
-        short_code: string
-        name: string | null
-        address: string
-        city: string | null
-        state: string | null
-        zip: string | null
-        country: string
-        type: 'pickup' | 'distribution_center' | 'recycling'
-        latitude: number | null
-        longitude: number | null
-        is_active: boolean
-        recycling_location: { short_code: string; name: string | null } | null
-        email: string | null
-        expected_arrival_time: string | null
-        created_at: string
-        updated_at: string
-    }
+  location: {
+    id: number
+    short_code: string
+    name: string | null
+    type: string
+    address: string | null
+    city: string | null
+    state: string | null
+    zip: string | null
+    country: string | null
+    latitude: number | null
+    longitude: number | null
+    recyclingLocation?: { id: number; short_code: string } | null
+    // ... other fields if needed
+  }
+  mapbox_token: string
 }>()
 
-// Delete confirmation with SweetAlert2
-const deleteLocation = async () => {
-    const result = await Swal.fire({
-        title: 'Delete Location?',
-        text: "This action cannot be undone.",
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#d33',
-        cancelButtonColor: '#3085d6',
-        confirmButtonText: 'Yes, delete it!',
-        cancelButtonText: 'Cancel',
-        reverseButtons: true
-    })
+const mapContainer = ref<HTMLDivElement | null>(null)
+let map: mapboxgl.Map | null = null
 
-    if (result.isConfirmed) {
-        router.delete(route('admin.locations.destroy', props.location.id), {
-            onSuccess: () => {
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Deleted!',
-                    text: 'Location has been deleted.',
-                    timer: 2000,
-                    showConfirmButton: false,
-                    toast: true,
-                    position: 'top-end'
-                })
-                router.visit(route('admin.locations.index'))
-            },
-            onError: () => {
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Error',
-                    text: 'Failed to delete location.'
-                })
-            },
-            preserveScroll: true,
-        })
-    }
-}
+onMounted(() => {
+  if (!mapContainer.value || !props.location.latitude || !props.location.longitude) {
+    console.warn('Cannot initialize map: missing container or coordinates')
+    return
+  }
+
+  mapboxgl.accessToken = props.mapbox_token
+
+  map = new mapboxgl.Map({
+    container: mapContainer.value,
+    style: 'mapbox://styles/mapbox/streets-v12',
+    center: [props.location.longitude, props.location.latitude],
+    zoom: 14,
+    attributionControl: true,
+  })
+
+  map.addControl(new mapboxgl.NavigationControl(), 'top-right')
+
+  map.on('load', () => {
+    // Add marker for the location
+    new mapboxgl.Marker({ color: '#ef4444' })
+      .setLngLat([props.location.longitude, props.location.latitude])
+      .setPopup(
+        new mapboxgl.Popup().setHTML(`
+          <strong>${props.location.short_code}</strong><br>
+          ${props.location.name || 'Unnamed'}<br>
+          ${props.location.address || 'No address'}<br>
+          ${[props.location.city, props.location.state, props.location.zip].filter(Boolean).join(', ')}
+        `)
+      )
+      .addTo(map!)
+
+    // Optional: Center and zoom to the marker
+    map!.flyTo({
+      center: [props.location.longitude, props.location.latitude],
+      zoom: 15,
+      duration: 1500,
+    })
+  })
+})
+
+onUnmounted(() => {
+  map?.remove()
+})
 </script>
 
 <template>
-    <Head title="Location Details" />
+  <Head :title="`Location: ${location.short_code}`" />
 
-    <AdminLayout>
-        <div class="p-6">
-            <div class="flex justify-between items-center mb-6">
-                <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                    Location: {{ location.short_code }}
-                </h1>
-                <div class="space-x-4">
-                    <a
-                        :href="route('admin.locations.edit', location.id)"
-                        class="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 transition-colors font-medium"
-                    >
-                        Edit
-                    </a>
-                    <button
-                        @click="deleteLocation"
-                        class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 transition-colors font-medium"
-                    >
-                        Delete
-                    </button>
-                </div>
-            </div>
+  <AdminLayout>
+    <div class="p-6 space-y-6">
+      <div class="flex items-center justify-between">
+        <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">
+          Location: {{ location.short_code }}
+        </h1>
 
-            <!-- Main Details Card -->
-            <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg dark:shadow-gray-900/30 border border-gray-200 dark:border-gray-700">
-                <dl class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    <!-- Short Code -->
-                    <div>
-                        <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Short Code</dt>
-                        <dd class="mt-1 text-lg font-semibold text-gray-900 dark:text-gray-100">
-                            {{ location.short_code }}
-                        </dd>
-                    </div>
-
-                    <!-- Name -->
-                    <div>
-                        <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Name</dt>
-                        <dd class="mt-1 text-gray-900 dark:text-gray-100">
-                            {{ location.name || '—' }}
-                        </dd>
-                    </div>
-
-                    <!-- Type -->
-                    <div>
-                        <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Type</dt>
-                        <dd class="mt-1 text-gray-900 dark:text-gray-100 capitalize">
-                            {{ location.type.replace('_', ' ') }}
-                        </dd>
-                    </div>
-
-                    <!-- Address -->
-                    <div class="md:col-span-2 lg:col-span-3">
-                        <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Full Address</dt>
-                        <dd class="mt-1 text-gray-900 dark:text-gray-100">
-                            {{ location.address || '—' }}
-                            <br v-if="location.city || location.state || location.zip" />
-                            <span class="text-sm text-gray-600 dark:text-gray-400">
-                {{ [location.city, location.state ? `${location.state} ${location.zip}` : null, location.country].filter(Boolean).join(', ') || '' }}
-              </span>
-                        </dd>
-                    </div>
-
-                    <!-- Coordinates -->
-                    <div>
-                        <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Latitude</dt>
-                        <dd class="mt-1 text-gray-900 dark:text-gray-100">{{ location.latitude || '—' }}</dd>
-                    </div>
-
-                    <div>
-                        <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Longitude</dt>
-                        <dd class="mt-1 text-gray-900 dark:text-gray-100">{{ location.longitude || '—' }}</dd>
-                    </div>
-
-                    <!-- Email -->
-                    <div>
-                        <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Email</dt>
-                        <dd class="mt-1 text-gray-900 dark:text-gray-100">
-                            {{ location.email || '—' }}
-                        </dd>
-                    </div>
-
-                    <!-- Expected Arrival Time -->
-                    <div>
-                        <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Expected Arrival Time</dt>
-                        <dd class="mt-1 text-gray-900 dark:text-gray-100">
-                            {{ location.expected_arrival_time || '—' }}
-                        </dd>
-                    </div>
-
-                    <!-- Recycling Location (only shown if DC) -->
-                    <div v-if="location.type === 'distribution_center'">
-                        <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Recycling Location</dt>
-                        <dd class="mt-1 text-gray-900 dark:text-gray-100">
-                            {{ location.recycling_location?.short_code || '—' }}
-                            <span v-if="location.recycling_location?.name" class="text-sm text-gray-500 dark:text-gray-400">
-                - {{ location.recycling_location.name }}
-              </span>
-                        </dd>
-                    </div>
-
-                    <!-- Active Status -->
-                    <div>
-                        <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Active</dt>
-                        <dd class="mt-1">
-              <span :class="location.is_active ? 'text-green-600 dark:text-green-400 font-medium' : 'text-red-600 dark:text-red-400 font-medium'">
-                {{ location.is_active ? 'Yes' : 'No' }}
-              </span>
-                        </dd>
-                    </div>
-
-                    <!-- Timestamps -->
-                    <div>
-                        <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Created At</dt>
-                        <dd class="mt-1 text-gray-900 dark:text-gray-100">
-                            {{ new Date(location.created_at).toLocaleString() }}
-                        </dd>
-                    </div>
-
-                    <div>
-                        <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Updated At</dt>
-                        <dd class="mt-1 text-gray-900 dark:text-gray-100">
-                            {{ new Date(location.updated_at).toLocaleString() }}
-                        </dd>
-                    </div>
-                </dl>
-            </div>
-
-            <!-- Back Link -->
-            <div class="mt-8 text-center">
-                <a href="javascript:history.back()" class="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors">
-                    ← Back to Locations List
-                </a>
-            </div>
+        <div class="space-x-4">
+          <Link
+            :href="route('admin.locations.edit', location.id)"
+            class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+          >
+            Edit
+          </Link>
+          <Link
+            :href="route('admin.locations.index')"
+            class="text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-300"
+          >
+            Back to List
+          </Link>
         </div>
-    </AdminLayout>
+      </div>
+
+      <!-- Location Details -->
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow border dark:border-gray-700 overflow-hidden">
+        <div class="p-6">
+          <dl class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Short Code</dt>
+              <dd class="mt-1 text-lg text-gray-900 dark:text-gray-100">{{ location.short_code }}</dd>
+            </div>
+
+            <div>
+              <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Name</dt>
+              <dd class="mt-1 text-lg text-gray-900 dark:text-gray-100">{{ location.name || '—' }}</dd>
+            </div>
+
+            <div>
+              <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Type</dt>
+              <dd class="mt-1 text-lg text-gray-900 dark:text-gray-100 capitalize">
+                {{ location.type.replace('_', ' ') }}
+              </dd>
+            </div>
+
+            <div>
+              <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Address</dt>
+              <dd class="mt-1 text-lg text-gray-900 dark:text-gray-100">
+                {{ location.address || '—' }}
+              </dd>
+            </div>
+
+            <div>
+              <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">City / State / Zip</dt>
+              <dd class="mt-1 text-lg text-gray-900 dark:text-gray-100">
+                {{ [location.city, location.state, location.zip].filter(Boolean).join(', ') || '—' }}
+              </dd>
+            </div>
+
+            <div>
+              <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Country</dt>
+              <dd class="mt-1 text-lg text-gray-900 dark:text-gray-100">
+                {{ location.country || '—' }}
+              </dd>
+            </div>
+
+            <div>
+              <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Latitude</dt>
+              <dd class="mt-1 text-lg text-gray-900 dark:text-gray-100">
+                {{ location.latitude?.toFixed(6) ?? '—' }}
+              </dd>
+            </div>
+
+            <div>
+              <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Longitude</dt>
+              <dd class="mt-1 text-lg text-gray-900 dark:text-gray-100">
+                {{ location.longitude?.toFixed(6) ?? '—' }}
+              </dd>
+            </div>
+
+            <div v-if="location.recyclingLocation">
+              <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Associated Recycling</dt>
+              <dd class="mt-1 text-lg text-gray-900 dark:text-gray-100">
+                <Link
+                  :href="route('admin.locations.show', location.recyclingLocation.id)"
+                  class="text-blue-600 hover:underline dark:text-blue-400"
+                >
+                  {{ location.recyclingLocation.short_code }}
+                </Link>
+              </dd>
+            </div>
+          </dl>
+        </div>
+      </div>
+
+      <!-- Map Section -->
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow border dark:border-gray-700 overflow-hidden">
+        <div class="p-6 border-b dark:border-gray-700">
+          <h2 class="text-xl font-semibold text-gray-900 dark:text-gray-100">
+            Location Map
+          </h2>
+          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            Showing the precise position of {{ location.short_code }}
+          </p>
+        </div>
+
+        <div class="h-[500px] relative">
+          <div ref="mapContainer" class="absolute inset-0"></div>
+
+          <!-- Fallback if no coordinates -->
+          <div
+            v-if="!location.latitude || !location.longitude"
+            class="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-900 text-gray-500 dark:text-gray-400"
+          >
+            No coordinates available for this location
+          </div>
+        </div>
+      </div>
+    </div>
+  </AdminLayout>
 </template>
+
+<style scoped>
+:deep(.mapboxgl-map) {
+  width: 100%;
+  height: 100%;
+}
+:deep(.mapboxgl-popup) {
+  color: black;
+}
+</style>

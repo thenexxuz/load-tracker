@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { Head, Link, router } from '@inertiajs/vue3'
-import { nextTick } from 'vue'
 import AdminLayout from '@/layouts/AppLayout.vue'
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import MultiSelect from 'vue-multiselect'
@@ -47,7 +46,7 @@ const calculateRoute = async () => {
       if (routeData.value?.route_coords?.length) {
         // Wait for Vue to render the map container
         await nextTick()
-        await nextTick()
+        await nextTick() // extra safety
         if (mapContainer.value) {
           drawMap()
         } else {
@@ -66,7 +65,7 @@ const calculateRoute = async () => {
   })
 }
 
-// Draw map with extreme safety checks
+// Draw map with improved marker placement and safety checks
 const drawMap = () => {
   if (!mapContainer.value || !routeData.value?.route_coords?.length) {
     console.warn('Cannot draw map: missing container or route coordinates')
@@ -82,12 +81,23 @@ const drawMap = () => {
   console.log('First coord:', routeData.value.route_coords[0])
   console.log('Last coord:', routeData.value.route_coords[routeData.value.route_coords.length - 1])
 
+  // Safety: Prevent loop by removing last point if it matches first
+  const coords = routeData.value.route_coords
+  if (coords.length > 2) {
+    const first = coords[0]
+    const last = coords[coords.length - 1]
+    if (Math.abs(first[0] - last[0]) < 0.0001 && Math.abs(first[1] - last[1]) < 0.0001) {
+      console.warn('Detected closed loop — removing last point')
+      coords.pop()
+    }
+  }
+
   mapboxgl.accessToken = props.mapbox_token
 
   map = new mapboxgl.Map({
     container: mapContainer.value,
     style: 'mapbox://styles/mapbox/streets-v12',
-    center: routeData.value.route_coords[0],
+    center: coords[0],
     zoom: 8,
     attributionControl: true,
   })
@@ -95,7 +105,7 @@ const drawMap = () => {
   map.addControl(new mapboxgl.NavigationControl(), 'top-right')
 
   map.on('load', () => {
-    // Route source & layer
+    // Route line
     map!.addSource('route', {
       type: 'geojson',
       data: {
@@ -103,7 +113,7 @@ const drawMap = () => {
         properties: {},
         geometry: {
           type: 'LineString',
-          coordinates: routeData.value.route_coords,
+          coordinates: coords,
         },
       },
     })
@@ -123,15 +133,23 @@ const drawMap = () => {
       },
     })
 
-    // Place markers for EVERY stop (prefer waypoints)
+    // Improved marker placement
     selectedLocations.value.forEach((loc, index) => {
       let coord = routeData.value.waypoints?.[index] || null
 
       if (!coord || coord.length !== 2) {
-        const totalPoints = routeData.value.route_coords.length
-        if (totalPoints < 2) return
-        const pointIndex = index === 0 ? 0 : index === selectedLocations.value.length - 1 ? totalPoints - 1 : Math.round(index * (totalPoints - 1) / (selectedLocations.value.length - 1))
-        coord = routeData.value.route_coords[pointIndex]
+        // Better approximation: cumulative segment lengths
+        if (index === 0) {
+          coord = coords[0] // exact start
+        } else if (index === selectedLocations.value.length - 1) {
+          coord = coords[coords.length - 1] // exact end
+        } else {
+          // Estimate position for intermediates
+          const numSegments = selectedLocations.value.length - 1
+          const segmentLengthApprox = Math.floor(coords.length / numSegments)
+          const pointIndex = Math.min(index * segmentLengthApprox, coords.length - 1)
+          coord = coords[pointIndex]
+        }
       }
 
       if (!coord || coord.length !== 2) {
@@ -147,11 +165,11 @@ const drawMap = () => {
         .addTo(map!)
     })
 
-    // Fit bounds with the strictest possible safety checks
-    if (routeData.value.route_coords.length >= 2) {
+    // Fit bounds with strict safety
+    if (coords.length >= 2) {
       const bounds = new mapboxgl.LngLatBounds()
 
-      routeData.value.route_coords.forEach(([lng, lat]) => {
+      coords.forEach(([lng, lat]) => {
         if (isFinite(lng) && isFinite(lat)) {
           bounds.extend([lng, lat])
         }
@@ -163,26 +181,24 @@ const drawMap = () => {
       const lngDiff = Math.abs(ne.lng - sw.lng)
       const latDiff = Math.abs(ne.lat - sw.lat)
 
-      // Very strict check: require non-zero difference AND finite values
       if (
         isFinite(sw.lng) && isFinite(sw.lat) &&
         isFinite(ne.lng) && isFinite(ne.lat) &&
-        lngDiff > 0.00001 && latDiff > 0.00001  // threshold for "zero size"
+        lngDiff > 0.00001 && latDiff > 0.00001
       ) {
-        console.log('Fitting valid bounds:', bounds.toArray())
         map!.fitBounds(bounds, {
           padding: 100,
           duration: 1200,
           maxZoom: 15,
         })
       } else {
-        console.warn('Bounds are degenerate or invalid (diff too small) — falling back to center/zoom')
-        map!.setCenter(routeData.value.route_coords[0])
+        console.warn('Bounds are degenerate or invalid — falling back to center/zoom')
+        map!.setCenter(coords[0])
         map!.setZoom(10)
       }
     } else {
       console.warn('Route has fewer than 2 points — centering on first')
-      map!.setCenter(routeData.value.route_coords[0] || [0, 0])
+      map!.setCenter(coords[0] || [0, 0])
       map!.setZoom(10)
     }
   })
@@ -242,7 +258,7 @@ onUnmounted(() => {
         </p>
       </div>
 
-      <!-- Route Summary -->
+      <!-- Route Summary (shown only after calculation) -->
       <div v-if="routeData" class="mt-6 bg-white dark:bg-gray-800 p-6 rounded-lg shadow border dark:border-gray-700">
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div>
@@ -281,5 +297,8 @@ onUnmounted(() => {
 :deep(.mapboxgl-map) {
   width: 100vw;
   height: 100vh;
+}
+:deep(.mapboxgl-popup) {
+  color: black;
 }
 </style>

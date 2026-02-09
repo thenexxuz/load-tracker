@@ -179,4 +179,7 @@ onUnmounted(() => {
   width: 100%;
   height: 100%;
 }
+:deep(.mapboxgl-popup) {
+  color: black;
+}
 </style>
