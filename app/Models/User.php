@@ -72,4 +72,9 @@ class User extends Authenticatable
     {
         return "This user has been {$eventName}";
     }
+
+    public function carrier()
+    {
+        return $this->belongsTo(Carrier::class);
+    }
 }

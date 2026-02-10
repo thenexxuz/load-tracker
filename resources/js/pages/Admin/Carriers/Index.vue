@@ -3,6 +3,8 @@ import { Head, router, usePage } from '@inertiajs/vue3'
 import { useForm } from '@inertiajs/vue3'
 import Swal from 'sweetalert2'
 import { ref, watch, onMounted } from 'vue'
+import { route } from 'ziggy-js'
+
 
 import AdminLayout from '@/layouts/AppLayout.vue'
 
@@ -204,6 +206,10 @@ const changePerPage = (e: Event) => {
     { preserveState: true, preserveScroll: true, replace: true }
   )
 }
+
+const { auth } = usePage().props
+const userRoles = auth?.user?.roles || []
+const hasImportAccess = userRoles.includes('administrator') || userRoles.includes('supervisor')
 </script>
 
 <template>
@@ -217,6 +223,7 @@ const changePerPage = (e: Event) => {
         </h1>
         <div class="space-x-4">
           <a
+            v-if="hasImportAccess"
             :href="route('admin.carriers.create')"
             class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-md font-medium transition-colors"
           >
@@ -224,6 +231,7 @@ const changePerPage = (e: Event) => {
           </a>
 
           <button
+            v-if="hasImportAccess"
             @click="showImportModal = true"
             class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-md font-medium transition-colors"
           >
@@ -231,6 +239,7 @@ const changePerPage = (e: Event) => {
           </button>
 
           <button
+            v-if="hasImportAccess"
             @click="exportCarriers"
             :disabled="isExporting"
             class="bg-green-600 hover:bg-green-700 text-white px-5 py-2.5 rounded-md font-medium transition-colors disabled:opacity-70"
@@ -390,6 +399,7 @@ const changePerPage = (e: Event) => {
                 </a>
 
                 <button
+                  v-if="hasImportAccess"
                   @click="destroy(carrier.id)"
                   class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 transition-colors"
                   title="Delete Carrier"

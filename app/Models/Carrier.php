@@ -158,4 +158,9 @@ class Carrier extends Model
     {
         return "This carrier has been {$eventName}";
     }
+
+    public function users()
+    {
+        return $this->hasMany(User::class);
+    }
 }

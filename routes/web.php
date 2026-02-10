@@ -3,7 +3,6 @@
 use App\Http\Controllers\AuditController;
 use App\Http\Controllers\CarrierController;
 use App\Http\Controllers\LocationController;
-use App\Http\Controllers\MessageController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\RateController;
 use App\Http\Controllers\ShipmentController;
@@ -29,11 +28,17 @@ Route::middleware(['auth', 'role:administrator'])->prefix('admin')->name('admin.
     Route::resource('users', UserController::class)->only(['index', 'edit', 'update']);
 });
 
+Route::middleware(['auth', 'role:carrier'])->prefix('admin')->name('admin.')->group(function () {
+    Route::middleware('role:administrator|supervisor')->group(function () {
+        Route::post('carriers/import', [CarrierController::class, 'import'])->name('carriers.import');
+        Route::get('carriers/export', [CarrierController::class, 'export'])->name('carriers.export');
+    });
+    Route::resource('carriers', CarrierController::class);
+});
+
 Route::middleware(['auth', 'role:administrator|supervisor'])->prefix('admin')->name('admin.')->group(function () {
     // Carrier Routes
-    Route::post('carriers/import', [CarrierController::class, 'import'])->name('carriers.import');
-    Route::get('carriers/export', [CarrierController::class, 'export'])->name('carriers.export');
-    Route::resource('carriers', CarrierController::class);
+    
     // Template Routes
     Route::resource('templates', TemplateController::class);
     // Location Routes

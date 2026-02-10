@@ -19,14 +19,22 @@ class CarrierController extends Controller
             'search' => 'nullable|string|max:500',
         ]);
 
-        $carriers = Carrier::query()
-            ->when(request('search'), fn ($q, $search) => $q->where('name', 'like', "%{$search}%")
-                ->orWhere('short_code', 'like', "%{$search}%")
-                ->orWhere('contact_name', 'like', "%{$search}%")
-                ->orWhere('emails', 'like', "%{$search}%"))
-            ->orderBy('name')
-            ->paginate($validated['per_page'] ?? 15)
-            ->withQueryString();
+        if (auth()->user()->hasRole('carrier')) {
+            $carriers = Carrier::where('id', auth()->user()->carrier_id)
+                ->paginate($validated['per_page'] ?? 15)
+                ->withQueryString();
+        } else {
+            $carriers = Carrier::query()
+                ->when($validated['search'], function ($q, $search) {
+                    $q->where('name', 'like', "%{$search}%")
+                        ->orWhere('short_code', 'like', "%{$search}%")
+                        ->orWhere('wt_code', 'like', "%{$search}%")
+                        ->orWhere('emails', 'like', "%{$search}%");
+                })
+                ->orderBy('name')
+                ->paginate($validated['per_page'] ?? 15)
+                ->withQueryString();
+        }
 
         return Inertia::render('Admin/Carriers/Index', [
             'carriers' => $carriers,

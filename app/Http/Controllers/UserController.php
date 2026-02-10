@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Carrier;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -31,6 +32,7 @@ class UserController extends Controller
         return Inertia::render('Admin/Users/Edit', [
             'user' => $user->load('roles'),
             'allRoles' => Role::all()->pluck('name')->toArray(),
+            'allCarriers' => Carrier::orderBy('name')->get(['id', 'name', 'short_code'])->toArray(),
         ]);
     }
 
@@ -53,6 +55,19 @@ class UserController extends Controller
                     ->withErrors(['roles' => 'You cannot remove your own administrator role.']);
             }
         }
+
+        // Update carrier association
+        if ($user->hasRole('carrier')) {
+            $request->validate([
+                'carrier_id' => 'required|exists:carriers,id',
+            ]);
+        } else {
+            // If user is not a carrier, ensure carrier_id is null
+            $request->merge(['carrier_id' => null]);
+
+        }
+        $user->carrier_id = $request->input('carrier_id');
+        $user->save();
 
         // Sync roles
         $user->syncRoles($request->input('roles', []));
