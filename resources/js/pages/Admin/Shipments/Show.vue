@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { Head, router } from '@inertiajs/vue3'
-import { computed } from 'vue'
+import { Head, router, usePage } from '@inertiajs/vue3'
+import { computed, onUnmounted, onMounted, ref } from 'vue'
 import AdminLayout from '@/layouts/AppLayout.vue'
 import Swal from 'sweetalert2'
+import mapboxgl from 'mapbox-gl'
+import 'mapbox-gl/dist/mapbox-gl.css'
 
-defineProps<{
+const props = defineProps<{
   shipment: {
     id: number
     shipment_number: string
@@ -30,7 +32,98 @@ defineProps<{
     created_at: string
     updated_at: string
   }
+  route_data: {
+    route_coords: number[][] | null
+    total_km: number | null
+    total_miles: number | null
+    duration: string | null
+    waypoints: Array<{
+      id: number
+      short_code: string
+      name: string | null
+      type: string
+      lng: number
+      lat: number
+    }> | null
+  } | null
+  mapbox_token: string
 }>()
+
+const { shipment, route_data } = props
+
+const mapContainer = ref<HTMLDivElement | null>(null)
+let map: mapboxgl.Map | null = null
+
+onMounted(() => {
+  if (!mapContainer.value || !props.route_data?.route_coords?.length) {
+    return
+  }
+
+  mapboxgl.accessToken = props.mapbox_token
+
+  map = new mapboxgl.Map({
+    container: mapContainer.value,
+    style: 'mapbox://styles/mapbox/streets-v12',
+    center: props.route_data.waypoints?.[0] ? [props.route_data.waypoints[0].lng, props.route_data.waypoints[0].lat] : [0, 0],
+    zoom: 8,
+  })
+
+  map.addControl(new mapboxgl.NavigationControl(), 'top-right')
+
+  map.on('load', () => {
+    // Route line
+    map!.addSource('route', {
+      type: 'geojson',
+      data: {
+        type: 'Feature',
+        properties: {},
+        geometry: {
+          type: 'LineString',
+          coordinates: props.route_data.route_coords,
+        },
+      },
+    })
+
+    map!.addLayer({
+      id: 'route',
+      type: 'line',
+      source: 'route',
+      layout: {
+        'line-join': 'round',
+        'line-cap': 'round',
+      },
+      paint: {
+        'line-color': '#3b82f6',
+        'line-width': 5,
+        'line-opacity': 0.8,
+      },
+    })
+
+    // Markers at exact waypoint locations
+    props.route_data.waypoints?.forEach((wp, index) => {
+      const color = index === 0 ? '#22c55e' : index === props.route_data.waypoints.length - 1 ? '#ef4444' : '#f59e0b'
+
+      new mapboxgl.Marker({ color })
+        .setLngLat([wp.lng, wp.lat])
+        .setPopup(new mapboxgl.Popup().setHTML(`
+          <strong>${wp.short_code}</strong> - ${wp.type}<br>
+          ${wp.name || 'Unnamed'}<br>
+          ${index === 0 ? 'Pickup' : index === props.route_data.waypoints.length - 1 ? 'Final' : 'Stop ' + (index + 1)}
+        `))
+        .addTo(map!)
+    })
+
+    // Fit to route
+    const bounds = new mapboxgl.LngLatBounds()
+    props.route_data.route_coords.forEach(([lng, lat]) => bounds.extend([lng, lat]))
+
+    map!.fitBounds(bounds, { padding: 80 })
+  })
+})
+
+onUnmounted(() => {
+  map?.remove()
+})
 
 const deleteShipment = async () => {
   const result = await Swal.fire({
@@ -81,6 +174,10 @@ const formatDate = (date: string | null, withTime = false) => {
   const minutes = String(d.getMinutes()).padStart(2, '0')
   return `${month}/${day}/${year} ${hours}:${minutes}`
 }
+
+const { auth } = usePage().props
+const userRoles = auth?.user?.roles || []
+const hasAdminAccess = userRoles.includes('administrator') || userRoles.includes('supervisor')
 </script>
 
 <template>
@@ -98,7 +195,9 @@ const formatDate = (date: string | null, withTime = false) => {
             Edit
           </a>
           <button @click="deleteShipment"
-                  class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 transition-colors">
+            v-if="hasAdminAccess"
+            class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 transition-colors"
+          >
             Delete
           </button>
         </div>
@@ -114,21 +213,24 @@ const formatDate = (date: string | null, withTime = false) => {
           <div>
             <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Shipper Location</dt>
             <dd class="mt-1 text-gray-900 dark:text-gray-100">
-              {{ shipment.pickup_location?.short_code || '—' }} - {{ shipment.pickup_location?.name || 'Unnamed' }}
+              {{ shipment.pickup_location?.short_code || '—' }}
             </dd>
           </div>
 
           <div>
             <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">DC Location</dt>
             <dd class="mt-1 text-gray-900 dark:text-gray-100">
-              {{ shipment.dc_location?.short_code || '—' }} - {{ shipment.dc_location?.name || 'Unnamed' }}
+              {{ shipment.dc_location?.short_code || '—' }}
             </dd>
           </div>
 
           <div>
             <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Carrier</dt>
-            <dd class="mt-1 text-gray-900 dark:text-gray-100">
-              {{ shipment.carrier?.name || '—' }}
+            <dd class="mt-1 text-gray-900 dark:text-gray-100" v-if="shipment.carrier">
+              {{ shipment.carrier?.name || '—' }} ({{ shipment.carrier?.wt_code || 'No WT Code set' }})
+            </dd>
+            <dd class="mt-1 text-gray-900 dark:text-gray-100" v-else>
+              No carrier assigned
             </dd>
           </div>
 
@@ -203,6 +305,32 @@ const formatDate = (date: string | null, withTime = false) => {
         </dl>
       </div>
 
+      <!-- Route Map Section -->
+      <div class="mt-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg dark:shadow-gray-900/30 border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div class="p-6 border-b dark:border-gray-700">
+          <h2 class="text-xl font-semibold text-gray-900 dark:text-gray-100">
+            Route Overview
+          </h2>
+          <div v-if="route_data" class="mt-2 text-sm text-gray-600 dark:text-gray-400">
+            Total Distance: {{ route_data.total_km }} km ({{ route_data.total_miles }} mi)
+            <br>
+            Estimated Duration: {{ route_data.duration }}
+          </div>
+        </div>
+
+        <div class="relative h-[500px]">
+          <div ref="mapContainer" class="absolute inset-0"></div>
+
+          <!-- No route fallback -->
+          <div
+            v-if="!route_data"
+            class="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-900 text-gray-600 dark:text-gray-400"
+          >
+            No route available (missing coordinates or locations)
+          </div>
+        </div>
+      </div>
+
       <!-- Back -->
       <div class="mt-8 text-center">
         <a href="javascript:history.back()" class="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors">
@@ -212,3 +340,10 @@ const formatDate = (date: string | null, withTime = false) => {
     </div>
   </AdminLayout>
 </template>
+
+<style scoped>
+:deep(.mapboxgl-map) {
+  width: 100%;
+  height: 100%;
+}
+</style>

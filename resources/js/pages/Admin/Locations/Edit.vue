@@ -347,11 +347,11 @@ watch(
                         <select
                             v-model="form.recycling_location_id"
                             :class="[
-                'w-full p-3 border rounded-md focus:ring-2 focus:outline-none appearance-none',
-                form.errors.recycling_location_id
-                  ? 'border-red-500 focus:ring-red-500 bg-red-50 dark:bg-red-950/30'
-                  : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500'
-              ]"
+                                'w-full p-3 border rounded-md focus:ring-2 focus:outline-none appearance-none',
+                                form.errors.recycling_location_id
+                                ? 'border-red-500 focus:ring-red-500 bg-red-50 dark:bg-red-950/30'
+                                : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500'
+                            ]"
                         >
                             <option :value="null">None</option>
                             <option v-for="loc in availableRecyclingLocations" :key="loc.id" :value="loc.id">

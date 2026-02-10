@@ -421,6 +421,7 @@ const hasAdminAccess = userRoles.includes('administrator') || userRoles.includes
         </h1>
         <div class="space-x-4">
           <a
+            v-if="hasAdminAccess"
             :href="route('admin.shipments.create')"
             class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-md font-medium transition-colors"
           >
@@ -428,6 +429,7 @@ const hasAdminAccess = userRoles.includes('administrator') || userRoles.includes
           </a>
 
           <button
+            v-if="hasAdminAccess"
             @click="showPbiImportModal = true"
             class="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2.5 rounded-md font-medium transition-colors"
           >
@@ -653,6 +655,7 @@ const hasAdminAccess = userRoles.includes('administrator') || userRoles.includes
                   </a>
 
                   <button
+                    v-if="hasAdminAccess"
                     @click.stop="destroy(shipment.id)"
                     class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 transition-colors"
                     title="Delete Shipment"

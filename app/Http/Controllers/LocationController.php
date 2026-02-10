@@ -96,7 +96,12 @@ class LocationController extends Controller
      */
     public function edit(Location $location)
     {
+        $recyclingLocations = Location::where('type', 'recycling')
+            ->select('id', 'short_code', 'name')
+            ->get();
+
         return Inertia::render('Admin/Locations/Edit', [
+            'availableRecyclingLocations' => $recyclingLocations,
             'location' => $location,
         ]);
     }
@@ -139,7 +144,7 @@ class LocationController extends Controller
             }
         }
 
-        return redirect()->route('admin.locations.show', $location)
+        return redirect()->route('admin.locations.show', $location->id)
             ->with('success', 'Location updated successfully.');
     }
 

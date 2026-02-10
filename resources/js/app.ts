@@ -9,6 +9,7 @@ import toastr from 'toastr'
 import type { DefineComponent } from 'vue';
 import { createApp, h } from 'vue';
 import { ZiggyVue } from 'ziggy-js'
+import flashPlugin from './plugins/flash'
 
 import { initializeTheme } from './composables/useAppearance';
 
@@ -77,6 +78,7 @@ createInertiaApp({
         createApp({ render: () => h(App, props) })
             .use(plugin)
             .use(ZiggyVue)
+            .use(flashPlugin)
             .mount(el);
     },
     progress: {

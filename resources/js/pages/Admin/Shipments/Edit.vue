@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, useForm } from '@inertiajs/vue3'
+import { Head, useForm, usePage } from '@inertiajs/vue3'
 import { ref } from 'vue'
 import AdminLayout from '@/layouts/AppLayout.vue'
 import Swal from 'sweetalert2'
@@ -113,6 +113,10 @@ const submit = () => {
     }
   })
 }
+
+const { auth } = usePage().props
+const userRoles = auth?.user?.roles || []
+const hasAdminAccess = userRoles.includes('administrator') || userRoles.includes('supervisor')
 </script>
 
 <template>
@@ -142,12 +146,13 @@ const submit = () => {
               class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none appearance-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
             >
               <option value="Pending">Pending</option>
+              <option value="Booked">Booked</option>
               <option value="Picked Up">Picked Up</option>
               <option value="In Transit">In Transit</option>
               <option value="Crossed Border">Crossed Border</option>
               <option value="Checked In">Checked In</option>
               <option value="Delivered">Delivered</option>
-              <option value="Cancelled">Cancelled</option>
+              <option v-if="hasAdminAccess" value="Cancelled">Cancelled</option>
             </select>
             <p v-if="form.errors.status" class="mt-1 text-sm text-red-600 dark:text-red-400">
               {{ form.errors.status }}
@@ -158,6 +163,7 @@ const submit = () => {
           <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">BOL</label>
             <input
+              :disabled="!hasAdminAccess"
               v-model="form.bol"
               type="text"
               class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
@@ -171,6 +177,7 @@ const submit = () => {
           <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Shipment Number</label>
             <input
+              :disabled="!hasAdminAccess"
               v-model.number="form.shipment_number"
               type="number"
               class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
@@ -186,6 +193,7 @@ const submit = () => {
               Shipper Location <span class="text-red-600 dark:text-red-400">*</span>
             </label>
             <select
+              :disabled="!hasAdminAccess"
               v-model="form.pickup_location_id"
               required
               class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none appearance-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
@@ -206,6 +214,7 @@ const submit = () => {
               DC Location <span class="text-red-600 dark:text-red-400">*</span>
             </label>
             <select
+              :disabled="!hasAdminAccess"
               v-model="form.dc_location_id"
               required
               class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none appearance-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
@@ -224,6 +233,7 @@ const submit = () => {
           <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Carrier</label>
             <select
+              :disabled="!hasAdminAccess"
               v-model="form.carrier_id"
               class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none appearance-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
             >
@@ -241,6 +251,7 @@ const submit = () => {
           <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Drop Date</label>
             <input
+              :disabled="!hasAdminAccess"
               v-model="form.drop_date"
               type="date"
               class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
@@ -254,6 +265,7 @@ const submit = () => {
           <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Pickup Date</label>
             <input
+              :disabled="!hasAdminAccess"
               v-model="form.pickup_date"
               type="datetime-local"
               class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
@@ -267,6 +279,7 @@ const submit = () => {
           <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Delivery Date</label>
             <input
+              :disabled="!hasAdminAccess"
               v-model="form.delivery_date"
               type="datetime-local"
               class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
@@ -280,6 +293,7 @@ const submit = () => {
           <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Rack Qty</label>
             <input
+              :disabled="!hasAdminAccess"
               v-model.number="form.rack_qty"
               type="number"
               min="0"
@@ -294,6 +308,7 @@ const submit = () => {
           <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Load Bar Qty</label>
             <input
+              :disabled="!hasAdminAccess"
               v-model.number="form.load_bar_qty"
               type="number"
               min="0"
@@ -308,6 +323,7 @@ const submit = () => {
           <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Strap Qty</label>
             <input
+              :disabled="!hasAdminAccess"
               v-model.number="form.strap_qty"
               type="number"
               min="0"
@@ -335,6 +351,7 @@ const submit = () => {
           <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Drayage</label>
             <input
+              :disabled="!hasAdminAccess"
               v-model="form.drayage"
               type="text"
               class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
@@ -399,7 +416,7 @@ const submit = () => {
               </p>
             </div>
 
-            <!-- Crossed (new) -->
+            <!-- Crossed -->
             <div>
               <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Crossed</label>
               <input
@@ -416,6 +433,7 @@ const submit = () => {
             <div>
               <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Recycling Sent</label>
               <input
+                :disabled="!hasAdminAccess"
                 v-model="form.recycling_sent"
                 type="datetime-local"
                 class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
@@ -429,6 +447,7 @@ const submit = () => {
             <div>
               <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Paperwork Sent</label>
               <input
+                :disabled="!hasAdminAccess"
                 v-model="form.paperwork_sent"
                 type="datetime-local"
                 class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
@@ -442,6 +461,7 @@ const submit = () => {
             <div>
               <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Delivery Alert Sent</label>
               <input
+                :disabled="!hasAdminAccess"
                 v-model="form.delivery_alert_sent"
                 type="datetime-local"
                 class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
@@ -456,6 +476,7 @@ const submit = () => {
           <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Consolidation Number</label>
             <input
+              :disabled="!hasAdminAccess"
               v-model="form.consolidation_number"
               type="text"
               class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"

@@ -8,6 +8,7 @@ use App\Models\Shipment;
 use App\Models\Template;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
 use Inertia\Inertia;
@@ -164,11 +165,94 @@ class ShipmentController extends Controller
 
     public function show(Shipment $shipment)
     {
-        $shipment->load(['pickupLocation:id,short_code,name', 'dcLocation:id,short_code,name', 'carrier:id,name']);
+        $shipment->load([
+            'pickupLocation:id,short_code,name,latitude,longitude',
+            'dcLocation:id,short_code,name,latitude,longitude,recycling_location_id',
+            'dcLocation.recyclingLocation:id,short_code,name,latitude,longitude',
+            'carrier:id,name,short_code',
+        ]);
+
+        // Build ordered waypoints: pickup → DC → (Recycling if exists)
+        $waypoints = [];
+
+        if ($shipment->pickupLocation && $shipment->pickupLocation->latitude && $shipment->pickupLocation->longitude) {
+            $waypoints[] = [
+                'id' => $shipment->pickupLocation->id,
+                'short_code' => $shipment->pickupLocation->short_code,
+                'name' => $shipment->pickupLocation->name,
+                'type' => 'pickup',
+                'lng' => $shipment->pickupLocation->longitude,
+                'lat' => $shipment->pickupLocation->latitude,
+            ];
+        }
+
+        if ($shipment->dcLocation && $shipment->dcLocation->latitude && $shipment->dcLocation->longitude) {
+            $waypoints[] = [
+                'id' => $shipment->dcLocation->id,
+                'short_code' => $shipment->dcLocation->short_code,
+                'name' => $shipment->dcLocation->name,
+                'type' => 'dc',
+                'lng' => $shipment->dcLocation->longitude,
+                'lat' => $shipment->dcLocation->latitude,
+            ];
+        }
+
+        // Add recycling if assigned to the DC
+        if ($shipment->dcLocation?->recyclingLocation && $shipment->dcLocation->recyclingLocation->latitude && $shipment->dcLocation->recyclingLocation->longitude) {
+            $waypoints[] = [
+                'id' => $shipment->dcLocation->recyclingLocation->id,
+                'short_code' => $shipment->dcLocation->recyclingLocation->short_code,
+                'name' => $shipment->dcLocation->recyclingLocation->name,
+                'type' => 'recycling',
+                'lng' => $shipment->dcLocation->recyclingLocation->longitude,
+                'lat' => $shipment->dcLocation->recyclingLocation->latitude,
+            ];
+        }
+
+        $routeData = null;
+
+        if (count($waypoints) >= 2) {
+            // Build Mapbox Directions coordinates string: lng1,lat1;lng2,lat2;...
+            $coordString = implode(';', array_map(fn($wp) => "{$wp['lng']},{$wp['lat']}", $waypoints));
+
+            $token = config('services.mapbox.key');
+
+            if ($token) {
+                $response = Http::get("https://api.mapbox.com/directions/v5/mapbox/driving/{$coordString}", [
+                    'access_token' => $token,
+                    'geometries' => 'geojson',
+                    'overview' => 'full',
+                ]);
+
+                if ($response->successful() && !empty($response['routes'])) {
+                    $route = $response['routes'][0];
+
+                    $routeData = [
+                        'route_coords' => $route['geometry']['coordinates'] ?? [],
+                        'total_km' => round($route['distance'] / 1000, 1),
+                        'total_miles' => round(($route['distance'] / 1000) * 0.621371, 1),
+                        'duration' => $this->secondsToHumanTime($route['duration']),
+                        'waypoints' => $waypoints, // for exact marker positions
+                    ];
+                } else {
+                    Log::warning("Failed to fetch route for shipment {$shipment->id}");
+                }
+            }
+        }
 
         return Inertia::render('Admin/Shipments/Show', [
             'shipment' => $shipment,
+            'route_data' => $routeData,
+            'mapbox_token' => config('services.mapbox.key'),
         ]);
+    }
+
+    // Optional helper (add to controller if not already present)
+    private function secondsToHumanTime($seconds)
+    {
+        $h = floor($seconds / 3600);
+        $m = floor(($seconds % 3600) / 60);
+        return $h > 0 ? "{$h} hr {$m} min" : "{$m} min";
     }
 
     public function edit(Shipment $shipment)
