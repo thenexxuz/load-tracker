@@ -2,10 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Controllers\Controller;
-use App\Models\Rate;
 use App\Models\Carrier;
 use App\Models\Location;
+use App\Models\Rate;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -14,6 +13,7 @@ class RateController extends Controller
     public function index()
     {
         $rates = Rate::with(['carrier', 'pickupLocation', 'dcLocation'])->paginate(10);
+
         return Inertia::render('Admin/Rates/Index', ['rates' => $rates]);
     }
 
@@ -47,6 +47,7 @@ class RateController extends Controller
     public function show(Rate $rate)
     {
         $rate->load(['carrier', 'pickupLocation', 'dcLocation']);
+
         return Inertia::render('Admin/Rates/Show', ['rate' => $rate]);
     }
 

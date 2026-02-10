@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { Head, router, usePage } from '@inertiajs/vue3'
-import { ref, watch, onMounted, computed, nextTick } from 'vue'
-import { onClickOutside } from '@vueuse/core'
 import { useForm } from '@inertiajs/vue3'
-import AdminLayout from '@/layouts/AppLayout.vue'
+import { onClickOutside } from '@vueuse/core'
 import Swal from 'sweetalert2'
+import { ref, watch, onMounted, computed, nextTick } from 'vue'
+
+import AdminLayout from '@/layouts/AppLayout.vue'
+
 
 const props = defineProps<{
   shipments: {
@@ -354,7 +356,7 @@ onMounted(() => {
       icon: 'warning',
       title: 'Partial Import Warning',
       html: `${page.props.flash.warning}<br><br>
-             <a href="${route('admin.shipments.download-failed-tsv')}" 
+             <a href="${route('admin.shipments.download-failed-tsv')}"
                 class="underline font-bold text-blue-600 dark:text-blue-400 hover:text-blue-800">
                Download Failed Rows TSV
              </a>`,
@@ -402,6 +404,10 @@ const changePerPage = (e: Event) => {
     { preserveState: true, preserveScroll: true, replace: true }
   )
 }
+
+const { auth } = usePage().props
+const userRoles = auth?.user?.roles || []
+const hasAdminAccess = userRoles.includes('administrator') || userRoles.includes('supervisor')
 </script>
 
 <template>
@@ -439,7 +445,7 @@ const changePerPage = (e: Event) => {
             </h2>
 
             <p class="mb-4 text-sm text-gray-600 dark:text-gray-400">
-              Upload an Excel (.xlsx) file exported from Power BI. 
+              Upload an Excel (.xlsx) file exported from Power BI.
               First two rows will be ignored; third row should contain headers.
             </p>
 

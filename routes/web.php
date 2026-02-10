@@ -3,8 +3,8 @@
 use App\Http\Controllers\AuditController;
 use App\Http\Controllers\CarrierController;
 use App\Http\Controllers\LocationController;
-use App\Http\Controllers\RoleController;
 use App\Http\Controllers\RateController;
+use App\Http\Controllers\RoleController;
 use App\Http\Controllers\ShipmentController;
 use App\Http\Controllers\TemplateController;
 use App\Http\Controllers\UserController;
@@ -38,7 +38,7 @@ Route::middleware(['auth', 'role:carrier'])->prefix('admin')->name('admin.')->gr
 
 Route::middleware(['auth', 'role:administrator|supervisor'])->prefix('admin')->name('admin.')->group(function () {
     // Carrier Routes
-    
+
     // Template Routes
     Route::resource('templates', TemplateController::class);
     // Location Routes
@@ -53,7 +53,7 @@ Route::middleware(['auth', 'role:administrator|supervisor'])->prefix('admin')->n
     Route::resource('rates', RateController::class);
 });
 
-Route::middleware(['auth', 'role:administrator|supervisor|truckload'])->prefix('admin')->name('admin.')->group(function () {
+Route::middleware(['auth', 'role:administrator|supervisor|truckload|carrier'])->prefix('admin')->name('admin.')->group(function () {
     // Shipment Routes
     Route::post('shipments/pbi-import', [ShipmentController::class, 'pbiImport'])->name('shipments.pbi-import');
     Route::get('shipments/failed-tsv', [ShipmentController::class, 'downloadFailedTsv'])->name('shipments.download-failed-tsv');

@@ -23,8 +23,14 @@ class ShipmentController extends Controller
             'search' => 'nullable|string|max:500',
         ]);
 
-        $query = Shipment::query()
-            ->with(['pickupLocation', 'dcLocation', 'carrier']);
+        if (auth()->user()->hasRole('carrier')) {
+            $query = Shipment::query()
+                ->where('carrier_id', auth()->user()->carrier_id)
+                ->with(['pickupLocation', 'dcLocation', 'carrier']);
+        } else {
+            $query = Shipment::query()
+                ->with(['pickupLocation', 'dcLocation', 'carrier']);
+        }
 
         // Search
         if ($search = $request->input('search')) {
@@ -62,7 +68,7 @@ class ShipmentController extends Controller
             $query->whereNull('carrier_id');
         }
         // Normal case: exclude the selected carriers
-        elseif (!empty($excludedCarriers)) {
+        elseif (! empty($excludedCarriers)) {
             $query->whereNotIn('carrier_id', function ($sub) use ($excludedCarriers) {
                 $sub->select('id')
                     ->from('carriers')
@@ -330,7 +336,7 @@ class ShipmentController extends Controller
                 $dc = Location::where('short_code', $validated['destination'])->first();
 
                 if (! $pickup) {
-                    $pickup = new Location();
+                    $pickup = new Location;
                     $pickup->short_code = $validated['origin'];
                     $pickup->name = $validated['origin'];
                     $pickup->address = 'Unknown Address';
@@ -343,7 +349,7 @@ class ShipmentController extends Controller
                     $pickup->save();
                 }
                 if (! $dc) {
-                    $dc = new Location();
+                    $dc = new Location;
                     $dc->short_code = $validated['destination'];
                     $dc->name = $validated['destination'];
                     $dc->address = 'Unknown Address';
@@ -461,7 +467,7 @@ class ShipmentController extends Controller
 
     public function generateTable(Shipment $shipment, array $columns)
     {
-        $html = <<<HTML
+        $html = <<<'HTML'
 <table style="border-collapse: collapse; width: 100%; border-width: 1px; border-color: #000000;" border="1">
     <tbody>
         <tr style="background-color: #0b5394;color: #ecf0f1;text-align: center;">
@@ -514,65 +520,65 @@ HTML;
                 case 'dc_location_address':
                     $html .= '<td><strong>Delivery Address</strong></td>';
                     break;
-                    default:
+                default:
                     // Ignore unknown columns
                     break;
             }
         }
-        $html .= <<<HTML
+        $html .= <<<'HTML'
         </tr>
         <tr style="border-color: #000000; background-color: #ffffff; color: #000000;">
 HTML;
         if ($shipment->isConsolidation()) {
             $shipment->load('consolidationShipments');
-            $shipments = $shipment->consolidationShipments;  
-            foreach($shipments as $consolShipment) {
+            $shipments = $shipment->consolidationShipments;
+            foreach ($shipments as $consolShipment) {
                 foreach ($columns as $column) {
                     switch (strtolower(trim($column))) {
                         case 'status':
-                            $html .= '<td>' . ($consolShipment->status ?? '') . '</td>';
+                            $html .= '<td>'.($consolShipment->status ?? '').'</td>';
                             break;
                         case 'bol':
-                            $html .= '<td>' . ($consolShipment->bol ?? '') . '</td>';
+                            $html .= '<td>'.($consolShipment->bol ?? '').'</td>';
                             break;
                         case 'pickup_location':
-                            $html .= '<td>' . (optional($consolShipment->pickupLocation)->short_code ?? '') . '</td>';
+                            $html .= '<td>'.(optional($consolShipment->pickupLocation)->short_code ?? '').'</td>';
                             break;
                         case 'shipment_number':
-                            $html .= '<td>' . ($consolShipment->shipment_number ?? '') . '</td>';
+                            $html .= '<td>'.($consolShipment->shipment_number ?? '').'</td>';
                             break;
                         case 'dc_location':
-                            $html .= '<td>' . (optional($consolShipment->dcLocation)->short_code ?? '') . '</td>';
+                            $html .= '<td>'.(optional($consolShipment->dcLocation)->short_code ?? '').'</td>';
                             break;
                         case 'drop_date':
-                            $html .= '<td>' . (Carbon::parse($consolShipment->drop_date)->format('m/d/Y') ?? '') . '</td>';
+                            $html .= '<td>'.(Carbon::parse($consolShipment->drop_date)->format('m/d/Y') ?? '').'</td>';
                             break;
                         case 'pickup_date':
-                            $html .= '<td>' . (Carbon::parse($consolShipment->pickup_date)->format('m/d/Y') ?? '') . '</td>';
+                            $html .= '<td>'.(Carbon::parse($consolShipment->pickup_date)->format('m/d/Y') ?? '').'</td>';
                             break;
                         case 'delivery_date':
-                            $html .= '<td>' . (Carbon::parse($consolShipment->delivery_date)->format('m/d/Y') ?? '') . '</td>';
+                            $html .= '<td>'.(Carbon::parse($consolShipment->delivery_date)->format('m/d/Y') ?? '').'</td>';
                             break;
                         case 'po_number':
-                            $html .= '<td>' . ($consolShipment->po_number ?? '') . '</td>';
+                            $html .= '<td>'.($consolShipment->po_number ?? '').'</td>';
                             break;
                         case 'rack_qty':
-                            $html .= '<td>' . ($consolShipment->rack_qty ?? '') . '</td>';
+                            $html .= '<td>'.($consolShipment->rack_qty ?? '').'</td>';
                             break;
                         case 'carrier_code':
-                            $html .= '<td>' . (optional($consolShipment->carrier)->short_code ?? '') . '</td>';
+                            $html .= '<td>'.(optional($consolShipment->carrier)->short_code ?? '').'</td>';
                             break;
                         case 'trailer':
-                            $html .= '<td>' . ($consolShipment->trailer ?? '') . '</td>';
+                            $html .= '<td>'.($consolShipment->trailer ?? '').'</td>';
                             break;
                         case 'load_bar_qty':
-                            $html .= '<td>' . ($consolShipment->load_bar_qty ?? '') . '</td>';
+                            $html .= '<td>'.($consolShipment->load_bar_qty ?? '').'</td>';
                             break;
                         case 'strap_qty':
-                            $html .= '<td>' . ($consolShipment->strap_qty ?? '') . '</td>';
+                            $html .= '<td>'.($consolShipment->strap_qty ?? '').'</td>';
                             break;
                         case 'dc_location_address':
-                            $html .= '<td>' . (optional($consolShipment->dcLocation)->address ?? '') . '</td>';
+                            $html .= '<td>'.(optional($consolShipment->dcLocation)->address ?? '').'</td>';
                             break;
                         default:
                             // Ignore unknown columns
@@ -582,7 +588,7 @@ HTML;
             }
 
         }
-        $html .= <<<HTML
+        $html .= <<<'HTML'
         </tr>
     </tbody>
 </table>
@@ -634,6 +640,7 @@ HTML;
         $renderPlaceholders = function (string $text) use ($replacements): string {
             return preg_replace_callback('/\{\{?\s*([^\}\s]+)\s*\}?\}/', function ($matches) use ($replacements) {
                 $key = strtolower(trim($matches[1]));
+
                 return $replacements[$key] ?? $matches[0];
             }, $text);
         };
@@ -645,14 +652,15 @@ HTML;
 
         $carrier = $shipment->carrier;
 
-        if ($carrier && isset($carrier->emails) && !empty($carrier->emails)) {
+        if ($carrier && isset($carrier->emails) && ! empty($carrier->emails)) {
             $input = str_replace(',', ';', $carrier->emails);
             $parts = array_map('trim', explode(';', $input));
             $emails = [];
 
             foreach ($parts as $part) {
-                if (empty($part))
+                if (empty($part)) {
                     continue;
+                }
 
                 // "Name" <email@domain.com>
                 if (preg_match('/<([^>]+)>/', $part, $matches)) {
@@ -710,8 +718,9 @@ HTML;
             return redirect()->route('admin.shipments.show', $shipment)
                 ->with('success', 'Paperwork sent successfully.');
         } catch (\Exception $e) {
-            \Log::error('Paperwork email failed: ' . $e->getMessage());
-            return back()->withErrors(['email' => 'Failed to send email: ' . $e->getMessage()]);
+            \Log::error('Paperwork email failed: '.$e->getMessage());
+
+            return back()->withErrors(['email' => 'Failed to send email: '.$e->getMessage()]);
         }
     }
 }

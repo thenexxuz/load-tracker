@@ -38,7 +38,7 @@ class Location extends Model
      * @var array<string, string>
      */
     protected $casts = [
-        'latitude'  => 'float',
+        'latitude' => 'float',
         'longitude' => 'float',
         'recycling_location_id' => 'integer',
     ];
@@ -49,7 +49,7 @@ class Location extends Model
     public function recyclingLocation(): BelongsTo
     {
         return $this->belongsTo(Location::class, 'recycling_location_id')
-                    ->where('type', 'recycling');
+            ->where('type', 'recycling');
     }
 
     /**
@@ -73,35 +73,33 @@ class Location extends Model
      */
     public function hasCoordinates(): bool
     {
-        return !is_null($this->latitude) && !is_null($this->longitude);
+        return ! is_null($this->latitude) && ! is_null($this->longitude);
     }
 
     /**
      * Calculate distance to another location.
      *
-     * @param Location $other
-     * @param bool $forceRecalculate Force new calculation even if cached
-     * @return array
+     * @param  bool  $forceRecalculate  Force new calculation even if cached
      */
     public function distanceTo(Location $other, bool $forceRecalculate = false): array
     {
         // Try to find existing distance record (bidirectional)
         $distanceRecord = LocationDistance::where(function ($q) use ($other) {
             $q->where('from_location_id', $this->id)
-              ->where('to_location_id', $other->id);
+                ->where('to_location_id', $other->id);
         })->orWhere(function ($q) use ($other) {
             $q->where('from_location_id', $other->id)
-              ->where('to_location_id', $this->id);
+                ->where('to_location_id', $this->id);
         })->first();
 
-        if ($distanceRecord && !$forceRecalculate) {
+        if ($distanceRecord && ! $forceRecalculate) {
             return [
-                'km'              => $distanceRecord->distance_km,
-                'miles'           => $distanceRecord->distance_miles,
-                'duration_text'   => $distanceRecord->duration_text,
+                'km' => $distanceRecord->distance_km,
+                'miles' => $distanceRecord->distance_miles,
+                'duration_text' => $distanceRecord->duration_text,
                 'duration_minutes' => $distanceRecord->duration_minutes,
-                'route_coords'    => $distanceRecord->route_coords ?? [],
-                'source'          => 'cached',
+                'route_coords' => $distanceRecord->route_coords ?? [],
+                'source' => 'cached',
             ];
         }
 
@@ -109,7 +107,8 @@ class Location extends Model
         $distanceData = $this->computeDistance($other);
 
         if (isset($distanceData['error'])) {
-            Log::warning("Distance calculation failed from Location {$this->id} to {$other->id}: " . $distanceData['error']);
+            Log::warning("Distance calculation failed from Location {$this->id} to {$other->id}: ".$distanceData['error']);
+
             return $distanceData;
         }
 
@@ -117,15 +116,15 @@ class Location extends Model
         LocationDistance::updateOrCreate(
             [
                 'from_location_id' => min($this->id, $other->id),
-                'to_location_id'   => max($this->id, $other->id),
+                'to_location_id' => max($this->id, $other->id),
             ],
             [
-                'distance_km'      => $distanceData['km'],
-                'distance_miles'   => $distanceData['miles'],
-                'duration_text'    => $distanceData['duration_text'],
+                'distance_km' => $distanceData['km'],
+                'distance_miles' => $distanceData['miles'],
+                'duration_text' => $distanceData['duration_text'],
                 'duration_minutes' => $distanceData['duration_minutes'],
-                'route_coords'     => $distanceData['route_coords'] ?? [],
-                'calculated_at'    => now(),
+                'route_coords' => $distanceData['route_coords'] ?? [],
+                'calculated_at' => now(),
             ]
         );
 
@@ -147,17 +146,17 @@ class Location extends Model
             );
 
             return [
-                'km'              => round($km, 1),
-                'miles'           => round($km * 0.621371, 1),
-                'duration_text'   => '—', // No time estimate without directions
+                'km' => round($km, 1),
+                'miles' => round($km * 0.621371, 1),
+                'duration_text' => '—', // No time estimate without directions
                 'duration_minutes' => null,
-                'route_coords'    => [], // No route path without API
+                'route_coords' => [], // No route path without API
             ];
         }
 
         // Fallback: full Mapbox calculation
         $token = config('services.mapbox.key');
-        if (!$token) {
+        if (! $token) {
             return ['error' => 'Mapbox token not configured'];
         }
 
@@ -178,15 +177,15 @@ class Location extends Model
         }
 
         // Mapbox Directions API
-        $coordString = implode(',', $originCoords) . ';' . implode(',', $destCoords);
+        $coordString = implode(',', $originCoords).';'.implode(',', $destCoords);
 
         $response = Http::get("https://api.mapbox.com/directions/v5/mapbox/driving/{$coordString}", [
             'access_token' => $token,
-            'geometries'   => 'geojson',
-            'overview'     => 'full',
+            'geometries' => 'geojson',
+            'overview' => 'full',
         ]);
 
-        if (!$response->successful() || empty($response['routes'])) {
+        if (! $response->successful() || empty($response['routes'])) {
             return ['error' => 'Failed to get route between locations'];
         }
 
@@ -196,11 +195,11 @@ class Location extends Model
         $seconds = $route['duration'];
 
         return [
-            'km'              => round($meters / 1000, 1),
-            'miles'           => round(($meters / 1000) * 0.621371, 1),
-            'duration_text'   => $this->secondsToHumanTime($seconds),
+            'km' => round($meters / 1000, 1),
+            'miles' => round(($meters / 1000) * 0.621371, 1),
+            'duration_text' => $this->secondsToHumanTime($seconds),
             'duration_minutes' => round($seconds / 60),
-            'route_coords'    => $route['geometry']['coordinates'] ?? [],
+            'route_coords' => $route['geometry']['coordinates'] ?? [],
         ];
     }
 
@@ -229,19 +228,19 @@ class Location extends Model
     public function geocodeAddress(string $address): array
     {
         $token = config('services.mapbox.key');
-        if (!$token) {
+        if (! $token) {
             return ['error' => 'Mapbox token not configured'];
         }
 
-        $response = Http::get("https://api.mapbox.com/geocoding/v5/mapbox.places/" . urlencode($address) . ".json", [
+        $response = Http::get('https://api.mapbox.com/geocoding/v5/mapbox.places/'.urlencode($address).'.json', [
             'access_token' => $token,
-            'limit'        => 1,
-            'types'        => 'address',
-            'country'      => 'us', // adjust as needed
+            'limit' => 1,
+            'types' => 'address',
+            'country' => 'us', // adjust as needed
         ]);
 
-        if (!$response->successful() || empty($response['features'])) {
-            return ['error' => 'Failed to geocode address: ' . $address];
+        if (! $response->successful() || empty($response['features'])) {
+            return ['error' => 'Failed to geocode address: '.$address];
         }
 
         return $response['features'][0]['center']; // [lng, lat]
@@ -256,8 +255,12 @@ class Location extends Model
         $minutes = floor(($seconds % 3600) / 60);
 
         $parts = [];
-        if ($hours > 0) $parts[] = $hours . ' hr';
-        if ($minutes > 0) $parts[] = $minutes . ' min';
+        if ($hours > 0) {
+            $parts[] = $hours.' hr';
+        }
+        if ($minutes > 0) {
+            $parts[] = $minutes.' min';
+        }
 
         return implode(' ', $parts) ?: '< 1 min';
     }

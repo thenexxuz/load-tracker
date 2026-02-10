@@ -4,8 +4,8 @@ namespace App\Console\Commands;
 
 use App\Models\Location;
 use App\Models\LocationDistance;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class CalculateAllRecyclingDistances extends Command
@@ -33,13 +33,15 @@ class CalculateAllRecyclingDistances extends Command
 
         foreach ($dcs as $dc) {
             $rec = $dc->recyclingLocation;
-            if (!$rec)
+            if (! $rec) {
                 continue;
+            }
 
             $distance = $this->calculateDistance($dc->address, $rec->address);
 
             if (isset($distance['error'])) {
-                Log::warning("Failed for DC {$dc->id}: " . $distance['error']);
+                Log::warning("Failed for DC {$dc->id}: ".$distance['error']);
+
                 continue;
             }
 
@@ -63,44 +65,46 @@ class CalculateAllRecyclingDistances extends Command
     {
         $token = config('services.mapbox.key');
 
-        if (!$token) {
+        if (! $token) {
             Log::error('Mapbox token not configured');
+
             return ['error' => 'Mapbox token missing'];
         }
 
         // Geocode origin
-        $originResponse = Http::get("https://api.mapbox.com/geocoding/v5/mapbox.places/" . urlencode($originAddress) . ".json", [
+        $originResponse = Http::get('https://api.mapbox.com/geocoding/v5/mapbox.places/'.urlencode($originAddress).'.json', [
             'access_token' => $token,
             'limit' => 1,
             'types' => 'address',
             'country' => 'us', // change if needed
         ]);
 
-        if (!$originResponse->successful() || empty($originResponse['features'])) {
+        if (! $originResponse->successful() || empty($originResponse['features'])) {
             Log::warning("Geocode failed for origin: {$originAddress}");
+
             return ['error' => 'Failed to geocode origin'];
         }
 
         $originCoords = $originResponse['features'][0]['center']; // [lng, lat]
 
-
         // Geocode destination
-        $destResponse = Http::get("https://api.mapbox.com/geocoding/v5/mapbox.places/" . urlencode($destinationAddress) . ".json", [
+        $destResponse = Http::get('https://api.mapbox.com/geocoding/v5/mapbox.places/'.urlencode($destinationAddress).'.json', [
             'access_token' => $token,
             'limit' => 1,
             'types' => 'address',
             'country' => 'us',
         ]);
 
-        if (!$destResponse->successful() || empty($destResponse['features'])) {
+        if (! $destResponse->successful() || empty($destResponse['features'])) {
             Log::warning("Geocode failed for destination: {$destinationAddress}");
+
             return ['error' => 'Failed to geocode destination'];
         }
 
         $destCoords = $destResponse['features'][0]['center'];
 
         // Get driving directions
-        $coords = implode(',', $originCoords) . ';' . implode(',', $destCoords); // lng1,lat1;lng2,lat2
+        $coords = implode(',', $originCoords).';'.implode(',', $destCoords); // lng1,lat1;lng2,lat2
 
         $directionsResponse = Http::get("https://api.mapbox.com/directions/v5/mapbox/driving/{$coords}", [
             'access_token' => $token,
@@ -108,8 +112,9 @@ class CalculateAllRecyclingDistances extends Command
             'overview' => 'full',
         ]);
 
-        if (!$directionsResponse->successful() || empty($directionsResponse['routes'])) {
+        if (! $directionsResponse->successful() || empty($directionsResponse['routes'])) {
             Log::warning("Directions failed between {$originAddress} and {$destinationAddress}");
+
             return ['error' => 'Failed to get route'];
         }
 
@@ -133,10 +138,12 @@ class CalculateAllRecyclingDistances extends Command
         $minutes = floor(($seconds % 3600) / 60);
 
         $parts = [];
-        if ($hours > 0)
-            $parts[] = $hours . ' hr';
-        if ($minutes > 0)
-            $parts[] = $minutes . ' min';
+        if ($hours > 0) {
+            $parts[] = $hours.' hr';
+        }
+        if ($minutes > 0) {
+            $parts[] = $minutes.' min';
+        }
 
         return implode(' ', $parts) ?: '< 1 min';
     }

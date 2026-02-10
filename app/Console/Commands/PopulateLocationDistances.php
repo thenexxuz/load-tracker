@@ -31,23 +31,26 @@ class PopulateLocationDistances extends Command
         foreach ($dcs as $dc) {
             $rec = $dc->recyclingLocation;
 
-            if (!$rec) {
+            if (! $rec) {
                 $this->comment("Skipped DC {$dc->short_code} - no recycling assigned");
                 $dcSkipped++;
+
                 continue;
             }
 
             // Check if already calculated
-            if (!$force && $dc->distanceTo($rec)) {
+            if (! $force && $dc->distanceTo($rec)) {
                 $dcSkipped++;
+
                 continue;
             }
 
             $result = $dc->distanceTo($rec, $force);
 
             if (isset($result['error'])) {
-                $this->warn("Failed DC {$dc->short_code} → Recycling {$rec->short_code}: " . $result['error']);
+                $this->warn("Failed DC {$dc->short_code} → Recycling {$rec->short_code}: ".$result['error']);
                 $dcSkipped++;
+
                 continue;
             }
 
@@ -69,25 +72,28 @@ class PopulateLocationDistances extends Command
 
         foreach ($shipments as $shipment) {
             $from = $shipment->pickupLocation;
-            $to   = $shipment->dcLocation;
+            $to = $shipment->dcLocation;
 
-            if (!$from || !$to) {
+            if (! $from || ! $to) {
                 $this->comment("Skipped shipment {$shipment->id} - missing pickup or DC location");
                 $shipmentSkipped++;
+
                 continue;
             }
 
             // Check if already calculated
-            if (!$force && $from->distanceTo($to)) {
+            if (! $force && $from->distanceTo($to)) {
                 $shipmentSkipped++;
+
                 continue;
             }
 
             $result = $from->distanceTo($to, $force);
 
             if (isset($result['error'])) {
-                $this->warn("Failed shipment {$shipment->id} (pickup {$from->short_code} → DC {$to->short_code}): " . $result['error']);
+                $this->warn("Failed shipment {$shipment->id} (pickup {$from->short_code} → DC {$to->short_code}): ".$result['error']);
                 $shipmentSkipped++;
+
                 continue;
             }
 

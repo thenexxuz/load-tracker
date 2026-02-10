@@ -74,8 +74,6 @@ class LocationDistance extends Model
 
     /**
      * Get a display-friendly distance string.
-     *
-     * @return string
      */
     public function getDistanceDisplayAttribute(): string
     {
@@ -83,13 +81,11 @@ class LocationDistance extends Model
             return '—';
         }
 
-        return round($this->distance_km, 1) . ' km (' . round($this->distance_miles, 1) . ' mi)';
+        return round($this->distance_km, 1).' km ('.round($this->distance_miles, 1).' mi)';
     }
 
     /**
      * Get a display-friendly duration string.
-     *
-     * @return string
      */
     public function getDurationDisplayAttribute(): string
     {
@@ -99,8 +95,7 @@ class LocationDistance extends Model
     /**
      * Determine if this distance record is outdated.
      *
-     * @param int $days Days after which a record is considered stale
-     * @return bool
+     * @param  int  $days  Days after which a record is considered stale
      */
     public function isOutdated(int $days = 30): bool
     {

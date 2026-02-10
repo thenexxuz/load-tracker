@@ -180,7 +180,7 @@ const getEmailInfo = (emails: string | null) => {
     .filter(e => e.length > 0)
 
   const count = emailArr.length
-  const tooltip = count === 0 
+  const tooltip = count === 0
     ? 'No emails set for this carrier'
     : emailArr.join('; ')
 
@@ -209,7 +209,7 @@ const changePerPage = (e: Event) => {
 
 const { auth } = usePage().props
 const userRoles = auth?.user?.roles || []
-const hasImportAccess = userRoles.includes('administrator') || userRoles.includes('supervisor')
+const hasAdminAccess = userRoles.includes('administrator') || userRoles.includes('supervisor')
 </script>
 
 <template>
@@ -223,7 +223,7 @@ const hasImportAccess = userRoles.includes('administrator') || userRoles.include
         </h1>
         <div class="space-x-4">
           <a
-            v-if="hasImportAccess"
+            v-if="hasAdminAccess"
             :href="route('admin.carriers.create')"
             class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-md font-medium transition-colors"
           >
@@ -231,7 +231,7 @@ const hasImportAccess = userRoles.includes('administrator') || userRoles.include
           </a>
 
           <button
-            v-if="hasImportAccess"
+            v-if="hasAdminAccess"
             @click="showImportModal = true"
             class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-md font-medium transition-colors"
           >
@@ -239,7 +239,7 @@ const hasImportAccess = userRoles.includes('administrator') || userRoles.include
           </button>
 
           <button
-            v-if="hasImportAccess"
+            v-if="hasAdminAccess"
             @click="exportCarriers"
             :disabled="isExporting"
             class="bg-green-600 hover:bg-green-700 text-white px-5 py-2.5 rounded-md font-medium transition-colors disabled:opacity-70"
@@ -399,7 +399,7 @@ const hasImportAccess = userRoles.includes('administrator') || userRoles.include
                 </a>
 
                 <button
-                  v-if="hasImportAccess"
+                  v-if="hasAdminAccess"
                   @click="destroy(carrier.id)"
                   class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 transition-colors"
                   title="Delete Carrier"

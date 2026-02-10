@@ -19,12 +19,13 @@ class LocationObserver
         }
 
         // Skip if no address or if lat/lng already set and address not changed
-        if (!$location->address || ($location->latitude && $location->longitude && !$location->isDirty(['address', 'city', 'state', 'zip', 'country']))) {
+        if (! $location->address || ($location->latitude && $location->longitude && ! $location->isDirty(['address', 'city', 'state', 'zip', 'country']))) {
             Log::info("Skipped for Location {$location->id}: {$location->fullAddress()}");
+
             return;
         }
 
-        $cacheKey = 'geocode:' . md5($location->fullAddress());
+        $cacheKey = 'geocode:'.md5($location->fullAddress());
 
         // Try to get from cache first (long TTL: 1 year)
         $cached = Cache::get($cacheKey);
@@ -33,13 +34,15 @@ class LocationObserver
             $location->latitude = $cached['lat'];
             $location->longitude = $cached['lng'];
             Log::info("Used cached geocode for Location {$location->id}: {$location->fullAddress()}");
+
             return;
         }
 
         // Call Mapbox Geocoding API
         $token = config('services.mapbox.key');
-        if (!$token) {
+        if (! $token) {
             Log::warning("Mapbox token missing - cannot geocode Location {$location->id}");
+
             return;
         }
 
@@ -47,13 +50,14 @@ class LocationObserver
 
         $response = Http::get("https://api.mapbox.com/geocoding/v5/mapbox.places/{$address}.json", [
             'access_token' => $token,
-            'limit'        => 1,
-            'types'        => 'address',
-            'country'      => strtolower($location->country),
+            'limit' => 1,
+            'types' => 'address',
+            'country' => strtolower($location->country),
         ]);
 
-        if (!$response->successful() || empty($response['features'])) {
+        if (! $response->successful() || empty($response['features'])) {
             Log::warning("Geocoding failed for Location {$location->id}: {$location->fullAddress()}");
+
             return;
         }
 

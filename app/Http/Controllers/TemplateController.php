@@ -2,10 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Controllers\Controller;
-use App\Models\Template;
 use App\Models\Carrier;
 use App\Models\Location;
+use App\Models\Template;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -49,7 +48,7 @@ class TemplateController extends Controller
             ? 'App\\Models\\Carrier'
             : 'App\\Models\\Location';
         $modelClass = $validated['model_type'];
-        if (!class_exists($modelClass) || !$modelClass::find($validated['model_id'])) {
+        if (! class_exists($modelClass) || ! $modelClass::find($validated['model_id'])) {
             return back()->withErrors(['model_id' => 'Selected model does not exist.']);
         }
 
@@ -85,7 +84,7 @@ class TemplateController extends Controller
     public function update(Request $request, Template $template)
     {
         $validated = $request->validate([
-            'name' => 'required|string|max:255|unique:templates,name,' . $template->id,
+            'name' => 'required|string|max:255|unique:templates,name,'.$template->id,
             'model_type' => 'required|in:carrier,location',
             'model_id' => 'required|integer',
             'subject' => 'nullable|string|max:255',
@@ -97,7 +96,7 @@ class TemplateController extends Controller
             ? 'App\\Models\\Carrier'
             : 'App\\Models\\Location';
         $modelClass = $validated['model_type'];
-        if (!class_exists($modelClass) || !$modelClass::find($validated['model_id'])) {
+        if (! class_exists($modelClass) || ! $modelClass::find($validated['model_id'])) {
             return back()->withErrors(['model_id' => 'Selected model does not exist.']);
         }
 

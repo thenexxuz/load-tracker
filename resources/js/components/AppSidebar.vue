@@ -1,10 +1,6 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
 import { Link, usePage } from '@inertiajs/vue3'
-import { route } from 'ziggy-js'
 import {
-  BookOpen,
-  Folder,
   LayoutGrid,
   Map,
   SearchIcon,
@@ -12,14 +8,15 @@ import {
   TruckIcon,
   User,
   DollarSign,
-  AtSign,
   NotepadTextDashed,
   Ruler,
   Locate,
 } from 'lucide-vue-next'
+import { ref, computed } from 'vue'
+import { route } from 'ziggy-js'
 
-import NavMain from '@/components/NavMain.vue'
 import NavFooter from '@/components/NavFooter.vue'
+import NavMain from '@/components/NavMain.vue'
 import NavUser from '@/components/NavUser.vue'
 import {
   Sidebar,
@@ -44,9 +41,7 @@ const hasRatesAccess = userRoles.includes('administrator') || userRoles.includes
 const hasCarrierAccess = userRoles.includes('administrator') || userRoles.includes('supervisor') || userRoles.includes('carrier')
 const hasTemplateAccess = userRoles.includes('administrator') || userRoles.includes('supervisor')
 const hasLocationsAccess = userRoles.includes('administrator') || userRoles.includes('supervisor')
-const hasShipmentAccess = userRoles.includes('administrator') || userRoles.includes('supervisor') || userRoles.includes('truckload') || userRoles.includes('data-entry')
-
-const collapsed = ref(false)
+const hasShipmentAccess = userRoles.includes('administrator') || userRoles.includes('supervisor') || userRoles.includes('truckload') || userRoles.includes('data-entry') || userRoles.includes('carrier')
 
 // Check if current page is any location-related route
 const isOnLocations = computed(() => {

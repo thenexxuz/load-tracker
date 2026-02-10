@@ -4,12 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\Location;
 use App\Models\LocationDistance;
-use App\Models\Shipment;
 use Illuminate\Http\Request;
-use Inertia\Inertia;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
+use Inertia\Inertia;
 
 class LocationController extends Controller
 {
@@ -20,7 +18,7 @@ class LocationController extends Controller
     {
         $validated = $request->validate([
             'per_page' => 'nullable|integer|min:1|max:25',
-            'search'   => 'nullable|string|max:500',
+            'search' => 'nullable|string|max:500',
         ]);
 
         $query = Location::query()
@@ -40,7 +38,7 @@ class LocationController extends Controller
             });
         }
 
-        $locations = $query->paginate($validated['per_page'] ?? 15 );
+        $locations = $query->paginate($validated['per_page'] ?? 15);
 
         return Inertia::render('Admin/Locations/Index', [
             'locations' => $locations,
@@ -62,22 +60,22 @@ class LocationController extends Controller
     {
         $validated = $request->validate([
             'short_code' => 'required|string|max:50|unique:locations',
-            'name'       => 'nullable|string|max:255',
-            'type'       => 'required|in:distribution_center,recycling,pickup',
-            'address'    => 'nullable|string|max:255',
-            'city'       => 'nullable|string|max:255',
-            'state'      => 'nullable|string|max:255',
-            'zip'        => 'nullable|string|max:20',
-            'country'    => 'nullable|string|max:255',
-            'latitude'   => 'nullable|numeric|between:-90,90',
-            'longitude'  => 'nullable|numeric|between:-180,180',
+            'name' => 'nullable|string|max:255',
+            'type' => 'required|in:distribution_center,recycling,pickup',
+            'address' => 'nullable|string|max:255',
+            'city' => 'nullable|string|max:255',
+            'state' => 'nullable|string|max:255',
+            'zip' => 'nullable|string|max:20',
+            'country' => 'nullable|string|max:255',
+            'latitude' => 'nullable|numeric|between:-90,90',
+            'longitude' => 'nullable|numeric|between:-180,180',
             // Add other validation rules as needed
         ]);
 
         Location::create($validated);
 
         return redirect()->route('admin.locations.index')
-                         ->with('success', 'Location created successfully.');
+            ->with('success', 'Location created successfully.');
     }
 
     /**
@@ -109,16 +107,16 @@ class LocationController extends Controller
     public function update(Request $request, Location $location)
     {
         $validated = $request->validate([
-            'short_code' => 'required|string|max:50|unique:locations,short_code,' . $location->id,
-            'name'       => 'nullable|string|max:255',
-            'type'       => 'required|in:distribution_center,recycling,pickup',
-            'address'    => 'nullable|string|max:255',
-            'city'       => 'nullable|string|max:255',
-            'state'      => 'nullable|string|max:255',
-            'zip'        => 'nullable|string|max:20',
-            'country'    => 'nullable|string|max:255',
-            'latitude'   => 'nullable|numeric|between:-90,90',
-            'longitude'  => 'nullable|numeric|between:-180,180',
+            'short_code' => 'required|string|max:50|unique:locations,short_code,'.$location->id,
+            'name' => 'nullable|string|max:255',
+            'type' => 'required|in:distribution_center,recycling,pickup',
+            'address' => 'nullable|string|max:255',
+            'city' => 'nullable|string|max:255',
+            'state' => 'nullable|string|max:255',
+            'zip' => 'nullable|string|max:20',
+            'country' => 'nullable|string|max:255',
+            'latitude' => 'nullable|numeric|between:-90,90',
+            'longitude' => 'nullable|numeric|between:-180,180',
             'recycling_location_id' => 'nullable|exists:locations,id|prohibited_if:type,recycling',
         ]);
 
@@ -142,7 +140,7 @@ class LocationController extends Controller
         }
 
         return redirect()->route('admin.locations.show', $location)
-                         ->with('success', 'Location updated successfully.');
+            ->with('success', 'Location updated successfully.');
     }
 
     /**
@@ -153,7 +151,7 @@ class LocationController extends Controller
         $location->delete();
 
         return redirect()->route('admin.locations.index')
-                         ->with('success', 'Location deleted successfully.');
+            ->with('success', 'Location deleted successfully.');
     }
 
     /**
@@ -165,7 +163,7 @@ class LocationController extends Controller
         $recyclingId = $request->input('recycling_id');
 
         $query = Location::where('type', 'distribution_center')
-                         ->with('recyclingLocation:id,short_code,address');
+            ->with('recyclingLocation:id,short_code,address');
 
         if ($recyclingId === 'none') {
             $query->whereNull('recycling_location_id');
@@ -178,30 +176,30 @@ class LocationController extends Controller
         $distances = $dcLocations->through(function ($dc) {
             $rec = $dc->recyclingLocation;
 
-            if (!$rec) {
+            if (! $rec) {
                 return [
-                    'dc_id'           => $dc->id,
-                    'dc_short_code'   => $dc->short_code,
-                    'rec_id'          => null,
-                    'rec_short_code'  => null,
-                    'distance_km'     => null,
-                    'distance_miles'  => null,
-                    'duration_text'   => 'No recycling assigned',
-                    'route_coords'    => [],
+                    'dc_id' => $dc->id,
+                    'dc_short_code' => $dc->short_code,
+                    'rec_id' => null,
+                    'rec_short_code' => null,
+                    'distance_km' => null,
+                    'distance_miles' => null,
+                    'duration_text' => 'No recycling assigned',
+                    'route_coords' => [],
                 ];
             }
 
             $distance = $dc->distanceTo($rec);
 
             return [
-                'dc_id'           => $dc->id,
-                'dc_short_code'   => $dc->short_code,
-                'rec_id'          => $rec->id,
-                'rec_short_code'  => $rec->short_code,
-                'distance_km'     => $distance['km'] ?? null,
-                'distance_miles'  => $distance['miles'] ?? null,
-                'duration_text'   => $distance['duration_text'] ?? '—',
-                'route_coords'    => $distance['route_coords'] ?? [],
+                'dc_id' => $dc->id,
+                'dc_short_code' => $dc->short_code,
+                'rec_id' => $rec->id,
+                'rec_short_code' => $rec->short_code,
+                'distance_km' => $distance['km'] ?? null,
+                'distance_miles' => $distance['miles'] ?? null,
+                'duration_text' => $distance['duration_text'] ?? '—',
+                'route_coords' => $distance['route_coords'] ?? [],
             ];
         });
 
@@ -211,7 +209,7 @@ class LocationController extends Controller
             ->get();
 
         return Inertia::render('Admin/Locations/RecyclingDistance', [
-            'distances'           => $distances,
+            'distances' => $distances,
             'recycling_locations' => $recyclingLocations,
         ]);
     }
@@ -246,7 +244,7 @@ class LocationController extends Controller
             ->get();
 
         return Inertia::render('Admin/Locations/MultiLocationRoute', [
-            'locations'    => $locations,
+            'locations' => $locations,
             'mapbox_token' => config('services.mapbox.key'),
         ]);
     }
@@ -264,7 +262,7 @@ class LocationController extends Controller
         $locationIds = $validated['location_ids'];
 
         // Preserve the exact order from the frontend (no sorting)
-        $cacheKey = 'mapbox_multi_route:' . md5(implode('|', $locationIds));
+        $cacheKey = 'mapbox_multi_route:'.md5(implode('|', $locationIds));
 
         $routeData = Cache::remember($cacheKey, now()->addDays(7), function () use ($locationIds) {
             // Load locations in the requested order
@@ -277,11 +275,11 @@ class LocationController extends Controller
             $waypoints = [];
             foreach ($locationIds as $id) {
                 $loc = $locations[$id] ?? null;
-                if (!$loc) {
+                if (! $loc) {
                     return ['error' => 'Missing location data'];
                 }
 
-                if (!$loc->latitude || !$loc->longitude) {
+                if (! $loc->latitude || ! $loc->longitude) {
                     return ['error' => "Location {$loc->short_code} has no coordinates"];
                 }
 
@@ -294,10 +292,10 @@ class LocationController extends Controller
             }
 
             // Build Mapbox Directions URL with all waypoints
-            $coordString = implode(';', array_map(fn($c) => implode(',', $c), $waypoints));
+            $coordString = implode(';', array_map(fn ($c) => implode(',', $c), $waypoints));
 
             $token = config('services.mapbox.key');
-            if (!$token) {
+            if (! $token) {
                 return ['error' => 'Mapbox token not configured'];
             }
 
@@ -308,7 +306,7 @@ class LocationController extends Controller
                 'steps' => 'false',
             ]);
 
-            if (!$response->successful() || empty($response['routes'])) {
+            if (! $response->successful() || empty($response['routes'])) {
                 return ['error' => 'Failed to calculate multi-point route'];
             }
 
@@ -359,7 +357,7 @@ class LocationController extends Controller
             $from = $locations[$fromId] ?? null;
             $to = $locations[$toId] ?? null;
 
-            if (!$from || !$to) {
+            if (! $from || ! $to) {
                 return ['error' => 'Missing location data'];
             }
 
@@ -373,7 +371,7 @@ class LocationController extends Controller
             $totalSeconds += ($distance['duration_minutes'] ?? 0) * 60;
 
             $segmentCoords = $distance['route_coords'] ?? [];
-            if ($i > 0 && !empty($segmentCoords)) {
+            if ($i > 0 && ! empty($segmentCoords)) {
                 array_shift($segmentCoords); // remove duplicate connecting point
             }
 
@@ -406,8 +404,12 @@ class LocationController extends Controller
         $minutes = floor(($seconds % 3600) / 60);
 
         $parts = [];
-        if ($hours > 0) $parts[] = $hours . ' hr';
-        if ($minutes > 0) $parts[] = $minutes . ' min';
+        if ($hours > 0) {
+            $parts[] = $hours.' hr';
+        }
+        if ($minutes > 0) {
+            $parts[] = $minutes.' min';
+        }
 
         return implode(' ', $parts) ?: '< 1 min';
     }
@@ -419,8 +421,9 @@ class LocationController extends Controller
     {
         $rec = $dc->recyclingLocation;
 
-        if (!$rec) {
+        if (! $rec) {
             LocationDistance::where('dc_id', $dc->id)->delete();
+
             return;
         }
 
