@@ -19,6 +19,8 @@ class CarrierController extends Controller
             'search' => 'nullable|string|max:500',
         ]);
 
+        $validated['search'] = $validated['search'] ?? '';
+
         if (auth()->user()->hasRole('carrier')) {
             $carriers = Carrier::where('id', auth()->user()->carrier_id)
                 ->paginate($validated['per_page'] ?? 15)
