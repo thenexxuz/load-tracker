@@ -1,10 +1,9 @@
 <script setup lang="ts">
 import { Head, router, usePage } from '@inertiajs/vue3'
 import { computed, onUnmounted, onMounted, ref } from 'vue'
-import AdminLayout from '@/layouts/AppLayout.vue'
-import Swal from 'sweetalert2'
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
+import AdminLayout from '@/layouts/AppLayout.vue'
 
 const props = defineProps<{
   shipment: {

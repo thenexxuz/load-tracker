@@ -2,7 +2,6 @@
 import { Head, Link, router } from '@inertiajs/vue3'
 import AdminLayout from '@/layouts/AppLayout.vue'
 import { ref, watch } from 'vue'
-import Swal from 'sweetalert2'
 
 const props = defineProps<{
   locations: {

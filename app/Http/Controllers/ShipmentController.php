@@ -314,7 +314,7 @@ class ShipmentController extends Controller
 
         $shipment->update($validated);
 
-        return redirect()->route('admin.shipments.index')
+        return redirect()->route('admin.shipments.show', $shipment->id)
             ->with('success', 'Shipment updated successfully.');
     }
 

@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { Head, router, usePage } from '@inertiajs/vue3'
-import Swal from 'sweetalert2'
 import { ref, watch, onMounted } from 'vue'
 
 import AdminLayout from '@/layouts/AppLayout.vue'

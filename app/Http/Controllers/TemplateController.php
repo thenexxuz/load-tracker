@@ -102,7 +102,7 @@ class TemplateController extends Controller
 
         $template->update($validated);
 
-        return redirect()->route('admin.templates.index')
+        return redirect()->route('admin.templates.show', $template->id)
             ->with('success', 'Template updated successfully.');
     }
 

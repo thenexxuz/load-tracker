@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -263,5 +264,12 @@ class Location extends Model
         }
 
         return implode(' ', $parts) ?: '< 1 min';
+    }
+
+    public function getExpectedArrivalTimeAttribute($value)
+    {
+        if (!$value)
+            return null;
+        return Carbon::parse($value)->format('H:i'); // 24-hour format: 08:00, 14:30
     }
 }

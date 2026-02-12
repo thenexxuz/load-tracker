@@ -2,7 +2,6 @@
 import { Head, useForm } from '@inertiajs/vue3'
 import { ref } from 'vue'
 import AdminLayout from '@/layouts/AppLayout.vue'
-import Swal from 'sweetalert2'
 
 const props = defineProps<{
   pickupLocations: Array<{ id: number; short_code: string; name: string | null }>

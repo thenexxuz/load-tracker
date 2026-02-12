@@ -2,7 +2,6 @@
 import { Head, useForm } from '@inertiajs/vue3'
 import AdminLayout from '@/layouts/AppLayout.vue'
 import { ref } from 'vue'
-import Swal from 'sweetalert2'
 
 const props = defineProps<{
   shipment: {

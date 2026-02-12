@@ -2,7 +2,6 @@
 import AdminLayout from '@/layouts/AppLayout.vue'
 import { Head, router, usePage } from '@inertiajs/vue3'
 import { onMounted } from 'vue'
-import Swal from 'sweetalert2'
 
 defineProps<{
     users: Array<{

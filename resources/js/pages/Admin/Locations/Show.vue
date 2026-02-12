@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3'
-import AdminLayout from '@/layouts/AppLayout.vue'
 import { onMounted, ref, onUnmounted } from 'vue'
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
+import { route } from 'ziggy-js'
+import AdminLayout from '@/layouts/AppLayout.vue'
 
 const props = defineProps<{
   location: {
@@ -19,7 +20,6 @@ const props = defineProps<{
     latitude: number | null
     longitude: number | null
     recyclingLocation?: { id: number; short_code: string } | null
-    // ... other fields if needed
   }
   mapbox_token: string
 }>()

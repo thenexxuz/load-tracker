@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { Head, router, usePage } from '@inertiajs/vue3'
 import { useForm } from '@inertiajs/vue3'
-import Swal from 'sweetalert2'
 import { ref, watch, onMounted } from 'vue'
 import { route } from 'ziggy-js'
 

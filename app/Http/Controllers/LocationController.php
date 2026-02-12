@@ -69,7 +69,6 @@ class LocationController extends Controller
             'country' => 'nullable|string|max:255',
             'latitude' => 'nullable|numeric|between:-90,90',
             'longitude' => 'nullable|numeric|between:-180,180',
-            // Add other validation rules as needed
         ]);
 
         Location::create($validated);
@@ -122,12 +121,16 @@ class LocationController extends Controller
             'country' => 'nullable|string|max:255',
             'latitude' => 'nullable|numeric|between:-90,90',
             'longitude' => 'nullable|numeric|between:-180,180',
-            'recycling_location_id' => 'nullable|exists:locations,id|prohibited_if:type,recycling',
+            'recycling_location_id' => 'nullable|exists:locations,id',
         ]);
 
         $oldRecyclingId = $location->recycling_location_id;
         $addressFields = ['address', 'city', 'state', 'zip', 'country'];
         $addressChanged = $location->wasChanged($addressFields);
+
+        if (($location->type === 'distribution_center' && $validated['type'] !== 'distribution_center') || ($location->type !== 'distribution_center' && $validated['type'] !== 'distribution_center')) {
+            $validated['recycling_location_id'] = null;
+        }
 
         $location->update($validated);
 
@@ -144,8 +147,7 @@ class LocationController extends Controller
             }
         }
 
-        return redirect()->route('admin.locations.show', $location->id)
-            ->with('success', 'Location updated successfully.');
+        return redirect()->route('admin.locations.show', $location);
     }
 
     /**

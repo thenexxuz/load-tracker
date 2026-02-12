@@ -48,7 +48,15 @@ Route::middleware(['auth', 'role:administrator|supervisor'])->prefix('admin')->n
     Route::post('locations/multi-route', [LocationController::class, 'calculateMultiRoute'])->name('locations.multi-route-calculate');
     Route::post('locations/import', [LocationController::class, 'import'])->name('locations.import');
     Route::get('locations/export', [LocationController::class, 'export'])->name('locations.export');
-    Route::resource('locations', LocationController::class);
+    Route::resource('locations', LocationController::class)->names([
+        'index' => 'locations.index',
+        'create' => 'locations.create',
+        'store' => 'locations.store',
+        'show' => 'locations.show',
+        'edit' => 'locations.edit',
+        'update' => 'locations.update',
+        'destroy' => 'locations.destroy',
+    ]);
     // Rate Routes
     Route::resource('rates', RateController::class);
 });

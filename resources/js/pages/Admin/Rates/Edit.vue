@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { Head, useForm } from '@inertiajs/vue3'
 import AdminLayout from '@/layouts/AppLayout.vue'
-import Swal from 'sweetalert2'
 
 const props = defineProps<{
   rate: {

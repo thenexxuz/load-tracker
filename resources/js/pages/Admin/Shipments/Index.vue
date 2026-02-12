@@ -2,7 +2,6 @@
 import { Head, router, usePage } from '@inertiajs/vue3'
 import { useForm } from '@inertiajs/vue3'
 import { onClickOutside } from '@vueuse/core'
-import Swal from 'sweetalert2'
 import { ref, watch, onMounted, computed, nextTick } from 'vue'
 
 import AdminLayout from '@/layouts/AppLayout.vue'
