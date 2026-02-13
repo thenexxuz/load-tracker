@@ -1,49 +1,101 @@
 <script setup lang="ts">
-import { Head } from '@inertiajs/vue3';
+import { Head } from '@inertiajs/vue3'
+import { computed } from 'vue'
+import AdminLayout from '@/layouts/AppLayout.vue'
+import { Line } from 'vue-chartjs'
+import {
+  Chart as ChartJS,
+  Title,
+  Tooltip,
+  Legend,
+  LineElement,
+  LinearScale,
+  PointElement,
+  CategoryScale,
+} from 'chart.js'
 
-import AppLayout from '@/layouts/AppLayout.vue';
-import { dashboard } from '@/routes';
-import { type BreadcrumbItem } from '@/types';
+ChartJS.register(
+  Title,
+  Tooltip,
+  Legend,
+  LineElement,
+  LinearScale,
+  PointElement,
+  CategoryScale
+)
 
-import PlaceholderPattern from '../components/PlaceholderPattern.vue';
+const props = defineProps<{
+  isAdminOrSupervisor?: boolean
+  chartData?: {
+    labels: string[]
+    values: number[]
+  }
+  bookedCount?: number
+}>()
 
-const breadcrumbs: BreadcrumbItem[] = [
+const chartOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: { position: 'top' },
+    title: { display: true, text: 'Deliveries per Day (Last 30 Days)' }
+  },
+  scales: {
+    y: { beginAtZero: true }
+  }
+}
+
+const chartDataComputed = computed(() => ({
+  labels: props.chartData?.labels || [],
+  datasets: [
     {
-        title: 'Dashboard',
-        href: dashboard().url,
-    },
-];
+      label: 'Delivered Shipments',
+      borderColor: '#3b82f6',
+      backgroundColor: 'rgba(59, 130, 246, 0.2)',
+      data: props.chartData?.values || [],
+      tension: 0.3,
+      fill: true
+    }
+  ]
+}))
 </script>
 
 <template>
-    <Head title="Dashboard" />
+  <Head title="Dashboard" />
 
-    <AppLayout :breadcrumbs="breadcrumbs">
-        <div
-            class="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4"
-        >
-            <div class="grid auto-rows-min gap-4 md:grid-cols-3">
-                <div
-                    class="relative aspect-video overflow-hidden rounded-xl border border-sidebar-border/70 dark:border-sidebar-border"
-                >
-                    <PlaceholderPattern />
-                </div>
-                <div
-                    class="relative aspect-video overflow-hidden rounded-xl border border-sidebar-border/70 dark:border-sidebar-border"
-                >
-                    <PlaceholderPattern />
-                </div>
-                <div
-                    class="relative aspect-video overflow-hidden rounded-xl border border-sidebar-border/70 dark:border-sidebar-border"
-                >
-                    <PlaceholderPattern />
-                </div>
-            </div>
-            <div
-                class="relative min-h-[100vh] flex-1 rounded-xl border border-sidebar-border/70 md:min-h-min dark:border-sidebar-border"
-            >
-                <PlaceholderPattern />
-            </div>
+  <AdminLayout>
+    <div class="p-6">
+      <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-8">
+        Dashboard
+      </h1>
+
+      <div v-if="isAdminOrSupervisor" class="space-y-8">
+        <!-- Booked Shipments Card -->
+        <div class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow border border-gray-200 dark:border-gray-700">
+          <h3 class="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-2">
+            Booked Shipments
+          </h3>
+          <p class="text-4xl font-bold text-blue-600 dark:text-blue-400">
+            {{ bookedCount ?? 0 }}
+          </p>
         </div>
-    </AppLayout>
+
+        <!-- Line Chart -->
+        <div class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow border border-gray-200 dark:border-gray-700">
+          <div class="h-80">
+            <Line
+              :data="chartDataComputed"
+              :options="chartOptions"
+            />
+          </div>
+        </div>
+      </div>
+
+      <!-- Regular dashboard content for non-admin/supervisor users -->
+      <div v-else class="text-center py-12 text-gray-600 dark:text-gray-400">
+        <p class="text-xl">Welcome to the Dashboard</p>
+        <p class="mt-2">Additional statistics are available for administrators and supervisors.</p>
+      </div>
+    </div>
+  </AdminLayout>
 </template>
