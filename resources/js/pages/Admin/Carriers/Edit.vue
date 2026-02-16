@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, router, useForm } from '@inertiajs/vue3';
 import AdminLayout from '@/layouts/AppLayout.vue'
+import { Notify } from 'notiflix';
 
 const props = defineProps<{
     carrier: {
@@ -23,12 +24,6 @@ const form = useForm({
 
 const submit = () => {
     form.put(route('admin.carriers.update', props.carrier.id), {
-        onSuccess: () => {
-            router.visit(route('admin.carriers.index'), {
-                data: { success: 'Carrier updated successfully!' },
-                preserveState: true,
-            })
-        },
         onError: (errors) => {
             console.log('Form errors:', errors)
         },

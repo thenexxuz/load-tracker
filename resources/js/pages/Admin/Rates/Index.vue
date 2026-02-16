@@ -1,6 +1,10 @@
 <script setup lang="ts">
-import { Head, router } from '@inertiajs/vue3'
+import { Head, router, usePage } from '@inertiajs/vue3'
 import AdminLayout from '@/layouts/AppLayout.vue'
+import { Confirm, Notify } from 'notiflix';
+import { onMounted } from 'vue';
+
+const page = usePage()
 
 const props = defineProps<{
   rates: {
@@ -20,46 +24,49 @@ const props = defineProps<{
 }>()
 
 const destroy = async (id: number) => {
-  const result = await Swal.fire({
-    title: 'Delete Rate?',
-    text: "This action cannot be undone.",
-    icon: 'warning',
-    showCancelButton: true,
-    confirmButtonColor: '#d33',
-    cancelButtonColor: '#3085d6',
-    confirmButtonText: 'Yes, delete it!',
-    cancelButtonText: 'Cancel',
-    reverseButtons: true
-  })
-
-  if (result.isConfirmed) {
-    router.delete(route('admin.rates.destroy', id), {
-      onSuccess: () => {
-        Swal.fire({
-          icon: 'success',
-          title: 'Deleted!',
-          text: 'Rate has been deleted.',
-          timer: 2000,
-          showConfirmButton: false,
-          toast: true,
-          position: 'top-end'
-        })
-      },
-      onError: () => {
-        Swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: 'Failed to delete rate.'
-        })
-      },
-      preserveScroll: true,
-    })
-  }
+  const result = await Confirm.show(
+    'Delete Rate',
+    'Are you sure you want to delete this rate? This action cannot be undone.',
+    'Yes, delete it',
+    'Cancel',
+    () => {
+      router.delete(route('admin.rates.destroy', id), {
+        onSuccess: () => {
+          Notify.success('Rate has been deleted.')
+        },
+        onError: () => {
+          Notify.failure('Failed to delete rate.')
+        }
+      })
+    },
+    () => {
+      // Cancelled - do nothing
+    },
+    {
+      titleColor: '#ff0000',
+      okButtonBackground: '#ff0000',
+    }
+  )
 }
 
 const goToShow = (id: number) => {
   router.visit(route('admin.rates.show', id))
 }
+
+onMounted(() => {
+  if (page.props.flash?.success) {
+    Notify.success(page.props.flash.success)
+  }
+  if (page.props.flash?.error) {
+    Notify.failure(page.props.flash.error)
+  }
+  if (page.props.flash?.info) {
+    Notify.info(page.props.flash.info)
+  }
+  if (page.props.flash?.warning) {
+    Notify.warning(page.props.flash.warning)
+  }
+})
 </script>
 
 <template>

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, useForm, router } from '@inertiajs/vue3'
 import AdminLayout from '@/layouts/AppLayout.vue'
+import { Notify } from 'notiflix'
 
 const form = useForm({
     short_code: '',
@@ -12,13 +13,6 @@ const form = useForm({
 
 const submit = () => {
     form.post(route('admin.carriers.store'), {
-        onSuccess: () => {
-            form.reset()
-            router.visit(route('admin.carriers.index'), {
-                data: { success: 'Carrier created successfully!' },
-                preserveState: true,
-            })
-        },
         onError: (errors) => {
             console.log('Form errors:', errors)
         },

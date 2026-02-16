@@ -6,6 +6,7 @@ use App\Models\Carrier;
 use App\Models\Location;
 use App\Models\Shipment;
 use App\Models\Template;
+use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
@@ -13,6 +14,7 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
 use Inertia\Inertia;
 use League\Csv\Writer;
+use Log;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 
 class ShipmentController extends Controller
@@ -218,25 +220,30 @@ class ShipmentController extends Controller
             $token = config('services.mapbox.key');
 
             if ($token) {
-                $response = Http::get("https://api.mapbox.com/directions/v5/mapbox/driving/{$coordString}", [
-                    'access_token' => $token,
-                    'geometries' => 'geojson',
-                    'overview' => 'full',
-                ]);
+                try {
+                    $response = Http::get("https://api.mapbox.com/directions/v5/mapbox/driving/{$coordString}", [
+                        'access_token' => $token,
+                        'geometries' => 'geojson',
+                        'overview' => 'full',
+                    ]);
 
-                if ($response->successful() && !empty($response['routes'])) {
-                    $route = $response['routes'][0];
+                    if (!empty($response['routes'])) {
+                        $route = $response['routes'][0];
 
-                    $routeData = [
-                        'route_coords' => $route['geometry']['coordinates'] ?? [],
-                        'total_km' => round($route['distance'] / 1000, 1),
-                        'total_miles' => round(($route['distance'] / 1000) * 0.621371, 1),
-                        'duration' => $this->secondsToHumanTime($route['duration']),
-                        'waypoints' => $waypoints, // for exact marker positions
-                    ];
-                } else {
+                        $routeData = [
+                            'route_coords' => $route['geometry']['coordinates'] ?? [],
+                            'total_km' => round($route['distance'] / 1000, 1),
+                            'total_miles' => round(($route['distance'] / 1000) * 0.621371, 1),
+                            'duration' => $this->secondsToHumanTime($route['duration']),
+                            'waypoints' => $waypoints, // for exact marker positions
+                        ];
+                    } else {
+                        throw new Exception();
+                    }
+                } catch(\Exception $e) {
                     Log::warning("Failed to fetch route for shipment {$shipment->id}");
                 }
+
             }
         }
 

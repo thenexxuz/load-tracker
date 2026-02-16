@@ -3,6 +3,7 @@ import { ref, watch } from 'vue'
 import { Head, useForm } from '@inertiajs/vue3'
 import AdminLayout from '@/layouts/AppLayout.vue'
 import Editor from '@tinymce/tinymce-vue'
+import { Notify } from 'notiflix';
 
 const props = defineProps<{
   template: {
@@ -59,23 +60,7 @@ const submit = () => {
 
   form.put(route('admin.templates.update', props.template.id), {
     data: payload,
-    onSuccess: () => {
-      Swal.fire({
-        icon: 'success',
-        title: 'Updated!',
-        text: 'Template updated successfully.',
-        timer: 3000,
-        showConfirmButton: false,
-        toast: true,
-        position: 'top-end'
-      })
-    },
     onError: (response) => {
-      Swal.fire({
-        icon: 'error',
-        title: 'Error',
-        text: 'Please fix the errors in the form.'
-      })
       console.error('Update error:', response)
     }
   })

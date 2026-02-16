@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { Head } from '@inertiajs/vue3'
-import { computed } from 'vue'
+import { Head, usePage } from '@inertiajs/vue3'
+import { computed, onMounted } from 'vue'
 import AdminLayout from '@/layouts/AppLayout.vue'
+import { Notify } from 'notiflix'
 
 const props = defineProps<{
   template: {
@@ -25,6 +26,23 @@ const props = defineProps<{
 const modelTypeDisplay = computed(() => {
   const type = props.template.model_type.split('\\').pop() || 'Unknown'
   return type
+})
+
+const page = usePage()
+
+onMounted(() => {
+  if (page.props.flash?.success) {
+    Notify.success(page.props.flash.success)
+  }
+  if (page.props.flash?.error) {
+    Notify.failure(page.props.flash.error)
+  }
+  if (page.props.flash?.info) {
+    Notify.info(page.props.flash.info)
+  }
+  if (page.props.flash?.warning) {
+    Notify.warning(page.props.flash.warning)
+  }
 })
 </script>
 

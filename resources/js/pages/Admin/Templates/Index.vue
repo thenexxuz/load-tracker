@@ -1,6 +1,10 @@
 <script setup lang="ts">
-import { Head, router } from '@inertiajs/vue3'
+import { Head, router, usePage } from '@inertiajs/vue3'
 import AdminLayout from '@/layouts/AppLayout.vue'
+import { Confirm, Notify } from 'notiflix';
+import { onMounted } from 'vue';
+
+const page = usePage()
 
 const props = defineProps<{
   templates: {
@@ -29,38 +33,38 @@ const props = defineProps<{
 }>()
 
 const destroy = async (id: number) => {
-  const result = await Swal.fire({
-    title: 'Delete Template?',
-    text: "This action cannot be undone.",
-    icon: 'warning',
-    showCancelButton: true,
-    confirmButtonColor: '#d33',
-    cancelButtonColor: '#3085d6',
-    confirmButtonText: 'Yes, delete it!',
-    cancelButtonText: 'Cancel',
-    reverseButtons: true
-  })
+  const result = await Confirm.show(
+    'Delete Template',
+    'Are you sure you want to delete this template? This action cannot be undone.',
+    'Yes, delete it',
+    'Cancel',
+    () => {
+      router.delete(route('admin.templates.destroy', id), {
+        onSuccess: () => {
+          Notify.success('Template has been deleted.')
+        },
+        onError: () => {
+          Notify.failure('Failed to delete template.')
+        }
+      })
+    },
+    () => {
+      // Cancelled - do nothing
+    },
+    {
+      titleColor: '#ff0000',
+      okButtonBackground: '#ff0000',
+    }
+  )
 
   if (result.isConfirmed) {
     router.delete(route('admin.templates.destroy', id), {
       preserveScroll: true,
       onSuccess: () => {
-        Swal.fire({
-          icon: 'success',
-          title: 'Deleted!',
-          text: 'Template has been deleted.',
-          timer: 2000,
-          showConfirmButton: false,
-          toast: true,
-          position: 'top-end'
-        })
+        Notify.success('Template has been deleted.')
       },
       onError: () => {
-        Swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: 'Failed to delete template.'
-        })
+        Notify.failure('Failed to delete template.')
       }
     })
   }
@@ -89,6 +93,21 @@ const changePerPage = (e: Event) => {
     { preserveState: true, preserveScroll: true, replace: true }
   )
 }
+
+onMounted(() => {
+  if (page.props.flash?.success) {
+    Notify.success(page.props.flash.success)
+  }
+  if (page.props.flash?.error) {
+    Notify.failure(page.props.flash.error)
+  }
+  if (page.props.flash?.info) {
+    Notify.info(page.props.flash.info)
+  }
+  if (page.props.flash?.warning) {
+    Notify.warning(page.props.flash.warning)
+  }
+})
 </script>
 
 <template>

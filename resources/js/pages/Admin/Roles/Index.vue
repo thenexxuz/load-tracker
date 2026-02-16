@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { Head, useForm, router } from '@inertiajs/vue3'
-import { inject, ref } from 'vue'
+import { Head, useForm, router, usePage } from '@inertiajs/vue3'
+import { inject, onMounted, ref } from 'vue'
 
 import AdminLayout from '@/layouts/AppLayout.vue'
+import { Notify } from 'notiflix'
 
 const route = inject('route')!
+
+const page = usePage()
 
 const props = defineProps<{
     roles: any[]
@@ -110,6 +113,21 @@ const cancelDelete = () => {
     showDeleteModal.value = false
     roleToDelete.value = null
 }
+
+onMounted(() => {
+    if (page.props.flash?.success) {
+        Notify.success(page.props.flash.success)
+    }
+    if (page.props.flash?.error) {
+        Notify.failure(page.props.flash.error)
+    }
+    if (page.props.flash?.info) {
+        Notify.info(page.props.flash.info)
+    }
+    if (page.props.flash?.warning) {
+        Notify.warning(page.props.flash.warning)
+    }
+})
 </script>
 
 <template>

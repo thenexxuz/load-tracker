@@ -4,6 +4,7 @@ import { computed, onUnmounted, onMounted, ref } from 'vue'
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import AdminLayout from '@/layouts/AppLayout.vue'
+import { Notify } from 'notiflix'
 
 const props = defineProps<{
   shipment: {
@@ -125,34 +126,33 @@ onUnmounted(() => {
 })
 
 const deleteShipment = async () => {
-  const result = await Swal.fire({
-    title: 'Delete Shipment?',
-    text: "This action cannot be undone.",
-    icon: 'warning',
-    showCancelButton: true,
-    confirmButtonColor: '#d33',
-    cancelButtonColor: '#3085d6',
-    confirmButtonText: 'Yes, delete it!',
-    cancelButtonText: 'Cancel',
-    reverseButtons: true
-  })
-
-  if (result.isConfirmed) {
-    router.delete(route('admin.shipments.destroy', shipment.id), {
-      onSuccess: () => {
-        Swal.fire({
-          icon: 'success',
-          title: 'Deleted!',
-          text: 'Shipment has been deleted.',
-          timer: 2000,
-          showConfirmButton: false,
-          toast: true,
-          position: 'top-end'
-        })
-        router.visit(route('admin.shipments.index'))
-      }
-    })
-  }
+  const result = await Notify.confirm(
+    'Delete Shipment',
+    'Are you sure you want to delete this shipment? This action cannot be undone.',
+    'Yes, delete it',
+    'Cancel',
+    () => {
+      router.delete(
+        route('admin.shipments.destroy', shipment.id),
+        {
+          onSuccess: () => {
+            Notify.success('Shipment has been deleted.')
+            router.visit(route('admin.shipments.index'))
+          },
+          onError: () => {
+            Notify.failure('Failed to delete shipment.')
+          }
+        }
+      )
+    },
+    () => {
+      // Cancelled - do nothing
+    },
+    {
+      titleColor: '#ff0000',
+      okButtonBackground: '#ff0000',
+    }
+  )
 }
 
 // Date formatting helper

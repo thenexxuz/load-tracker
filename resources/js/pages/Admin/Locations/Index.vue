@@ -1,7 +1,10 @@
 <script setup lang="ts">
-import { Head, Link, router } from '@inertiajs/vue3'
+import { Head, Link, router, usePage } from '@inertiajs/vue3'
 import AdminLayout from '@/layouts/AppLayout.vue'
-import { ref, watch } from 'vue'
+import { onMounted, ref, watch } from 'vue'
+import { Confirm, Notify } from 'notiflix';
+
+const page = usePage()
 
 const props = defineProps<{
   locations: {
@@ -57,27 +60,45 @@ const changePage = (url: string | null) => {
 
 // Delete with confirmation
 const destroy = (id: number) => {
-  Swal.fire({
-    title: 'Are you sure?',
-    text: 'This location will be deleted permanently!',
-    icon: 'warning',
-    showCancelButton: true,
-    confirmButtonColor: '#d33',
-    cancelButtonColor: '#3085d6',
-    confirmButtonText: 'Yes, delete it!',
-  }).then((result) => {
-    if (result.isConfirmed) {
+  Confirm.show(
+    'Delete Location',
+    'Are you sure you want to delete this location? This action cannot be undone.',
+    'Yes, delete it',
+    'Cancel',
+    () => {
       router.delete(route('admin.locations.destroy', id), {
         onSuccess: () => {
-          Swal.fire('Deleted!', 'Location has been deleted.', 'success')
+          Notify.success('Location has been deleted.')
         },
         onError: () => {
-          Swal.fire('Error', 'Something went wrong.', 'error')
-        },
+          Notify.failure('Failed to delete location.')
+        }
       })
+    },
+    () => {
+      // Cancelled - do nothing
+    },
+    {
+      titleColor: '#ff0000',
+      okButtonBackground: '#ff0000',
     }
-  })
+  )
 }
+
+onMounted(() => {
+  if (page.props.flash?.success) {
+    Notify.success(page.props.flash.success)
+  }
+  if (page.props.flash?.error) {
+    Notify.failure(page.props.flash.error)
+  }
+  if (page.props.flash?.info) {
+    Notify.info(page.props.flash.info)
+  }
+  if (page.props.flash?.warning) {
+    Notify.warning(page.props.flash.warning)
+  }
+})
 </script>
 
 <template>

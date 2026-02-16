@@ -2,6 +2,7 @@
 import { Head, useForm, usePage } from '@inertiajs/vue3'
 import { ref } from 'vue'
 import AdminLayout from '@/layouts/AppLayout.vue'
+import { Notify } from 'notiflix';
 
 const props = defineProps<{
   shipment: {
@@ -89,24 +90,6 @@ const submit = () => {
 
   form.put(route('admin.shipments.update', props.shipment.id), {
     data: payload,
-    onSuccess: () => {
-      Swal.fire({
-        icon: 'success',
-        title: 'Success!',
-        text: 'Shipment updated successfully.',
-        timer: 3000,
-        showConfirmButton: false,
-        toast: true,
-        position: 'top-end'
-      })
-    },
-    onError: () => {
-      Swal.fire({
-        icon: 'error',
-        title: 'Error',
-        text: 'Please fix the errors in the form.'
-      })
-    },
     onFinish: () => {
       form.processing = false
     }

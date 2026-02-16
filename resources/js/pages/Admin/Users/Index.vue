@@ -2,8 +2,10 @@
 import AdminLayout from '@/layouts/AppLayout.vue'
 import { Head, router, usePage } from '@inertiajs/vue3'
 import { onMounted } from 'vue'
+import { Confirm } from 'notiflix/build/notiflix-confirm-aio';
+import { Notify } from 'notiflix/build/notiflix-notify-aio';
 
-defineProps<{
+const props = defineProps<{
     users: Array<{
         id: number
         name: string
@@ -11,63 +13,21 @@ defineProps<{
         roles: string[]
         edit_url: string
     }>
+    flash?: Array<{
+        success?: string
+        error?: string
+    }>
 }>()
 
 const page = usePage()
 
 // Show flashed success message on page load (e.g. after update)
 onMounted(() => {
-    if (page.props.flash?.success) {
-        Swal.fire({
-            icon: 'success',
-            title: 'Success!',
-            text: page.props.flash.success,
-            timer: 3000,
-            showConfirmButton: false,
-            toast: true,
-            position: 'top-end'
-        })
+    const flash = props?.flash
+    if (flash?.success) {
+        Notify.success(flash.success)
     }
 })
-
-// SweetAlert2-powered delete confirmation
-const destroy = async (id: number) => {
-    const result = await Swal.fire({
-        title: 'Delete User?',
-        text: "This action cannot be undone.",
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#d33',
-        cancelButtonColor: '#3085d6',
-        confirmButtonText: 'Yes, delete it!',
-        cancelButtonText: 'Cancel',
-        reverseButtons: true
-    })
-
-    if (result.isConfirmed) {
-        router.delete(route('admin.users.destroy', id), {
-            onSuccess: () => {
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Deleted!',
-                    text: 'User has been deleted.',
-                    timer: 2000,
-                    showConfirmButton: false,
-                    toast: true,
-                    position: 'top-end'
-                })
-            },
-            onError: () => {
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Error',
-                    text: 'Failed to delete user.'
-                })
-            },
-            preserveScroll: true,
-        })
-    }
-}
 </script>
 
 <template>

@@ -2,6 +2,7 @@
 import { Head, useForm } from '@inertiajs/vue3'
 import AdminLayout from '@/layouts/AppLayout.vue'
 import { ref } from 'vue'
+import { Notify } from 'notiflix';
 
 const props = defineProps<{
   shipment: {
@@ -113,23 +114,23 @@ const bolFileSelected = (e) => {
 // Submit paperwork
 const submit = () => {
   if (!form.template_id) {
-    Swal.fire('Error', 'Please select a template.', 'error')
+    Notify.failure('Please select a template before sending paperwork.')
     return
   }
 
   if (!form.lrc_file && !form.bol_file) {
-    Swal.fire('Error', 'Please upload at least one file.', 'error')
+    Notify.failure('Please upload at least both documents (LRC or BOL) before sending paperwork.')
     return
   }
 
   form.post(route('admin.shipments.send-paperwork', props.shipment.id), {
     forceFormData: true, // important for file uploads
     onSuccess: () => {
-      Swal.fire('Success', 'Paperwork sent successfully!', 'success')
+      Notify.success('Paperwork sent successfully.')
       form.reset()
     },
     onError: (response) => {
-      Swal.fire('Error', 'Failed to send paperwork. Check the form.', 'error')
+      Notify.failure('Failed to send paperwork. Please check the form for errors.')
       console.error('Send paperwork error:', response)
     }
   })

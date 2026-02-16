@@ -6,6 +6,7 @@ import { route } from 'ziggy-js'
 
 
 import AdminLayout from '@/layouts/AppLayout.vue'
+import { Confirm, Notify } from 'notiflix'
 
 const props = defineProps<{
   carriers: {
@@ -60,11 +61,7 @@ const handleFileChange = (event: Event) => {
 
 const importFile = () => {
   if (!importForm.file) {
-    Swal.fire({
-      icon: 'warning',
-      title: 'No file selected',
-      text: 'Please choose a TSV file first.',
-    })
+    Notify.failure('Please select a file to import.')
     return
   }
 
@@ -75,15 +72,7 @@ const importFile = () => {
       showImportModal.value = false
       selectedFile.value = null
       importForm.reset()
-      Swal.fire({
-        icon: 'success',
-        title: 'Imported!',
-        text: 'Carriers imported successfully.',
-        timer: 3000,
-        showConfirmButton: false,
-        toast: true,
-        position: 'top-end'
-      })
+      Notify.success('Carriers imported successfully.')
       router.reload({ only: ['carriers'] })
     },
     onError: (errors) => {
@@ -91,11 +80,8 @@ const importFile = () => {
       if (typeof errors === 'object' && errors !== null) {
         errorMessage = Object.values(errors).join('<br>')
       }
-      Swal.fire({
-        icon: 'error',
-        title: 'Import Failed',
-        html: errorMessage
-      })
+      Notify.failure(errorMessage)
+      console.log('Import errors:', errors)
     }
   })
 }
@@ -113,55 +99,43 @@ const exportCarriers = () => {
 
 // Delete
 const destroy = async (id: number) => {
-  const result = await Swal.fire({
-    title: 'Delete Carrier?',
-    text: "This action cannot be undone.",
-    icon: 'warning',
-    showCancelButton: true,
-    confirmButtonColor: '#d33',
-    cancelButtonColor: '#3085d6',
-    confirmButtonText: 'Yes, delete it!',
-    cancelButtonText: 'Cancel',
-    reverseButtons: true
-  })
-
-  if (result.isConfirmed) {
-    router.delete(route('admin.carriers.destroy', id), {
-      onSuccess: () => {
-        Swal.fire({
-          icon: 'success',
-          title: 'Deleted!',
-          text: 'Carrier has been deleted.',
-          timer: 2000,
-          showConfirmButton: false,
-          toast: true,
-          position: 'top-end'
-        })
-      },
-      onError: () => {
-        Swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: 'Failed to delete carrier.'
-        })
-      },
-      preserveScroll: true,
-    })
-  }
+  const result = await Confirm.show(
+    'Delete Carrier',
+    'Are you sure you want to delete this carrier? This action cannot be undone.',
+    'Yes, delete it',
+    'Cancel',
+    () => {
+      router.delete(route('admin.carriers.destroy', id), {
+        onSuccess: () => {
+          Notify.success('Carrier has been deleted.')
+        },
+        onError: () => {
+          Notify.failure('Failed to delete carrier.')
+        }
+      })
+    },
+    () => {
+      // Cancelled - do nothing
+    },
+    {
+      titleColor: '#ff0000',
+      okButtonBackground: '#ff0000',
+    }
+  )
 }
 
-// Flash success
 onMounted(() => {
   if (page.props.flash?.success) {
-    Swal.fire({
-      icon: 'success',
-      title: 'Success!',
-      text: page.props.flash.success,
-      timer: 3000,
-      showConfirmButton: false,
-      toast: true,
-      position: 'top-end'
-    })
+    Notify.success(page.props.flash.success)
+  }
+  if (page.props.flash?.error) {
+      Notify.failure(page.props.flash.error)
+  }
+  if (page.props.flash?.info) {
+      Notify.info(page.props.flash.info)
+  }
+  if (page.props.flash?.warning) {
+      Notify.warning(page.props.flash.warning)
   }
 })
 

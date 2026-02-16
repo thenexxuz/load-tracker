@@ -41,7 +41,8 @@ class RateController extends Controller
 
         Rate::create($validated);
 
-        return redirect()->route('admin.rates.index')->with('success', 'Rate created successfully.');
+        return redirect()->route('admin.rates.index')
+            ->with('success', 'Rate created successfully.');
     }
 
     public function show(Rate $rate)
@@ -78,7 +79,8 @@ class RateController extends Controller
 
         $rate->update($validated);
 
-        return redirect()->route('admin.rates.index')->with('success', 'Rate updated successfully.');
+        return redirect()->route('admin.rates.show', $rate->id)
+            ->with('success', 'Rate updated successfully.');
     }
 
     public function destroy(Rate $rate)

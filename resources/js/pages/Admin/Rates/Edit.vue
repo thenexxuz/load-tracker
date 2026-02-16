@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, useForm } from '@inertiajs/vue3'
 import AdminLayout from '@/layouts/AppLayout.vue'
+import { Notify } from 'notiflix';
 
 const props = defineProps<{
   rate: {
@@ -23,26 +24,7 @@ const form = useForm({
 })
 
 const submit = () => {
-  form.put(route('admin.rates.update', props.rate.id), {
-    onSuccess: () => {
-      Swal.fire({
-        icon: 'success',
-        title: 'Updated!',
-        text: 'Rate updated successfully.',
-        timer: 3000,
-        showConfirmButton: false,
-        toast: true,
-        position: 'top-end'
-      })
-    },
-    onError: () => {
-      Swal.fire({
-        icon: 'error',
-        title: 'Error',
-        text: 'Please fix the errors in the form.'
-      })
-    }
-  })
+  form.put(route('admin.rates.update', props.rate.id))
 }
 </script>
 

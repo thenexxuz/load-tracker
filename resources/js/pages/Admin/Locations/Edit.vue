@@ -3,6 +3,7 @@ import { Head, router, useForm } from '@inertiajs/vue3';
 import { watch } from 'vue'
 
 import AdminLayout from '@/layouts/AppLayout.vue'
+import { Notify } from 'notiflix';
 
 const props = defineProps<{
     location: {
@@ -51,12 +52,6 @@ const form = useForm({
 
 const submit = () => {
     form.put(route('admin.locations.update', props.location.id), {
-        onSuccess: () => {
-            router.visit(route('admin.locations.index'), {
-                data: { success: 'Location updated successfully!' },
-                preserveState: true,
-            })
-        },
         onError: (errors) => {
             console.log('Form errors:', errors)
         },

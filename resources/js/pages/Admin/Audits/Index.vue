@@ -3,6 +3,7 @@ import { Head, router, usePage } from '@inertiajs/vue3'
 import { ref, watch, onMounted } from 'vue'
 
 import AdminLayout from '@/layouts/AppLayout.vue'
+import { Notify } from 'notiflix';
 
 const props = defineProps<{
     logs: {
@@ -45,15 +46,16 @@ watch([search, modelFilter], () => {
 // Show success message from flash
 onMounted(() => {
     if (page.props.flash?.success) {
-        Swal.fire({
-            icon: 'success',
-            title: 'Success!',
-            text: page.props.flash.success,
-            timer: 3000,
-            showConfirmButton: false,
-            toast: true,
-            position: 'top-end'
-        })
+        Notify.success(page.props.flash.success)
+    }
+    if (page.props.flash?.error) {
+        Notify.failure(page.props.flash.error)
+    }
+    if (page.props.flash?.info) {
+        Notify.info(page.props.flash.info)
+    }
+    if (page.props.flash?.warning) {
+        Notify.warning(page.props.flash.warning)
     }
 })
 </script>

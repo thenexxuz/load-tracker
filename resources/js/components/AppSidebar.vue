@@ -11,6 +11,7 @@ import {
   NotepadTextDashed,
   Ruler,
   Locate,
+  AtSign,
 } from 'lucide-vue-next'
 import { ref, computed } from 'vue'
 import { route } from 'ziggy-js'
@@ -47,6 +48,9 @@ const hasShipmentAccess = userRoles.includes('administrator') || userRoles.inclu
 const isOnLocations = computed(() => {
   return route().current('admin.locations.*')
 })
+const isOnUsers = computed(() => {
+  return (route().current('admin.users.*') || route().current('admin.roles.*'))
+})
 
 const mainNavItems: NavItem[] = [
   {
@@ -66,6 +70,13 @@ const mainNavItems: NavItem[] = [
         title: 'User Management',
         href: route('admin.users.index'),
         icon: User,
+      }]
+    : []),
+  ...(hasUserAccess && isOnUsers.value
+    ? [{
+        title: 'Role Management',
+        href: route('admin.roles.index'),
+        icon: AtSign,
       }]
     : []),
   ...(hasCarrierAccess

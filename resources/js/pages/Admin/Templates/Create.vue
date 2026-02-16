@@ -3,6 +3,7 @@ import { ref, watch } from 'vue'
 import { Head, useForm } from '@inertiajs/vue3'
 import AdminLayout from '@/layouts/AppLayout.vue'
 import Editor from '@tinymce/tinymce-vue'
+import { Notify } from 'notiflix';
 
 const props = defineProps<{
   carriers: Array<{ id: number; name: string; short_code: string }>
@@ -52,24 +53,8 @@ const submit = () => {
   form.post(route('admin.templates.store'), {
     data: payload,
     onSuccess: () => {
-      Swal.fire({
-        icon: 'success',
-        title: 'Created!',
-        text: 'Template created successfully.',
-        timer: 3000,
-        showConfirmButton: false,
-        toast: true,
-        position: 'top-end'
-      })
       form.reset()
       form.message = '<p>Start typing your message here...</p>'
-    },
-    onError: () => {
-      Swal.fire({
-        icon: 'error',
-        title: 'Error',
-        text: 'Please fix the errors in the form.'
-      })
     }
   })
 }

@@ -2,6 +2,7 @@
 import { Head, useForm } from '@inertiajs/vue3'
 import { ref } from 'vue'
 import AdminLayout from '@/layouts/AppLayout.vue'
+import { Notify } from 'notiflix';
 
 const props = defineProps<{
   pickupLocations: Array<{ id: number; short_code: string; name: string | null }>
@@ -50,23 +51,7 @@ const clearDate = (field: keyof typeof form) => {
 const submit = () => {
   form.post(route('admin.shipments.store'), {
     onSuccess: () => {
-      Swal.fire({
-        icon: 'success',
-        title: 'Created!',
-        text: 'Shipment created successfully.',
-        timer: 3000,
-        showConfirmButton: false,
-        toast: true,
-        position: 'top-end'
-      })
       form.reset()
-    },
-    onError: () => {
-      Swal.fire({
-        icon: 'error',
-        title: 'Error',
-        text: 'Please fix the errors in the form.'
-      })
     }
   })
 }

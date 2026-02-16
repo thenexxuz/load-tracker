@@ -147,7 +147,8 @@ class LocationController extends Controller
             }
         }
 
-        return redirect()->route('admin.locations.show', $location);
+        return redirect()->route('admin.locations.show', $location)
+            ->with('success', 'Location updated successfully.');
     }
 
     /**

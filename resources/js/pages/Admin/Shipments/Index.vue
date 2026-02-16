@@ -5,7 +5,7 @@ import { onClickOutside } from '@vueuse/core'
 import { ref, watch, onMounted, computed, nextTick } from 'vue'
 
 import AdminLayout from '@/layouts/AppLayout.vue'
-
+import { Notify } from 'notiflix'
 
 const props = defineProps<{
   shipments: {
@@ -258,11 +258,7 @@ const handlePbiFileChange = (event: Event) => {
 
 const importPbiFile = () => {
   if (!pbiImportForm.file) {
-    Swal.fire({
-      icon: 'warning',
-      title: 'No file selected',
-      text: 'Please choose an XLSX file first.',
-    })
+    Notify.failure('Please select a file to import.')
     return
   }
 
@@ -273,15 +269,7 @@ const importPbiFile = () => {
       showPbiImportModal.value = false
       selectedPbiFile.value = null
       pbiImportForm.reset()
-      Swal.fire({
-        icon: 'success',
-        title: 'Imported!',
-        text: 'Shipments imported from PBI successfully.',
-        timer: 3000,
-        showConfirmButton: false,
-        toast: true,
-        position: 'top-end'
-      })
+      Notify.success('PBI import successful. Shipments have been updated.')
       router.reload({ only: ['shipments'] })
     },
     onError: (errors) => {
@@ -289,82 +277,50 @@ const importPbiFile = () => {
       if (typeof errors === 'object' && errors !== null) {
         errorMessage = Object.values(errors).join('<br>')
       }
-      Swal.fire({
-        icon: 'error',
-        title: 'PBI Import Failed',
-        html: errorMessage
-      })
+      Notify.failure(errorMessage)
     }
   })
 }
 
 // ── Delete ──────────────────────────────────────────────────────────────
 const destroy = async (id: number) => {
-  const result = await Swal.fire({
-    title: 'Delete Shipment?',
-    text: "This action cannot be undone.",
-    icon: 'warning',
-    showCancelButton: true,
-    confirmButtonColor: '#d33',
-    cancelButtonColor: '#3085d6',
-    confirmButtonText: 'Yes, delete it!',
-    cancelButtonText: 'Cancel',
-    reverseButtons: true
-  })
-
-  if (result.isConfirmed) {
-    router.delete(route('admin.shipments.destroy', id), {
-      onSuccess: () => {
-        Swal.fire({
-          icon: 'success',
-          title: 'Deleted!',
-          text: 'Shipment has been deleted.',
-          timer: 2000,
-          showConfirmButton: false,
-          toast: true,
-          position: 'top-end'
-        })
-      },
-      onError: () => {
-        Swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: 'Failed to delete shipment.'
-        })
-      },
-      preserveScroll: true,
-    })
-  }
+  const result = await Notify.confirm(
+    'Delete Template',
+    'Are you sure you want to delete this template? This action cannot be undone.',
+    'Yes, delete it',
+    'Cancel',
+    () => {
+      router.delete(route('admin.templates.destroy', id), {
+        onSuccess: () => {
+          Notify.success('Template has been deleted.')
+        },
+        onError: () => {
+          Notify.failure('Failed to delete template.')
+        }
+      })
+    },
+    () => {
+      // Cancelled - do nothing
+    },
+    {
+      titleColor: '#ff0000',
+      okButtonBackground: '#ff0000',
+    }
+  )
 }
 
-// ── Flash messages ──────────────────────────────────────────────────────
 onMounted(() => {
   if (page.props.flash?.success) {
-    Swal.fire({
-      icon: 'success',
-      title: 'Success!',
-      text: page.props.flash.success,
-      timer: 3000,
-      toast: true,
-      position: 'top-end'
-    })
+    Notify.success(page.props.flash.success)
   }
-
+  if (page.props.flash?.error) {
+    Notify.failure(page.props.flash.error)
+  }
+  if (page.props.flash?.info) {
+    Notify.info(page.props.flash.info)
+  }
   if (page.props.flash?.warning) {
-    Swal.fire({
-      icon: 'warning',
-      title: 'Partial Import Warning',
-      html: `${page.props.flash.warning}<br><br>
-             <a href="${route('admin.shipments.download-failed-tsv')}"
-                class="underline font-bold text-blue-600 dark:text-blue-400 hover:text-blue-800">
-               Download Failed Rows TSV
-             </a>`,
-      timer: 8000,
-      showConfirmButton: false,
-      toast: true,
-      position: 'top-end',
-      allowOutsideClick: true
-    })
+    Notify.warning(page.props.flash.warning)
   }
 })
 

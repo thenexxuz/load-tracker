@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3'
+import { Head, Link, usePage } from '@inertiajs/vue3'
 import { onMounted, ref, onUnmounted } from 'vue'
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import { route } from 'ziggy-js'
 import AdminLayout from '@/layouts/AppLayout.vue'
+import { Notify } from 'notiflix'
 
 const props = defineProps<{
   location: {
@@ -70,6 +71,23 @@ onMounted(() => {
 
 onUnmounted(() => {
   map?.remove()
+})
+
+const page = usePage()
+
+onMounted(() => {
+  if (page.props.flash?.success) {
+    Notify.success(page.props.flash.success)
+  }
+  if (page.props.flash?.error) {
+    Notify.failure(page.props.flash.error)
+  }
+  if (page.props.flash?.info) {
+    Notify.info(page.props.flash.info)
+  }
+  if (page.props.flash?.warning) {
+    Notify.warning(page.props.flash.warning)
+  }
 })
 </script>
 

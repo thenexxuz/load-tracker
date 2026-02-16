@@ -2,6 +2,7 @@
 import { Head, useForm, router } from '@inertiajs/vue3'
 import { watch } from 'vue'
 import AdminLayout from '@/layouts/AppLayout.vue'
+import { Notify } from 'notiflix';
 
 defineProps<{
     availableRecyclingLocations: Array<{
@@ -32,9 +33,7 @@ const submit = () => {
     form.post(route('admin.locations.store'), {
         onSuccess: () => {
             form.reset()
-            router.visit(route('admin.locations.index'), {
-                preserveState: true,
-            })
+            form.type = 'pickup'
         },
         onError: (errors) => {
             console.log('Form errors:', errors)

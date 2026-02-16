@@ -21,7 +21,8 @@ class RoleController extends Controller
         $role = Role::create(['name' => $request->name]);
         $role->syncPermissions($request->permissions ?? []);
 
-        return redirect()->route('admin.roles.index');
+        return redirect()->route('admin.roles.index')
+            ->with('success', 'Role created successfully.');
     }
 
     public function edit(Role $role)
@@ -43,7 +44,7 @@ class RoleController extends Controller
         $role->update(['name' => $request->name]);
         $role->syncPermissions($request->permissions ?? []);
 
-        return redirect()->route('admin.roles.index')
+        return redirect()->route('admin.roles.show', $role->id)
             ->with('success', 'Role updated.');
     }
 
@@ -54,6 +55,7 @@ class RoleController extends Controller
         }
         $role->delete();
 
-        return redirect()->route('admin.roles.index')->with('success', 'Role deleted.');
+        return redirect()->route('admin.roles.index')
+            ->with('success', 'Role deleted.');
     }
 }
