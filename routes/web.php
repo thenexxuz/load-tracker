@@ -4,6 +4,7 @@ use App\Http\Controllers\AuditController;
 use App\Http\Controllers\CarrierController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\LocationController;
+use App\Http\Controllers\NoteController;
 use App\Http\Controllers\RateController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\ShipmentController;
@@ -71,6 +72,12 @@ Route::middleware(['auth', 'role:administrator|supervisor|truckload|carrier'])->
         return redirect()->route('admin.shipments.index');
     });
     Route::resource('shipments', ShipmentController::class);
+});
+
+Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () {
+    // Note Routes
+    Route::post('notes', [NoteController::class, 'store'])->name('notes.store');
+    Route::delete('notes/{note}', [NoteController::class, 'destroy'])->name('notes.destroy');
 });
 
 require __DIR__.'/settings.php';

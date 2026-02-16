@@ -28,4 +28,9 @@ class Template extends Model
     {
         return $this->model;
     }
+
+    public function notes()
+    {
+        return $this->morphMany(Note::class, 'notable');
+    }
 }

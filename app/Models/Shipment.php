@@ -169,4 +169,9 @@ class Shipment extends Model
         return $this->hasMany(Shipment::class, 'consolidation_number', 'consolidation_number')
             ->where('id', '!=', $this->id);
     }
+
+    public function notes()
+    {
+        return $this->morphMany(Note::class, 'notable');
+    }
 }

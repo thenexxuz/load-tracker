@@ -67,6 +67,7 @@ class CarrierController extends Controller
 
     public function show(Carrier $carrier)
     {
+        $carrier->load('notes.user'); // Load notes for display on the show page
         return Inertia::render('Admin/Carriers/Show', [
             'carrier' => $carrier,
         ]);

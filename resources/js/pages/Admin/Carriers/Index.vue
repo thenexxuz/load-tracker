@@ -4,7 +4,6 @@ import { useForm } from '@inertiajs/vue3'
 import { ref, watch, onMounted } from 'vue'
 import { route } from 'ziggy-js'
 
-
 import AdminLayout from '@/layouts/AppLayout.vue'
 import { Confirm, Notify } from 'notiflix'
 
@@ -129,13 +128,13 @@ onMounted(() => {
     Notify.success(page.props.flash.success)
   }
   if (page.props.flash?.error) {
-      Notify.failure(page.props.flash.error)
+    Notify.failure(page.props.flash.error)
   }
   if (page.props.flash?.info) {
-      Notify.info(page.props.flash.info)
+    Notify.info(page.props.flash.info)
   }
   if (page.props.flash?.warning) {
-      Notify.warning(page.props.flash.warning)
+    Notify.warning(page.props.flash.warning)
   }
 })
 
@@ -178,6 +177,11 @@ const changePerPage = (e: Event) => {
     { search: search.value || null, per_page: value, page: 1 },
     { preserveState: true, preserveScroll: true, replace: true }
   )
+}
+
+// Navigate to Carrier Show page
+const goToShow = (id: number) => {
+  router.visit(route('admin.carriers.show', id))
 }
 
 const { auth } = usePage().props
@@ -322,45 +326,42 @@ const hasAdminAccess = userRoles.includes('administrator') || userRoles.includes
         </p>
       </div>
 
-      <!-- Table -->
+      <!-- Table – rows are clickable -->
       <div v-else class="overflow-x-auto">
         <table class="w-full border-collapse bg-white dark:bg-gray-800 rounded-t-lg overflow-hidden shadow-md dark:shadow-gray-900/30">
           <thead>
             <tr class="bg-gray-100 dark:bg-gray-700 text-left">
               <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300">Short Code</th>
               <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300">Name</th>
-              <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300">Contact Name</th>
               <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300">Emails</th>
-              <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300">Phone</th>
               <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300">Active</th>
               <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300 text-center">Actions</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-            <tr v-for="carrier in carriers.data" :key="carrier.id">
+            <tr
+              v-for="carrier in carriers.data"
+              :key="carrier.id"
+              class="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer transition-colors"
+              @click="goToShow(carrier.id)"
+            >
               <td class="px-6 py-4 text-gray-900 dark:text-gray-100 font-medium">
                 {{ carrier.short_code }}
               </td>
               <td class="px-6 py-4 text-gray-600 dark:text-gray-400">
                 {{ carrier.name }}
               </td>
-              <td class="px-6 py-4 text-gray-600 dark:text-gray-400">
-                {{ carrier.contact_name || '—' }}
-              </td>
               <td class="px-6 py-4 text-gray-600 dark:text-gray-400 group relative cursor-help">
                 <span :title="getEmailInfo(carrier.emails).tooltip">
                   {{ getEmailInfo(carrier.emails).count }}
                 </span>
-              </td>
-              <td class="px-6 py-4 text-gray-600 dark:text-gray-400">
-                {{ carrier.phone || '—' }}
               </td>
               <td class="px-6 py-4 text-center">
                 <span :class="carrier.is_active ? 'text-green-600 dark:text-green-400 font-medium' : 'text-red-600 dark:text-red-400 font-medium'">
                   {{ carrier.is_active ? 'Yes' : 'No' }}
                 </span>
               </td>
-              <td class="px-6 py-4 text-center space-x-5">
+              <td class="px-6 py-4 text-center space-x-5" @click.stop>
                 <a
                   :href="route('admin.carriers.edit', carrier.id)"
                   class="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 transition-colors"

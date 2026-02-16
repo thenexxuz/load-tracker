@@ -163,4 +163,9 @@ class Carrier extends Model
     {
         return $this->hasMany(User::class);
     }
+
+    public function notes()
+    {
+        return $this->morphMany(Note::class, 'notable');
+    }
 }

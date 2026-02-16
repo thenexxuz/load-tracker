@@ -272,4 +272,9 @@ class Location extends Model
             return null;
         return Carbon::parse($value)->format('H:i'); // 24-hour format: 08:00, 14:30
     }
+
+    public function notes()
+    {
+        return $this->morphMany(Note::class, 'notable');
+    }
 }

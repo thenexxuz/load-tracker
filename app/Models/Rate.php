@@ -31,4 +31,9 @@ class Rate extends Model
     {
         return $this->belongsTo(Location::class, 'dc_location_id');
     }
+
+    public function notes()
+    {
+        return $this->morphMany(Note::class, 'notable');
+    }
 }
