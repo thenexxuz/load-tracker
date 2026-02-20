@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Note;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -173,5 +174,62 @@ class Shipment extends Model
     public function notes()
     {
         return $this->morphMany(Note::class, 'notable');
+    }
+
+    public function calculateBol()
+    {
+        try {
+            $tracking = (string) $this->shipment_number;
+            if (empty($tracking)) {
+                \Log::warning("No tracking number for model {$this->id}");
+                return null;
+            }
+
+            $payload = [
+                'trackMode'  => 'Domestic',
+                'trackBy'    => 'reference',
+                'trackingNo' => $tracking,
+            ];
+
+            \Log::debug('Pegasus request details', [
+                'url'     => 'https://partners.pegasuslogistics.com/api/getbasictrackingdetails',
+                'payload' => $payload,
+                'as_json' => json_encode($payload),
+            ]);
+
+            $response = \Http::withHeaders(
+                [
+                    'Referer'         => 'https://partners.pegasuslogistics.com/',
+                    'accept'          => 'application/json',
+                ])
+                ->post(
+                    'https://partners.pegasuslogistics.com/api/getbasictrackingdetails',
+                    $payload
+                );
+
+            \Log::debug('Pegasus response', [
+                'status' => $response->status(),
+                'headers' => $response->headers(),
+                'body'   => $response->body(),
+            ]);
+
+            if ($response->successful()) {
+                $data = $response->json();
+                if (is_array($data) && count($data) > 0) {
+                    \Log::info('BOL fetched successfully: ' . $data[0]['housebill']);
+                    $this->bol = $data[0]['housebill'] ?? null;
+                    $this->save();
+                    return $data[0]['housebill'] ?? null;
+                }
+                \Log::warning('BOL response is empty or not an array: ' . $response->body());
+                return null;
+            } else {
+                \Log::error('Failed to fetch BOL: ' . $response->body());
+                return null;
+            }
+        } catch (\Exception $e) {
+            \Log::error('Exception in calculateBol: ' . $e->getMessage());
+            return null;
+        }
     }
 }

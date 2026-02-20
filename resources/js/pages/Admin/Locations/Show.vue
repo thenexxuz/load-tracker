@@ -5,6 +5,7 @@ import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import { route } from 'ziggy-js'
 import AdminLayout from '@/layouts/AppLayout.vue'
+import NotesSection from '@/components/NotesSection.vue'
 import { Notify } from 'notiflix'
 
 const props = defineProps<{
@@ -211,6 +212,12 @@ onMounted(() => {
           </div>
         </div>
       </div>
+
+      <NotesSection
+        :entity="location"
+        entity-type="App\Models\Location"
+        entity-prop-key="location"
+      />
     </div>
   </AdminLayout>
 </template>

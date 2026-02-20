@@ -67,10 +67,7 @@ Route::middleware(['auth', 'role:administrator|supervisor|truckload|carrier'])->
     Route::get('shipments/failed-tsv', [ShipmentController::class, 'downloadFailedTsv'])->name('shipments.download-failed-tsv');
     Route::post('shipments/{shipment}/send-paperwork', [ShipmentController::class, 'processSendPaperwork'])->name('shipments.process-send-paperwork');
     Route::get('shipments/{shipment}/send-paperwork', [ShipmentController::class, 'sendPaperwork'])->name('shipments.send-paperwork');
-    Route::post('shipments/filter', [ShipmentController::class, 'index'])->name('shipments.filter');
-    Route::get('shipments/filter', function () {
-        return redirect()->route('admin.shipments.index');
-    });
+    Route::get('shipments/{shipment}/calculate-bol', [ShipmentController::class, 'calculateBol'])->name('shipments.calculate-bol');
     Route::resource('shipments', ShipmentController::class);
 });
 

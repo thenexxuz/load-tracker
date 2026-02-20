@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Note;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
@@ -46,6 +47,16 @@ class Carrier extends Model
     public function shipments()
     {
         return $this->hasMany(Shipment::class);
+    }
+
+    public function users()
+    {
+        return $this->hasMany(User::class);
+    }
+
+    public function notes()
+    {
+        return $this->morphMany(Note::class, 'notable');
     }
 
     // ────────────────────────────────────────────────────────────────────────────────
@@ -157,15 +168,5 @@ class Carrier extends Model
     public function getDescriptionForEvent(string $eventName): string
     {
         return "This carrier has been {$eventName}";
-    }
-
-    public function users()
-    {
-        return $this->hasMany(User::class);
-    }
-
-    public function notes()
-    {
-        return $this->morphMany(Note::class, 'notable');
     }
 }

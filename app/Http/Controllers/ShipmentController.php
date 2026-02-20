@@ -18,95 +18,119 @@ use Log;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 
 class ShipmentController extends Controller
+{public function index(Request $request)
 {
-    public function index(Request $request)
-    {
-        $validated = $request->validate([
-            'per_page' => 'nullable|integer|min:1|max:25',
-            'search' => 'nullable|string|max:500',
-        ]);
+    $validated = $request->validate([
+        'per_page' => 'nullable|integer|min:1|max:25',
+        'search' => 'nullable|string|max:500',
+        'excluded_statuses' => 'nullable|array',
+        'excluded_statuses.*' => 'string',
+        'excluded_pickup_locations' => 'nullable|array',
+        'excluded_pickup_locations.*' => 'string',
+        'excluded_dc_locations' => 'nullable|array',
+        'excluded_dc_locations.*' => 'string',
+        'excluded_carriers' => 'nullable|array',
+        'excluded_carriers.*' => 'string',
+        'drop_start' => 'nullable|date',
+        'drop_end' => 'nullable|date|after_or_equal:drop_start',
+    ]);
 
-        if (auth()->user()->hasRole('carrier')) {
-            $query = Shipment::query()
-                ->where('carrier_id', auth()->user()->carrier_id)
-                ->with(['pickupLocation', 'dcLocation', 'carrier']);
-        } else {
-            $query = Shipment::query()
-                ->with(['pickupLocation', 'dcLocation', 'carrier']);
-        }
-
-        // Search
-        if ($search = $request->input('search')) {
-            $query->where(function ($q) use ($search) {
-                $q->where('shipment_number', 'like', "%{$search}%")
-                    ->orWhere('bol', 'like', "%{$search}%")
-                    ->orWhere('po_number', 'like', "%{$search}%");
-            });
-        }
-
-        // Exclude statuses
-        if ($excludedStatuses = $request->input('excluded_statuses')) {
-            $query->whereNotIn('status', (array) $excludedStatuses);
-        }
-
-        // Exclude shippers
-        if ($excludedShippers = $request->input('excluded_pickup_locations')) {
-            $query->whereHas('pickupLocation', function ($q) use ($excludedShippers) {
-                $q->whereNotIn('short_code', (array) $excludedShippers);
-            });
-        }
-
-        // Exclude DCs
-        if ($excludedDcs = $request->input('excluded_dc_locations')) {
-            $query->whereHas('dcLocation', function ($q) use ($excludedDcs) {
-                $q->whereNotIn('short_code', (array) $excludedDcs);
-            });
-        }
-
-        // Exclude carriers
-        $excludedCarriers = $request->input('excluded_carriers', []);
-
-        // Special case: if user excluded ALL carriers → show only shipments with null carrier
-        if (is_array($excludedCarriers) && count($excludedCarriers) === count(Carrier::pluck('name')->unique()->toArray())) {
-            $query->whereNull('carrier_id');
-        }
-        // Normal case: exclude the selected carriers
-        elseif (! empty($excludedCarriers)) {
-            $query->whereNotIn('carrier_id', function ($sub) use ($excludedCarriers) {
-                $sub->select('id')
-                    ->from('carriers')
-                    ->whereIn('name', $excludedCarriers);
-            });
-        }
-
-        // Drop Date filter
-        $dropStart = $request->input('drop_start');
-        $dropEnd = $request->input('drop_end');
-
-        // If both are provided → between those two dates (inclusive)
-        if ($dropStart && $dropEnd) {
-            $query->whereDate('drop_date', '>=', $dropStart)
-                ->whereDate('drop_date', '<=', $dropEnd);
-        }
-        // Only start date → from that date onward
-        elseif ($dropStart) {
-            $query->whereDate('drop_date', '>=', $dropStart);
-        }
-        // Only end date → up to that date
-        elseif ($dropEnd) {
-            $query->whereDate('drop_date', '<=', $dropEnd);
-        }
-
-        $shipments = $query->latest()->paginate($validated['per_page'] ?? 15)->withQueryString();
-
-        return Inertia::render('Admin/Shipments/Index', [
-            'shipments' => $shipments,
-            'statuses' => Shipment::select('status')->distinct()->pluck('status')->sort()->values(),
-            'all_shipper_codes' => Location::where('type', 'pickup')->pluck('short_code')->unique()->sort()->values(),
-            'all_dc_codes' => Location::where('type', 'distribution_center')->pluck('short_code')->unique()->sort()->values(),
-            'all_carrier_names' => Carrier::pluck('name')->unique()->sort()->values(),
-        ]);
+    if (auth()->user()->hasRole('carrier')) {
+        $query = Shipment::query()
+            ->where('carrier_id', auth()->user()->carrier_id)
+            ->with(['pickupLocation', 'dcLocation', 'carrier']);
+    } else {
+        $query = Shipment::query()
+            ->with(['pickupLocation', 'dcLocation', 'carrier']);
     }
+
+    // Search
+    if ($search = trim($request->input('search'))) {
+        $query->where(function ($q) use ($search) {
+            $q->where('shipment_number', 'like', "%{$search}%")
+              ->orWhere('bol', 'like', "%{$search}%")
+              ->orWhere('po_number', 'like', "%{$search}%");
+        });
+    }
+
+    // Exclude statuses
+    if ($excludedStatuses = $request->input('excluded_statuses')) {
+        $query->whereNotIn('status', (array) $excludedStatuses);
+    }
+
+    // Exclude shippers (pickup locations)
+    if ($excludedShippers = $request->input('excluded_pickup_locations')) {
+        $query->whereHas('pickupLocation', function ($q) use ($excludedShippers) {
+            $q->whereNotIn('short_code', (array) $excludedShippers);
+        });
+    }
+
+    // Exclude DCs
+    if ($excludedDcs = $request->input('excluded_dc_locations')) {
+        $query->whereHas('dcLocation', function ($q) use ($excludedDcs) {
+            $q->whereNotIn('short_code', (array) $excludedDcs);
+        });
+    }
+
+    // Exclude carriers
+    $excludedCarriers = $request->input('excluded_carriers', []);
+
+    // Special case: if user excluded ALL carriers → show only shipments with null carrier
+    $allCarrierNames = Carrier::pluck('name')->unique()->toArray();
+    if (is_array($excludedCarriers) && count(array_unique($excludedCarriers)) === count($allCarrierNames)) {
+        $query->whereNull('carrier_id');
+    }
+    // Normal case: exclude the selected carriers
+    elseif (!empty($excludedCarriers)) {
+        $query->whereNotIn('carrier_id', function ($sub) use ($excludedCarriers) {
+            $sub->select('id')
+                ->from('carriers')
+                ->whereIn('name', $excludedCarriers);
+        });
+    }
+
+    // Drop Date filter
+    $dropStart = $request->input('drop_start');
+    $dropEnd   = $request->input('drop_end');
+
+    if ($dropStart && $dropEnd) {
+        $query->whereDate('drop_date', '>=', $dropStart)
+              ->whereDate('drop_date', '<=', $dropEnd);
+    } elseif ($dropStart) {
+        $query->whereDate('drop_date', '>=', $dropStart);
+    } elseif ($dropEnd) {
+        $query->whereDate('drop_date', '<=', $dropEnd);
+    }
+
+    // Pagination - use validated per_page or default 15
+    $perPage = $validated['per_page'] ?? 15;
+    $shipments = $query->latest()->paginate($perPage);
+
+    // Add has_notes flag to each item
+    $shipments->getCollection()->transform(function ($shipment) {
+        $shipment->has_notes = $shipment->notes()->exists();
+        return $shipment;
+    });
+
+    return Inertia::render('Admin/Shipments/Index', [
+        'shipments' => $shipments,
+        'statuses' => Shipment::select('status')->distinct()->pluck('status')->sort()->values(),
+        'all_shipper_codes' => Location::where('type', 'pickup')->pluck('short_code')->unique()->sort()->values(),
+        'all_dc_codes' => Location::where('type', 'distribution_center')->pluck('short_code')->unique()->sort()->values(),
+        'all_carrier_names' => Carrier::pluck('name')->unique()->sort()->values(),
+        // Pass current filters back so Vue can restore selections on back/forward
+        'filters' => $request->only([
+            'search',
+            'excluded_statuses',
+            'excluded_pickup_locations',
+            'excluded_dc_locations',
+            'excluded_carriers',
+            'drop_start',
+            'drop_end',
+            'per_page',
+        ]),
+    ]);
+}
 
     public function create()
     {
@@ -172,6 +196,7 @@ class ShipmentController extends Controller
             'dcLocation:id,short_code,name,latitude,longitude,recycling_location_id',
             'dcLocation.recyclingLocation:id,short_code,name,latitude,longitude',
             'carrier:id,name,short_code',
+            'notes.user',
         ]);
 
         // Build ordered waypoints: pickup → DC → (Recycling if exists)
@@ -428,6 +453,7 @@ class ShipmentController extends Controller
 
                 if (! $pickup) {
                     $pickup = new Location;
+                    $pickup->guid = \Str::uuid();
                     $pickup->short_code = $validated['origin'];
                     $pickup->name = $validated['origin'];
                     $pickup->address = 'Unknown Address';
@@ -441,6 +467,7 @@ class ShipmentController extends Controller
                 }
                 if (! $dc) {
                     $dc = new Location;
+                    $dc->guid = \Str::uuid();
                     $dc->short_code = $validated['destination'];
                     $dc->name = $validated['destination'];
                     $dc->address = 'Unknown Address';
@@ -471,18 +498,25 @@ class ShipmentController extends Controller
                 }
 
                 // Create shipment
-                Shipment::create([
-                    'shipment_number' => $validated['load'],
-                    'status' => $validated['status'],
-                    'po_number' => $validated['msft po#'] ?? null,
-                    'pickup_location_id' => $pickup->id,
-                    'dc_location_id' => $dc->id,
-                    'carrier_id' => null,
-                    'drop_date' => $dropDate,
-                    'pickup_date' => $pickupDate,
-                    'delivery_date' => $deliveryDate,
-                    'rack_qty' => (int) $validated['sum of pallets'],
-                ]);
+                $shipment = Shipment::updateOrCreate(
+                    [
+                        'shipment_number' => $validated['load'],
+                    ],
+                    [
+                        'shipment_number' => $validated['load'],
+                        'status' => $validated['status'],
+                        'po_number' => $validated['msft po#'] ?? null,
+                        'pickup_location_id' => $pickup->id,
+                        'dc_location_id' => $dc->id,
+                        'carrier_id' => null,
+                        'drop_date' => $dropDate,
+                        'pickup_date' => $pickupDate,
+                        'delivery_date' => $deliveryDate,
+                        'rack_qty' => (int) $validated['sum of pallets'],
+                    ]
+                );
+
+                $shipment->calculateBol();
 
                 $imported++;
             }
@@ -812,6 +846,20 @@ HTML;
             \Log::error('Paperwork email failed: '.$e->getMessage());
 
             return back()->withErrors(['email' => 'Failed to send email: '.$e->getMessage()]);
+        }
+    }
+
+    public function calculateBol(Shipment $shipment): \Illuminate\Http\RedirectResponse
+    {
+        try {
+            $shipment->calculateBol();
+
+            return redirect()->route('admin.shipments.show', $shipment)
+                ->with('success', 'BOL calculated successfully.');
+        } catch (\Exception $e) {
+            \Log::error("Failed to calculate BOL for shipment {$shipment->id}: ".$e->getMessage());
+
+            return back()->withErrors(['bol' => 'Failed to calculate BOL: '.$e->getMessage()]);
         }
     }
 }

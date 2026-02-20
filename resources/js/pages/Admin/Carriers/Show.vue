@@ -2,6 +2,7 @@
 import { Head, router, usePage, useForm } from '@inertiajs/vue3'
 import { ref, computed, onMounted } from 'vue'
 import AdminLayout from '@/layouts/AppLayout.vue'
+import NotesSection from '@/components/NotesSection.vue'
 import { Notify, Confirm } from 'notiflix'
 
 const props = defineProps<{
@@ -46,63 +47,6 @@ onMounted(() => {
   if (page.props.flash?.info) Notify.info(page.props.flash.info)
   if (page.props.flash?.warning) Notify.warning(page.props.flash.warning)
 })
-
-// ── Add Note Modal ──────────────────────────────────────────────────────
-const showAddNoteModal = ref(false)
-const noteForm = useForm({
-  content: '',
-  is_admin: false,
-  notable_id: props.carrier.id,
-  notable_type: 'App\\Models\\Carrier',
-})
-
-const addNote = () => {
-  noteForm.post(route('admin.notes.store'), {
-    preserveScroll: true,
-    onSuccess: () => {
-      showAddNoteModal.value = false
-      noteForm.reset()
-      router.reload({ only: ['carrier'] }) // Refresh notes
-    },
-    onError: (errors) => {
-      console.log('Note form errors:', errors)
-    },
-  })
-}
-
-// ── Delete Note ─────────────────────────────────────────────────────────
-const deleteNote = async (noteId: number) => {
-  const confirmed = await Confirm.show(
-    'Delete Note?',
-    'This action cannot be undone.',
-    'Yes, delete',
-    'Cancel',
-    () => {
-        router.delete(route('admin.notes.destroy', noteId), {
-          preserveScroll: true,
-          onSuccess: () => {
-            router.reload({ only: ['carrier'] })
-          }
-        })  
-    },
-    () => false,
-    { titleColor: '#ff0000', okButtonBackground: '#ff0000' }
-  )
-
-  if (confirmed) {
-    router.delete(route('admin.notes.destroy', noteId), {
-      onSuccess: () => {
-        Notify.success('Note deleted.')
-        router.reload({ only: ['carrier'] })
-      },
-      onError: () => Notify.failure('Failed to delete note.')
-    })
-  }
-}
-
-const showNote = (isNoteAdmin: boolean) => {
-  return (isNoteAdmin && hasAdminAccess) || !isNoteAdmin
-}
 </script>
 
 <template>
@@ -178,65 +122,11 @@ const showNote = (isNoteAdmin: boolean) => {
         </div>
       </div>
 
-      <!-- Notes Section -->
-      <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg dark:shadow-gray-900/30 border border-gray-200 dark:border-gray-700 overflow-hidden">
-        <div class="p-6 border-b dark:border-gray-700 flex justify-between items-center">
-            <h2 class="text-xl font-semibold text-gray-900 dark:text-gray-100">
-                Notes
-            </h2>
-            <button
-                @click="showAddNoteModal = true"
-                class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
-            >
-                + Add Note
-            </button>
-        </div>
-
-        <div class="p-6">
-            <div v-if="!carrier.notes?.length" class="text-center py-8 text-gray-500 dark:text-gray-400">
-                No notes yet for this carrier.
-            </div>
-
-            <div v-else class="space-y-4">
-                <div
-                    v-for="note in carrier.notes"
-                    :key="note.id"
-                >
-                    <div
-                        class="p-4 bg-gray-50 dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700"
-                        v-if="showNote(note.is_admin)"
-                    >
-                        <div class="flex justify-between items-start mb-2">
-                            <div>
-                                <p class="text-sm text-gray-600 dark:text-gray-400 mt-1 whitespace-pre-line">
-                                    {{ note.content }}
-                                </p>
-                            </div>
-                            <div class="text-right text-xs text-gray-500 dark:text-gray-400">
-                                <div v-if="note.is_admin" class="text-purple-600 dark:text-purple-400 font-semibold">
-                                    Admin Note
-                                </div>
-                                <div>
-                                    {{ note.user?.name || 'System' }}
-                                </div>
-                                <div>
-                                    {{ new Date(note.created_at).toLocaleString() }}
-                                </div>
-                            </div>
-                        </div>
-                        <div v-if="hasAdminAccess" class="mt-2 text-right">
-                            <button
-                                @click="deleteNote(note.id)"
-                                class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 text-sm transition-colors"
-                            >
-                                Delete
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-      </div>
+      <NotesSection
+        :entity="carrier"
+        entity-type="App\Models\Carrier"
+        entity-prop-key="carrier"
+      />
 
       <!-- Back -->
       <div class="mt-8 text-center">

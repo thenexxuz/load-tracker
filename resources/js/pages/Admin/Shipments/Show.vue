@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { Head, router, usePage } from '@inertiajs/vue3'
+import { Head, router, usePage, useForm } from '@inertiajs/vue3'
 import { computed, onUnmounted, onMounted, ref } from 'vue'
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import AdminLayout from '@/layouts/AppLayout.vue'
-import { Notify } from 'notiflix'
+import NotesSection from '@/components/NotesSection.vue'
+import { Notify, Confirm } from 'notiflix' // Note: Confirm is from notiflix, but you used Confirm.show in Carrier
 
 const props = defineProps<{
   shipment: {
@@ -15,7 +16,7 @@ const props = defineProps<{
     status: string
     pickup_location: { short_code: string; name: string | null } | null
     dc_location: { short_code: string; name: string | null } | null
-    carrier: { name: string; short_code: string } | null
+    carrier: { name: string; short_code: string; wt_code?: string } | null
     drop_date: string | null
     pickup_date: string | null
     delivery_date: string | null
@@ -31,6 +32,14 @@ const props = defineProps<{
     delivery_alert_sent: boolean
     created_at: string
     updated_at: string
+    notes?: Array<{
+      id: number
+      title: string | null
+      content: string
+      is_admin: boolean
+      created_at: string
+      user?: { name: string } | null
+    }>
   }
   route_data: {
     route_coords: number[][] | null
@@ -99,7 +108,7 @@ onMounted(() => {
       },
     })
 
-    // Markers at exact waypoint locations
+    // Markers
     props.route_data.waypoints?.forEach((wp, index) => {
       const color = index === 0 ? '#22c55e' : index === props.route_data.waypoints.length - 1 ? '#ef4444' : '#f59e0b'
 
@@ -113,10 +122,9 @@ onMounted(() => {
         .addTo(map!)
     })
 
-    // Fit to route
+    // Fit bounds
     const bounds = new mapboxgl.LngLatBounds()
     props.route_data.route_coords.forEach(([lng, lat]) => bounds.extend([lng, lat]))
-
     map!.fitBounds(bounds, { padding: 80 })
   })
 })
@@ -125,6 +133,7 @@ onUnmounted(() => {
   map?.remove()
 })
 
+// ── Delete Shipment ─────────────────────────────────────────────────────
 const deleteShipment = async () => {
   const result = await Notify.confirm(
     'Delete Shipment',
@@ -132,22 +141,15 @@ const deleteShipment = async () => {
     'Yes, delete it',
     'Cancel',
     () => {
-      router.delete(
-        route('admin.shipments.destroy', shipment.id),
-        {
-          onSuccess: () => {
-            Notify.success('Shipment has been deleted.')
-            router.visit(route('admin.shipments.index'))
-          },
-          onError: () => {
-            Notify.failure('Failed to delete shipment.')
-          }
-        }
-      )
+      router.delete(route('admin.shipments.destroy', shipment.id), {
+        onSuccess: () => {
+          Notify.success('Shipment has been deleted.')
+          router.visit(route('admin.shipments.index'))
+        },
+        onError: () => Notify.failure('Failed to delete shipment.'),
+      })
     },
-    () => {
-      // Cancelled - do nothing
-    },
+    () => {},
     {
       titleColor: '#ff0000',
       okButtonBackground: '#ff0000',
@@ -155,7 +157,7 @@ const deleteShipment = async () => {
   )
 }
 
-// Date formatting helper
+// ── Date formatting ─────────────────────────────────────────────────────
 const formatDate = (date: string | null, withTime = false) => {
   if (!date) return '—'
   const d = new Date(date)
@@ -165,18 +167,18 @@ const formatDate = (date: string | null, withTime = false) => {
   const day = String(d.getDate()).padStart(2, '0')
   const year = d.getFullYear()
 
-  if (!withTime) {
-    return `${month}/${day}/${year}`
-  }
+  if (!withTime) return `${month}/${day}/${year}`
 
   const hours = String(d.getHours()).padStart(2, '0')
   const minutes = String(d.getMinutes()).padStart(2, '0')
   return `${month}/${day}/${year} ${hours}:${minutes}`
 }
 
+// ── Auth & Roles ────────────────────────────────────────────────────────
 const { auth } = usePage().props
 const userRoles = auth?.user?.roles || []
 const hasAdminAccess = userRoles.includes('administrator') || userRoles.includes('supervisor')
+
 </script>
 
 <template>
@@ -194,15 +196,15 @@ const hasAdminAccess = userRoles.includes('administrator') || userRoles.includes
             Edit
           </a>
           <button @click="deleteShipment"
-            v-if="hasAdminAccess"
-            class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 transition-colors"
-          >
+                  v-if="hasAdminAccess"
+                  class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 transition-colors">
             Delete
           </button>
         </div>
       </div>
 
-      <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg dark:shadow-gray-900/30 border border-gray-200 dark:border-gray-700">
+      <!-- Shipment Details Card -->
+      <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg dark:shadow-gray-900/30 border border-gray-200 dark:border-gray-700 mb-8">
         <dl class="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Status</dt>
@@ -210,27 +212,33 @@ const hasAdminAccess = userRoles.includes('administrator') || userRoles.includes
           </div>
 
           <div>
-            <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Shipper Location</dt>
+            <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">BOL</dt>
             <dd class="mt-1 text-gray-900 dark:text-gray-100">
-              {{ shipment.pickup_location?.short_code || '—' }}
+              {{ shipment.bol || '—' }}
             </dd>
+            <div v-if="!shipment.bol" class="mt-2">
+              <a :href="route('admin.shipments.calculate-bol', shipment.id)">
+                <button class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-md font-medium transition-colors">
+                  Calculate BOL
+                </button>
+              </a>
+            </div>
           </div>
 
-          <div>
-            <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">DC Location</dt>
-            <dd class="mt-1 text-gray-900 dark:text-gray-100">
-              {{ shipment.dc_location?.short_code || '—' }}
-            </dd>
-          </div>
-
+          <!-- Carrier fix (added wt_code safe access) -->
           <div>
             <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Carrier</dt>
             <dd class="mt-1 text-gray-900 dark:text-gray-100" v-if="shipment.carrier">
-              {{ shipment.carrier?.name || '—' }} ({{ shipment.carrier?.wt_code || 'No WT Code set' }})
+              {{ shipment.carrier.name }} ({{ shipment.carrier.wt_code || 'No WT Code' }})
             </dd>
-            <dd class="mt-1 text-gray-900 dark:text-gray-100" v-else>
+            <dd v-else class="mt-1 text-gray-900 dark:text-gray-100">
               No carrier assigned
             </dd>
+          </div>
+
+          <div>
+            <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Trailer</dt>
+            <dd class="mt-1 text-gray-900 dark:text-gray-100">{{ shipment.trailer || '—' }}</dd>
           </div>
 
           <!-- Dates – one row, 3 columns -->
@@ -272,11 +280,6 @@ const hasAdminAccess = userRoles.includes('administrator') || userRoles.includes
           </div>
 
           <div>
-            <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Trailer</dt>
-            <dd class="mt-1 text-gray-900 dark:text-gray-100">{{ shipment.trailer || '—' }}</dd>
-          </div>
-
-          <div>
             <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Drayage</dt>
             <dd class="mt-1 text-gray-900 dark:text-gray-100">{{ shipment.drayage ? 'Yes' : 'No' }}</dd>
           </div>
@@ -304,14 +307,14 @@ const hasAdminAccess = userRoles.includes('administrator') || userRoles.includes
         </dl>
       </div>
 
-      <!-- Route Map Section -->
+      <!-- Route Map Section (unchanged) -->
       <div class="mt-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg dark:shadow-gray-900/30 border border-gray-200 dark:border-gray-700 overflow-hidden">
         <div class="p-6 border-b dark:border-gray-700">
           <h2 class="text-xl font-semibold text-gray-900 dark:text-gray-100">
             Route Overview
           </h2>
           <div v-if="route_data" class="mt-2 text-sm text-gray-600 dark:text-gray-400">
-            Total Distance: {{ route_data.total_km }} km ({{ route_data.total_miles }} mi)
+            Total Distance: {{ route_data.total_miles }} mi ({{ route_data.total_km }} km)
             <br>
             Estimated Duration: {{ route_data.duration }}
           </div>
@@ -319,8 +322,6 @@ const hasAdminAccess = userRoles.includes('administrator') || userRoles.includes
 
         <div class="relative h-[500px]">
           <div ref="mapContainer" class="absolute inset-0"></div>
-
-          <!-- No route fallback -->
           <div
             v-if="!route_data"
             class="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-900 text-gray-600 dark:text-gray-400"
@@ -329,6 +330,12 @@ const hasAdminAccess = userRoles.includes('administrator') || userRoles.includes
           </div>
         </div>
       </div>
+
+      <NotesSection
+        :entity="shipment"
+        entity-type="App\Models\Shipment"
+        entity-prop-key="shipment"
+      />
 
       <!-- Back -->
       <div class="mt-8 text-center">

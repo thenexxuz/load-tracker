@@ -24,7 +24,7 @@ class NoteController extends Controller
             'notable_type' => $validated['notable_type'],
         ]);
 
-        return redirect()->back()
+        return back()
             ->with('success', 'Note added successfully.');
     }
 
@@ -32,7 +32,7 @@ class NoteController extends Controller
     {
         $note->delete();
 
-        return redirect()->back()
+        return back()
             ->with('success', 'Note deleted.');
     }
 }
