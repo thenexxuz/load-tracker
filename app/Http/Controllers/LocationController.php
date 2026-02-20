@@ -40,6 +40,12 @@ class LocationController extends Controller
 
         $locations = $query->paginate($validated['per_page'] ?? 15);
 
+        // Add has_notes flag to each item
+        $locations->getCollection()->transform(function ($location) {
+            $location->has_notes = $location->notes()->exists();
+            return $location;
+        });
+
         return Inertia::render('Admin/Locations/Index', [
             'locations' => $locations,
         ]);

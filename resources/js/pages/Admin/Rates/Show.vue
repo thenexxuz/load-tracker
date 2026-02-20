@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, usePage } from '@inertiajs/vue3'
 import AdminLayout from '@/layouts/AppLayout.vue'
+import NotesSection from '@/components/NotesSection.vue'
 import { computed, onMounted } from 'vue'
 import { Notify } from 'notiflix'
 
@@ -62,6 +63,13 @@ onMounted(() => {
           </a>
         </div>
       </div>
+
+      <!-- Notes Section -->
+      <NotesSection
+        :entity="rate"
+        entity-type="App\Models\Rate"
+        entity-prop-key="rate"
+      />
     </div>
   </AdminLayout>
 </template>

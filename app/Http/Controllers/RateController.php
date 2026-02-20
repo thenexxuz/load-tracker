@@ -47,7 +47,12 @@ class RateController extends Controller
 
     public function show(Rate $rate)
     {
-        $rate->load(['carrier', 'pickupLocation', 'dcLocation']);
+        $rate->load([
+            'carrier',
+            'pickupLocation',
+            'dcLocation',
+            'notes.user',
+        ]);
 
         return Inertia::render('Admin/Rates/Show', ['rate' => $rate]);
     }
