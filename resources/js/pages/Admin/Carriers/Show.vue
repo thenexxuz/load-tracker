@@ -40,6 +40,26 @@ const formattedUpdatedAt = computed(() => {
   return new Date(props.carrier.updated_at).toLocaleString()
 })
 
+const copyEmails = async () => {
+  if (!props.carrier.emails?.trim()) {
+    Notify.warning('No emails to copy.')
+    return
+  }
+
+  const emailsText = props.carrier.emails.trim()  // already comma-separated or line-separated
+
+  try {
+    await navigator.clipboard.writeText(emailsText)
+    Notify.success('Emails copied to clipboard!', {
+      timeout: 3000,
+      position: 'right-top',
+    })
+  } catch (err) {
+    console.error('Clipboard copy failed:', err)
+    Notify.failure('Failed to copy emails. Please try manually.')
+  }
+}
+
 // Flash notifications (global style)
 onMounted(() => {
   if (page.props.flash?.success) Notify.success(page.props.flash.success)
@@ -102,7 +122,23 @@ onMounted(() => {
 
           <!-- Emails -->
           <div>
-            <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Emails</h3>
+            <div class="flex items-center justify-between mb-2">
+              <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400">
+                Emails
+              </h3>
+              <button
+                v-if="carrier.emails?.trim()"
+                @click="copyEmails"
+                class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 text-sm font-medium flex items-center gap-1 transition-colors"
+                title="Copy all emails to clipboard"
+              >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+                Copy
+              </button>
+            </div>
+
             <p class="text-gray-900 dark:text-gray-100 whitespace-pre-line">
               {{ carrier.emails ? carrier.emails.split(',').map(e => e.trim()).join('\n') : 'None' }}
             </p>
