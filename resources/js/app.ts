@@ -3,41 +3,57 @@ import '../css/app.css';
 import { createInertiaApp } from '@inertiajs/vue3';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import type { DefineComponent } from 'vue';
-import { createApp, h, onUnmounted } from 'vue';
-import { ZiggyVue } from 'ziggy-js'
+import { createApp, h, onMounted, onUnmounted } from 'vue';
+import { ZiggyVue } from 'ziggy-js';
 import FlashPlugin from './plugins/flash';
 
 import { initializeTheme } from './composables/useAppearance';
 import { configureEcho, echo } from '@laravel/echo-vue';
 
+// ──────────────────────────────────────────────────────────────
+// Configure Echo / Reverb
+// ──────────────────────────────────────────────────────────────
 configureEcho({
     broadcaster: 'reverb',
-    host: import.meta.env.VITE_REVERB_HOST ?? window.location.hostname,
-    port: import.meta.env.VITE_REVERB_PORT ?? 6001,
-    key: import.meta.env.VITE_REVERB_KEY ?? 'local',
-    cluster: import.meta.env.VITE_REVERB_CLUSTER ?? 'mt1',
-    encrypted: true,
+    key: import.meta.env.VITE_REVERB_APP_KEY,
+    wsHost: import.meta.env.VITE_REVERB_HOST,
+    wsPort: import.meta.env.VITE_REVERB_PORT ?? 80,
+    wssPort: import.meta.env.VITE_REVERB_PORT ?? 443,
+    forceTLS: (import.meta.env.VITE_REVERB_SCHEME ?? 'https') === 'https',
+    enabledTransports: ['ws', 'wss'],
+    authEndpoint: '/broadcasting/auth',
+    auth: {
+        headers: {
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
+        },
+    },
 });
 
 window.Echo = echo();
 
-window.Echo.connector.pusher.connection.bind('connected', () => {
-    console.log('Reverb connected successfully');
-});
+// ──────────────────────────────────────────────────────────────
+// Join user channel when app mounts
+// ──────────────────────────────────────────────────────────────
+onMounted(() => {
+    const userIdMeta = document.querySelector('meta[name="user-id"]');
+    const userId = userIdMeta?.getAttribute('content');
 
-window.Echo.connector.pusher.connection.bind('disconnected', () => {
-    console.warn('Reverb disconnected');
-});
+    if (!userId) {
+        console.warn('No user ID found in meta[name="user-id"] — skipping channel join');
+        return;
+    }
 
-window.Echo.connector.pusher.connection.bind('failed', () => {
-    console.error('Reverb connection failed');
-});
+    console.log(`Joining private channel: user.${userId}`);
 
-const userId = document.querySelector('meta[name="user-id"]')?.getAttribute('content');
-if (userId) {
-    window.Echo.join(`user.${userId}`)
+    window.Echo.private(`user.${userId}`)
+        .listen('NewNotification', (event) => {
+            console.log('New notification received:', event);
+            // Here you can show Notiflix toast, update UI, etc.
+        })
         .here((users) => {
-            console.log('Current users in channel:', users);
+            console.log('Users currently in channel:', users);
         })
         .joining((user) => {
             console.log('User joined:', user);
@@ -46,42 +62,21 @@ if (userId) {
             console.log('User left:', user);
         })
         .error((err) => {
-            console.error('Error joining channel:', err);
+            console.error('Error in private-user channel:', err);
         });
-} else {
-    console.warn('No user ID found in meta tags, skipping Echo channel join');
-}
-
-// Optional: Global error handling for Echo connection issues
-
-window.Echo.connector.pusher.connection.bind('error', (err) => {
-    console.error('Reverb connection error:', err)
 });
 
-window.Echo.connector.pusher.connection.bind('state_change', (states) => {
-    console.log('Reverb connection state changed:', states);
+onUnmounted(() => {
+    const userId = document.querySelector('meta[name="user-id"]')?.getAttribute('content');
+    if (userId) {
+        window.Echo.leave(`user.${userId}`);
+        console.log(`Left channel: user.${userId}`);
+    }
 });
 
-window.Echo.connector.pusher.connection.bind('ping', () => {
-    console.log('Reverb connection ping');
-});
-
-window.Echo.connector.pusher.connection.bind('pong', () => {
-    console.log('Reverb connection pong');
-});
-
-window.Echo.connector.pusher.connection.bind('connecting_in', (delay) => {
-    console.log(`Reverb will attempt to reconnect in ${delay} seconds`);
-});
-
-window.Echo.connector.pusher.connection.bind('reconnecting', (delay) => {
-    console.log(`Reverb is reconnecting, attempt #${delay}`);
-});
-
-window.Echo.connector.pusher.connection.bind('reconnected', () => {
-    console.log('Reverb reconnected successfully');
-});
-
+// ──────────────────────────────────────────────────────────────
+// Inertia App Creation
+// ──────────────────────────────────────────────────────────────
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
 
 createInertiaApp({
@@ -103,9 +98,5 @@ createInertiaApp({
     },
 });
 
-// This will set light / dark mode on page load...
+// Apply theme on load
 initializeTheme();
-
-onUnmounted(() => {
-    window.Echo.leave(`user.${userId}`)
-})
