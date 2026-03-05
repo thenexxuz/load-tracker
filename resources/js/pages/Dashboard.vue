@@ -5,6 +5,7 @@ import AdminLayout from '@/layouts/AppLayout.vue'
 import { Line } from 'vue-chartjs'
 import {
   Chart as ChartJS,
+  Filler,
   Title,
   Tooltip,
   Legend,
@@ -15,6 +16,7 @@ import {
 } from 'chart.js'
 
 ChartJS.register(
+  Filler,
   Title,
   Tooltip,
   Legend,

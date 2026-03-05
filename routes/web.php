@@ -15,7 +15,17 @@ use Inertia\Inertia;
 use Laravel\Fortify\Features;
 
 
-Broadcast::routes(['middleware' => ['auth']]);
+// explicitly attach our validation middleware to the auth route
+// (``Broadcast::routes`` lives inside the existing ``web`` group so we
+// need to repeat those entries here).  Using the class reference avoids
+// needing to register an alias.
+Broadcast::routes([
+    'middleware' => [
+        'web',
+        'auth',
+        \App\Http\Middleware\EnsureSocketId::class,
+    ],
+]);
 
 Route::get('/', function () {
     return Inertia::render('Welcome', [

@@ -20,6 +20,9 @@ class NewNotification implements ShouldBroadcast
     public function __construct($notification)
     {
         $this->notification = $notification;
+            \Log::info('NewNotification event created for user_id: ' . $this->notification->user_id);
+            \Log::info('Notification data: ' . json_encode($this->notification->data));
+            \Log::info('Notification object: ' . json_encode($this->notification, JSON_PRETTY_PRINT));
     }
 
     public function broadcastOn(): array

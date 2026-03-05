@@ -34,6 +34,8 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->appendToGroup('broadcasting', [
             \Illuminate\Auth\Middleware\Authenticate::class,
+            // ensure the Pusher socket_id is present and correctly typed
+            \App\Http\Middleware\EnsureSocketId::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
