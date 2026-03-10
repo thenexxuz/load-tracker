@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Head, Link, router } from '@inertiajs/vue3'
 import AdminLayout from '@/layouts/AppLayout.vue'
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue'
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import MultiSelect from 'vue-multiselect'
@@ -11,6 +11,7 @@ const props = defineProps<{
   locations: Array<{ id: number; short_code: string; address: string; type: string }>
   preselected?: string | null
   mapbox_token: string
+  default_rate_per_mile?: number
 }>()
 
 // Auto-select preloaded IDs on mount
@@ -27,16 +28,31 @@ onMounted(() => {
   }
 })
 
-const selectedLocations = ref<Array<{ id: number; short_code: string; address: string }>>([])
+const selectedLocations = ref<Array<{ id: number; short_code: string; address: string; type?: string }>>([])
 const isLoading = ref(false)
 const routeData = ref<{
   total_km: number
   total_miles: number
   total_duration: string
   route_coords: number[][]        // [[lng, lat], ...]
-  waypoints?: number[][]          // exact [lng, lat] per stop (preferred)
+  waypoints?: number[][]          // exact [lng, lat] per stop
 } | null>(null)
 const error = ref<string | null>(null)
+
+const ratePerMile = ref<number>(props.default_rate_per_mile ?? 2.50)
+
+const estimatedRate = computed(() => {
+  if (!routeData.value?.total_miles || ratePerMile.value <= 0) {
+    return null
+  }
+  const amount = routeData.value.total_miles * ratePerMile.value
+  return amount.toLocaleString('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })
+})
 
 const mapContainer = ref<HTMLDivElement | null>(null)
 let map: mapboxgl.Map | null = null
@@ -93,8 +109,6 @@ const drawMap = () => {
   }
 
   console.log('Drawing route with', routeData.value.route_coords.length, 'coordinates')
-  console.log('First coord:', routeData.value.route_coords[0])
-  console.log('Last coord:', routeData.value.route_coords[routeData.value.route_coords.length - 1])
 
   // Safety: Prevent loop by removing last point if it matches first
   const coords = routeData.value.route_coords
@@ -148,18 +162,16 @@ const drawMap = () => {
       },
     })
 
-    // Improved marker placement
+    // Markers
     selectedLocations.value.forEach((loc, index) => {
       let coord = routeData.value.waypoints?.[index] || null
 
       if (!coord || coord.length !== 2) {
-        // Better approximation: cumulative segment lengths
         if (index === 0) {
-          coord = coords[0] // exact start
+          coord = coords[0]
         } else if (index === selectedLocations.value.length - 1) {
-          coord = coords[coords.length - 1] // exact end
+          coord = coords[coords.length - 1]
         } else {
-          // Estimate position for intermediates
           const numSegments = selectedLocations.value.length - 1
           const segmentLengthApprox = Math.floor(coords.length / numSegments)
           const pointIndex = Math.min(index * segmentLengthApprox, coords.length - 1)
@@ -180,10 +192,9 @@ const drawMap = () => {
         .addTo(map!)
     })
 
-    // Fit bounds with strict safety
+    // Fit bounds
     if (coords.length >= 2) {
       const bounds = new mapboxgl.LngLatBounds()
-
       coords.forEach(([lng, lat]) => {
         if (isFinite(lng) && isFinite(lat)) {
           bounds.extend([lng, lat])
@@ -207,14 +218,9 @@ const drawMap = () => {
           maxZoom: 15,
         })
       } else {
-        console.warn('Bounds are degenerate or invalid — falling back to center/zoom')
         map!.setCenter(coords[0])
         map!.setZoom(10)
       }
-    } else {
-      console.warn('Route has fewer than 2 points — centering on first')
-      map!.setCenter(coords[0] || [0, 0])
-      map!.setZoom(10)
     }
   })
 }
@@ -251,17 +257,38 @@ onUnmounted(() => {
         />
       </div>
 
+      <!-- Rate per Mile Input -->
+      <div class="mt-4">
+        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+          Rate per Mile (for estimation)
+        </label>
+        <div class="flex items-center gap-3">
+          <input
+            v-model.number="ratePerMile"
+            type="number"
+            step="0.01"
+            min="0.01"
+            class="w-40 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="2.50"
+          />
+          <span class="text-gray-600 dark:text-gray-400">USD / mile</span>
+        </div>
+        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          Typical 2026 dry van spot rates: ~$2.30–$2.80/mi (varies by lane, season, fuel)
+        </p>
+      </div>
+
       <!-- Calculate Button -->
       <button
         @click="calculateRoute"
         :disabled="isLoading || selectedLocations.length < 2"
-        class="px-6 py-3 bg-blue-600 text-white rounded-md font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        class="px-6 py-3 bg-blue-600 text-white rounded-md font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors mt-4"
       >
         {{ isLoading ? 'Calculating...' : 'Calculate Route' }}
       </button>
 
       <!-- Status / Feedback -->
-      <div class="mt-4 min-h-[1.5rem]">
+      <div class="min-h-[1.5rem]">
         <p v-if="error" class="text-red-600 dark:text-red-400">
           {{ error }}
         </p>
@@ -273,34 +300,50 @@ onUnmounted(() => {
         </p>
       </div>
 
-      <!-- Route Summary (shown only after calculation) -->
+      <!-- Route Summary + Estimated Rate -->
       <div v-if="routeData" class="mt-6 bg-white dark:bg-gray-800 p-6 rounded-lg shadow border dark:border-gray-700">
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           <div>
             <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400">Total Distance</h3>
             <p class="text-xl font-semibold text-gray-900 dark:text-gray-100">
-              {{ routeData.total_km?.toFixed(1) ?? '—' }} km
+              {{ routeData.total_miles?.toFixed(1) ?? '—' }} mi
               <span class="text-sm text-gray-500 dark:text-gray-400">
-                ({{ routeData.total_miles?.toFixed(1) ?? '—' }} mi)
+                ({{ routeData.total_km?.toFixed(1) ?? '—' }} km)
               </span>
             </p>
           </div>
+
           <div>
             <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400">Total Duration</h3>
             <p class="text-xl font-semibold text-gray-900 dark:text-gray-100">
               {{ routeData.total_duration ?? '—' }}
             </p>
           </div>
+
           <div>
-            <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400">Stops</h3>
+            <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400">Number of Stops</h3>
             <p class="text-xl font-semibold text-gray-900 dark:text-gray-100">
               {{ selectedLocations.length }}
             </p>
           </div>
+
+          <div>
+            <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400">Estimated Rate</h3>
+            <p class="text-xl font-bold text-green-700 dark:text-green-400">
+              {{ estimatedRate ?? '—' }}
+            </p>
+            <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+              @ ${{ ratePerMile.toFixed(2) }}/mi
+            </p>
+          </div>
         </div>
+
+        <p class="mt-5 text-sm text-gray-500 dark:text-gray-400 italic">
+          This is a rough estimate only. Actual freight rates depend on many factors: fuel surcharge, deadhead miles, accessorials, market conditions, equipment type, etc.
+        </p>
       </div>
 
-      <!-- Map – only rendered after successful calculation -->
+      <!-- Map -->
       <div v-if="routeData" class="mt-6">
         <div ref="mapContainer" class="w-full h-[600px] rounded-lg border border-gray-300 dark:border-gray-700 shadow overflow-hidden"></div>
       </div>
@@ -310,8 +353,8 @@ onUnmounted(() => {
 
 <style scoped>
 :deep(.mapboxgl-map) {
-  width: 100vw;
-  height: 100vh;
+  width: 75vw;
+  height: 75vh;
 }
 :deep(.mapboxgl-popup) {
   color: black;

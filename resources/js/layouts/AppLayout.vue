@@ -8,6 +8,7 @@ import { Notify } from 'notiflix'
 
 interface Props {
     breadcrumbs?: BreadcrumbItemType[];
+    APP_DEBUG?: string; // from .env, as a string
 }
 
 withDefaults(defineProps<Props>(), {
@@ -26,11 +27,15 @@ onMounted(() => {
   if (userId) {
     const channelName = `user.${userId}`;
     console.log(`[Echo] Subscribing to ${channelName}`);
-    Notify.info(`Subscribed to notifications on ${channelName}`, {
-      timeout: 3000,
-      clickToClose: true,
-      position: 'right-top',
-    });
+
+    if (import.meta.env.VITE_APP_DEBUG === 'true') {
+      console.debug(`[Echo] Debug mode is ON — will log incoming notifications to console`)
+      Notify.info(`Subscribed to notifications on ${channelName}`, {
+        timeout: 3000,
+        clickToClose: true,
+        position: 'right-top',
+      });
+    }
 
     window.Echo.channel(channelName)  // or .private(channelName) if using PrivateChannel
       .listen('NewNotification', (event) => {
