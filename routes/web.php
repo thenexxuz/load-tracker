@@ -75,13 +75,39 @@ Route::middleware(['auth', 'role:administrator|supervisor'])->prefix('admin')->n
 });
 
 Route::middleware(['auth', 'role:administrator|supervisor|truckload|carrier'])->prefix('admin')->name('admin.')->group(function () {
-    // Shipment Routes
-    Route::post('shipments/pbi-import', [ShipmentController::class, 'pbiImport'])->name('shipments.pbi-import');
-    Route::get('shipments/failed-tsv', [ShipmentController::class, 'downloadFailedTsv'])->name('shipments.download-failed-tsv');
-    Route::post('shipments/{shipment}/send-paperwork', [ShipmentController::class, 'processSendPaperwork'])->name('shipments.process-send-paperwork');
-    Route::get('shipments/{shipment}/send-paperwork', [ShipmentController::class, 'sendPaperwork'])->name('shipments.send-paperwork');
-    Route::get('shipments/{shipment}/calculate-bol', [ShipmentController::class, 'calculateBol'])->name('shipments.calculate-bol');
-    Route::resource('shipments', ShipmentController::class);
+    // Shipments - main index route handles both GET (initial load, pagination) and POST (filter/search)
+    Route::match(['get', 'post'], 'shipments', [ShipmentController::class, 'index'])
+        ->name('shipments.index');
+
+    // Create / Store
+    Route::get('shipments/create', [ShipmentController::class, 'create'])
+        ->name('shipments.create');
+
+    Route::post('shipments/create', [ShipmentController::class, 'store'])
+        ->name('shipments.store');
+
+    // Show, Edit, Update, Delete
+    Route::get('shipments/{shipment}', [ShipmentController::class, 'show'])
+        ->name('shipments.show');
+
+    Route::get('shipments/{shipment}/edit', [ShipmentController::class, 'edit'])
+        ->name('shipments.edit');
+
+    Route::put('shipments/{shipment}', [ShipmentController::class, 'update'])
+        ->name('shipments.update');
+
+    Route::delete('shipments/{shipment}', [ShipmentController::class, 'destroy'])
+        ->name('shipments.destroy');
+
+    // Custom actions (from your earlier code)
+    Route::post('shipments/pbi-import', [ShipmentController::class, 'pbiImport'])
+        ->name('shipments.pbi-import');
+
+    Route::get('shipments/{shipment}/calculate-bol', [ShipmentController::class, 'calculateBol'])
+        ->name('shipments.calculate-bol');
+
+    Route::post('shipments/{shipment}/send-paperwork', [ShipmentController::class, 'sendPaperwork'])
+        ->name('shipments.send-paperwork');
 });
 
 Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () {

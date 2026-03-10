@@ -2,7 +2,7 @@
 import { Head, router, usePage, useForm } from '@inertiajs/vue3'
 import { onClickOutside } from '@vueuse/core'
 import { ref, watch, onMounted, computed, nextTick } from 'vue'
-import { debounce } from 'lodash' // npm install lodash (if not already present)
+import { debounce } from 'lodash' // npm install lodash
 
 import AdminLayout from '@/layouts/AppLayout.vue'
 import { Notify } from 'notiflix'
@@ -48,28 +48,28 @@ const props = defineProps<{
 
 const page = usePage()
 
-// ── Filter state (restore from props.filters if available) ──────────────
+// ── Filter state – restore from props.filters if available ──────────────
 const selectedStatuses = ref<string[]>(
   props.filters?.excluded_statuses
-    ? props.statuses.filter(s => !props.filters.excluded_statuses!.includes(s))
+    ? props.statuses.filter(s => !props.filters.excluded_statuses.includes(s))
     : [...props.statuses]
 )
 
 const selectedPickupLocations = ref<string[]>(
   props.filters?.excluded_pickup_locations
-    ? props.all_shipper_codes.filter(s => !props.filters.excluded_pickup_locations!.includes(s))
+    ? props.all_shipper_codes.filter(s => !props.filters.excluded_pickup_locations.includes(s))
     : [...props.all_shipper_codes]
 )
 
 const selectedDcLocations = ref<string[]>(
   props.filters?.excluded_dc_locations
-    ? props.all_dc_codes.filter(s => !props.filters.excluded_dc_locations!.includes(s))
+    ? props.all_dc_codes.filter(s => !props.filters.excluded_dc_locations.includes(s))
     : [...props.all_dc_codes]
 )
 
 const selectedCarriers = ref<string[]>(
   props.filters?.excluded_carriers
-    ? props.all_carrier_names.filter(c => !props.filters.excluded_carriers!.includes(c))
+    ? props.all_carrier_names.filter(c => !props.filters.excluded_carriers.includes(c))
     : [...props.all_carrier_names]
 )
 
@@ -77,30 +77,18 @@ const dropStart = ref<string>(props.filters?.drop_start || '')
 const dropEnd = ref<string>(props.filters?.drop_end || '')
 const search = ref<string>(props.filters?.search || '')
 
-// ── Computed excluded values (for header text) ──────────────────────────
-const excludedStatuses = computed(() =>
-  props.statuses.filter(s => !selectedStatuses.value.includes(s))
-)
+// ── Computed excluded values & payload ──────────────────────────────────
+const excludedStatuses = computed(() => props.statuses.filter(s => !selectedStatuses.value.includes(s)))
+const excludedPickupLocations = computed(() => props.all_shipper_codes.filter(s => !selectedPickupLocations.value.includes(s)))
+const excludedDcLocations = computed(() => props.all_dc_codes.filter(s => !selectedDcLocations.value.includes(s)))
+const excludedCarriers = computed(() => props.all_carrier_names.filter(c => !selectedCarriers.value.includes(c)))
 
-const excludedPickupLocations = computed(() =>
-  props.all_shipper_codes.filter(s => !selectedPickupLocations.value.includes(s))
-)
-
-const excludedDcLocations = computed(() =>
-  props.all_dc_codes.filter(s => !selectedDcLocations.value.includes(s))
-)
-
-const excludedCarriers = computed(() =>
-  props.all_carrier_names.filter(c => !selectedCarriers.value.includes(c))
-)
-
-// ── Payload for requests ────────────────────────────────────────────────
 const currentFilters = computed(() => ({
   search: search.value.trim() || undefined,
-  excluded_statuses: excludedStatuses.value.length ? excludedStatuses.value : undefined,
-  excluded_pickup_locations: excludedPickupLocations.value.length ? excludedPickupLocations.value : undefined,
-  excluded_dc_locations: excludedDcLocations.value.length ? excludedDcLocations.value : undefined,
-  excluded_carriers: excludedCarriers.value.length ? excludedCarriers.value : undefined,
+  excluded_statuses: excludedStatuses.value,           // always send array (even empty)
+  excluded_pickup_locations: excludedPickupLocations.value,
+  excluded_dc_locations: excludedDcLocations.value,
+  excluded_carriers: excludedCarriers.value,
   drop_start: dropStart.value || undefined,
   drop_end: dropEnd.value || undefined,
   per_page: props.shipments.per_page,
@@ -108,12 +96,17 @@ const currentFilters = computed(() => ({
 
 // ── Apply filters (POST to same route) ──────────────────────────────────
 const applyFilters = debounce(() => {
+  console.log('[Filter] Applying with payload:', currentFilters.value)
+
   router.post(route('admin.shipments.index'), currentFilters.value, {
     preserveState: true,
     preserveScroll: true,
     replace: true,
+    onBefore: () => console.log('[Filter] POST starting...'),
+    onSuccess: () => console.log('[Filter] POST success - shipments count:', props.shipments?.data?.length),
+    onError: (err) => console.error('[Filter] POST error:', err),
   })
-}, 250) // slight debounce – good for search typing
+}, 300)
 
 watch([selectedStatuses, selectedPickupLocations, selectedDcLocations, selectedCarriers, dropStart, dropEnd], applyFilters, { deep: true })
 watch(search, applyFilters)
@@ -166,6 +159,7 @@ const clearDropDate = () => {
 // ── Pagination ──────────────────────────────────────────────────────────
 const changePage = (url: string | null) => {
   if (url) {
+    console.log('[Pagination] Navigating to:', url, 'with filters:', currentFilters.value)
     router.get(url, currentFilters.value, {
       preserveState: true,
       preserveScroll: true,
@@ -176,10 +170,11 @@ const changePage = (url: string | null) => {
 
 const changePerPage = (e: Event) => {
   const value = Number((e.target as HTMLSelectElement).value)
+  console.log('[Per Page] Changing to:', value)
   router.get(route('admin.shipments.index'), {
     ...currentFilters.value,
     per_page: value,
-    page: 1, // reset to first page when changing per-page
+    page: 1,
   }, {
     preserveState: true,
     preserveScroll: true,
@@ -336,6 +331,7 @@ const userRoles = auth?.user?.roles || []
 const hasAdminAccess = userRoles.includes('administrator') || userRoles.includes('supervisor')
 
 onMounted(() => {
+  console.log('[Index] Mounted - initial filters from props:', props.filters)
   if (page.props.flash?.success) Notify.success(page.props.flash.success)
   if (page.props.flash?.error)   Notify.failure(page.props.flash.error)
 })
@@ -434,7 +430,7 @@ onMounted(() => {
           <input
             v-model="search"
             type="text"
-            placeholder="Search by shipment #, BOL or PO..."
+            placeholder="Search by shipment number, BOL or PO..."
             class="w-full border border-gray-300 dark:border-gray-600 rounded p-2.5 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500"
           />
         </div>
@@ -524,21 +520,21 @@ onMounted(() => {
               class="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer"
               @click="goToShow(shipment.id)"
             >
-              <td class="px-6 py-4 relative">
-                <div v-if="shipment.has_notes" 
-                    class="absolute top-1 left-1 text-blue-500 opacity-70"
-                    title="Has notes">
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-                          d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
-                  </svg>
-                </div>
+              <td class="px-6 py-4 capitalize text-gray-600 dark:text-gray-400">
                 {{ shipment.status }}
               </td>
-              <td class="px-6 py-4 text-gray-600 dark:text-gray-400">{{ shipment.bol || '—' }}</td>
-              <td class="px-6 py-4 font-medium text-gray-900 dark:text-gray-100">{{ shipment.shipment_number }}</td>
-              <td class="px-6 py-4 text-gray-600 dark:text-gray-400">{{ shipment.pickup_location?.short_code || '—' }}</td>
-              <td class="px-6 py-4 text-gray-600 dark:text-gray-400">{{ shipment.dc_location?.short_code || '—' }}</td>
+              <td class="px-6 py-4 text-gray-600 dark:text-gray-400">
+                {{ shipment.bol || '—' }}
+              </td>
+              <td class="px-6 py-4 font-medium text-gray-900 dark:text-gray-100">
+                {{ shipment.shipment_number }}
+              </td>
+              <td class="px-6 py-4 text-gray-600 dark:text-gray-400">
+                {{ shipment.pickup_location?.short_code || '—' }}
+              </td>
+              <td class="px-6 py-4 text-gray-600 dark:text-gray-400">
+                {{ shipment.dc_location?.short_code || '—' }}
+              </td>
               <td class="px-6 py-4 text-gray-600 dark:text-gray-400" :title="getFullDateTime(shipment.drop_date)">
                 {{ formatDate(shipment.drop_date) }}
               </td>
@@ -548,8 +544,12 @@ onMounted(() => {
               <td class="px-6 py-4 text-gray-600 dark:text-gray-400" :title="getFullDateTime(shipment.delivery_date)">
                 {{ formatDate(shipment.delivery_date) }}
               </td>
-              <td class="px-6 py-4 text-gray-600 dark:text-gray-400">{{ shipment.carrier?.name || '—' }}</td>
-              <td class="px-6 py-4 text-gray-600 dark:text-gray-400">{{ shipment.trailer || '—' }}</td>
+              <td class="px-6 py-4 text-gray-600 dark:text-gray-400">
+                {{ shipment.carrier?.name || '—' }}
+              </td>
+              <td class="px-6 py-4 text-gray-600 dark:text-gray-400">
+                {{ shipment.trailer || '—' }}
+              </td>
               <td class="px-6 py-4 text-center space-x-4" @click.stop>
                 <a
                   :href="route('admin.shipments.edit', shipment.id)"
@@ -606,76 +606,141 @@ onMounted(() => {
 
     <!-- Teleported Dropdowns -->
     <Teleport to="body">
-      <!-- Status -->
-      <div v-if="showStatusFilter" ref="statusDropdownRoot" class="fixed z-50 bg-white dark:bg-gray-800 border dark:border-gray-600 rounded shadow-xl" :style="statusDropdownStyle">
+      <!-- Status Dropdown -->
+      <div
+        v-if="showStatusFilter"
+        ref="statusDropdownRoot"
+        class="fixed z-[9999] bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-2xl"
+        :style="statusDropdownStyle"
+      >
         <div class="p-4">
-          <select v-model="selectedStatuses" multiple class="w-64 h-48 border dark:border-gray-600 rounded p-2 bg-white dark:bg-gray-700">
-            <option v-for="s in props.statuses" :key="s" :value="s">{{ s }}</option>
+          <select v-model="selectedStatuses" multiple class="w-full h-48 border border-gray-300 dark:border-gray-600 rounded p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option v-for="status in props.statuses" :key="status" :value="status">
+              {{ status }}
+            </option>
           </select>
         </div>
-        <div class="border-t dark:border-gray-700 p-3 flex justify-between text-sm">
-          <span>{{ selectedStatuses.length }} / {{ props.statuses.length }}</span>
-          <button @click="selectedStatuses = [...props.statuses]" class="text-blue-600 hover:underline">Select all</button>
+        <div class="border-t border-gray-200 dark:border-gray-700 p-3 flex justify-between items-center">
+          <span class="text-sm text-gray-500 dark:text-gray-400">
+            {{ selectedStatuses.length }} / {{ props.statuses.length }}
+          </span>
+          <button @click="selectedStatuses = [...props.statuses]" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-md text-sm transition-colors">
+            Select all
+          </button>
         </div>
       </div>
 
-      <!-- Pickup -->
-      <div v-if="showPickupFilter" ref="pickupDropdownRoot" class="fixed z-50 bg-white dark:bg-gray-800 border dark:border-gray-600 rounded shadow-xl" :style="pickupDropdownStyle">
+      <!-- Pickup Location Dropdown -->
+      <div
+        v-if="showPickupFilter"
+        ref="pickupDropdownRoot"
+        class="fixed z-[9999] bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-2xl"
+        :style="pickupDropdownStyle"
+      >
         <div class="p-4">
-          <select v-model="selectedPickupLocations" multiple class="w-64 h-48 border dark:border-gray-600 rounded p-2 bg-white dark:bg-gray-700">
-            <option v-for="code in props.all_shipper_codes" :key="code" :value="code">{{ code }}</option>
+          <select v-model="selectedPickupLocations" multiple class="w-full h-48 border border-gray-300 dark:border-gray-600 rounded p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option v-for="code in props.all_shipper_codes" :key="code" :value="code">
+              {{ code }}
+            </option>
           </select>
         </div>
-        <div class="border-t dark:border-gray-700 p-3 flex justify-between text-sm">
-          <span>{{ selectedPickupLocations.length }} / {{ props.all_shipper_codes.length }}</span>
-          <button @click="selectedPickupLocations = [...props.all_shipper_codes]" class="text-blue-600 hover:underline">Select all</button>
+        <div class="border-t border-gray-200 dark:border-gray-700 p-3 flex justify-between items-center">
+          <span class="text-sm text-gray-500 dark:text-gray-400">
+            {{ selectedPickupLocations.length }} / {{ props.all_shipper_codes.length }}
+          </span>
+          <button @click="selectedPickupLocations = [...props.all_shipper_codes]" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-md text-sm transition-colors">
+            Select all
+          </button>
         </div>
       </div>
 
-      <!-- DC -->
-      <div v-if="showDcFilter" ref="dcDropdownRoot" class="fixed z-50 bg-white dark:bg-gray-800 border dark:border-gray-600 rounded shadow-xl" :style="dcDropdownStyle">
-        <!-- similar structure as above -->
+      <!-- DC Dropdown -->
+      <div
+        v-if="showDcFilter"
+        ref="dcDropdownRoot"
+        class="fixed z-[9999] bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-2xl"
+        :style="dcDropdownStyle"
+      >
         <div class="p-4">
-          <select v-model="selectedDcLocations" multiple class="w-64 h-48 border dark:border-gray-600 rounded p-2 bg-white dark:bg-gray-700">
-            <option v-for="code in props.all_dc_codes" :key="code" :value="code">{{ code }}</option>
+          <select v-model="selectedDcLocations" multiple class="w-full h-48 border border-gray-300 dark:border-gray-600 rounded p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option v-for="code in props.all_dc_codes" :key="code" :value="code">
+              {{ code }}
+            </option>
           </select>
         </div>
-        <div class="border-t dark:border-gray-700 p-3 flex justify-between text-sm">
-          <span>{{ selectedDcLocations.length }} / {{ props.all_dc_codes.length }}</span>
-          <button @click="selectedDcLocations = [...props.all_dc_codes]" class="text-blue-600 hover:underline">Select all</button>
+        <div class="border-t border-gray-200 dark:border-gray-700 p-3 flex justify-between items-center">
+          <span class="text-sm text-gray-500 dark:text-gray-400">
+            {{ selectedDcLocations.length }} / {{ props.all_dc_codes.length }}
+          </span>
+          <button @click="selectedDcLocations = [...props.all_dc_codes]" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-md text-sm transition-colors">
+            Select all
+          </button>
         </div>
       </div>
 
-      <!-- Carrier -->
-      <div v-if="showCarrierFilter" ref="carrierDropdownRoot" class="fixed z-50 bg-white dark:bg-gray-800 border dark:border-gray-600 rounded shadow-xl" :style="carrierDropdownStyle">
+      <!-- Carrier Dropdown -->
+      <div
+        v-if="showCarrierFilter"
+        ref="carrierDropdownRoot"
+        class="fixed z-[9999] bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-2xl"
+        :style="carrierDropdownStyle"
+      >
         <div class="p-4">
-          <select v-model="selectedCarriers" multiple class="w-64 h-48 border dark:border-gray-600 rounded p-2 bg-white dark:bg-gray-700">
-            <option v-for="name in props.all_carrier_names" :key="name" :value="name">{{ name }}</option>
+          <select v-model="selectedCarriers" multiple class="w-full h-48 border border-gray-300 dark:border-gray-600 rounded p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option v-for="name in props.all_carrier_names" :key="name" :value="name">
+              {{ name }}
+            </option>
           </select>
         </div>
-        <div class="border-t dark:border-gray-700 p-3 flex justify-between text-sm">
-          <span>{{ selectedCarriers.length }} / {{ props.all_carrier_names.length }}</span>
-          <button @click="selectedCarriers = [...props.all_carrier_names]" class="text-blue-600 hover:underline">Select all</button>
+        <div class="border-t border-gray-200 dark:border-gray-700 p-3 flex justify-between items-center">
+          <span class="text-sm text-gray-500 dark:text-gray-400">
+            {{ selectedCarriers.length }} / {{ props.all_carrier_names.length }}
+          </span>
+          <button @click="selectedCarriers = [...props.all_carrier_names]" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-md text-sm transition-colors">
+            Select all
+          </button>
         </div>
       </div>
 
-      <!-- Drop Date -->
-      <div v-if="showDropDateFilter" ref="dropDateDropdownRoot" class="fixed z-50 bg-white dark:bg-gray-800 border dark:border-gray-600 rounded shadow-xl" :style="dropDateDropdownStyle">
+      <!-- Drop Date Dropdown -->
+      <div
+        v-if="showDropDateFilter"
+        ref="dropDateDropdownRoot"
+        class="fixed z-[9999] bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-2xl"
+        :style="dropDateDropdownStyle"
+      >
         <div class="p-4 space-y-4">
           <div>
-            <label class="block text-sm mb-1">From</label>
-            <input v-model="dropStart" type="date" class="w-full border dark:border-gray-600 rounded p-2 bg-white dark:bg-gray-700" />
+            <label class="block text-sm text-gray-600 dark:text-gray-400 mb-1">From</label>
+            <input
+              v-model="dropStart"
+              type="date"
+              class="w-full border border-gray-300 dark:border-gray-600 rounded p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
           </div>
           <div>
-            <label class="block text-sm mb-1">To</label>
-            <input v-model="dropEnd" type="date" :min="dropStart" class="w-full border dark:border-gray-600 rounded p-2 bg-white dark:bg-gray-700" />
+            <label class="block text-sm text-gray-600 dark:text-gray-400 mb-1">To</label>
+            <input
+              v-model="dropEnd"
+              type="date"
+              :min="dropStart"
+              class="w-full border border-gray-300 dark:border-gray-600 rounded p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
           </div>
         </div>
-        <div class="border-t dark:border-gray-700 p-3 flex justify-between">
-          <button @click="clearDropDate" class="text-gray-600 hover:underline">Clear</button>
-          <button @click="showDropDateFilter = false" class="text-blue-600 hover:underline">Close</button>
+        <div class="border-t border-gray-200 dark:border-gray-700 p-3 flex justify-between items-center">
+          <button @click="clearDropDate" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-md text-sm transition-colors">
+            Clear
+          </button>
+          <button @click="showDropDateFilter = false" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm transition-colors">
+            Close
+          </button>
         </div>
       </div>
     </Teleport>
   </AdminLayout>
 </template>
+
+<style scoped>
+/* Add any scoped styles if needed */
+</style>

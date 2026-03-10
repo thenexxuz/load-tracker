@@ -38,7 +38,7 @@ class TestNotification extends Notification
 
     public function broadcastOn()
     {
-        return new \Illuminate\Broadcasting\PrivateChannel('user.' . $this->notifiable->id);
+        return new \Illuminate\Broadcasting\Channel('user.' . $this->notifiable->id);
     }
     public function broadcastAs()
     {

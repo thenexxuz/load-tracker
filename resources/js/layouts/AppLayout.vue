@@ -23,32 +23,33 @@ onMounted(() => {
     return
   }
 
-  const channelName = `user.${userId}`
-  console.log(`[Echo] Joining channel: ${channelName}`)
+  if (userId) {
+    const channelName = `user.${userId}`;
+    console.log(`[Echo] Subscribing to ${channelName}`);
+    Notify.info(`Subscribed to notifications on ${channelName}`, {
+      timeout: 3000,
+      clickToClose: true,
+      position: 'right-top',
+    });
 
-  window.Echo.connector.pusher.connection.bind('connected', () => {
-    // safe to join private channels now
-    window.Echo.private(channelName)
-    .listenAny((eventName, event) => {
-      console.log('[Echo] New notification received ('+eventName+'):', event)
+    window.Echo.channel(channelName)  // or .private(channelName) if using PrivateChannel
+      .listen('NewNotification', (event) => {
+        console.log('[Echo] New notification:', event);
 
-      Notify.info(event.message || 'New notification', {
-        title: event.title || 'Notification',
-        timeout: 8000,
-        clickToClose: true,
-        position: 'right-top',
-        onClick: () => {
-          if (event.link) router.visit(event.link)
-        }
+        Notify.info(event.message || 'New notification', {
+          title: event.title || 'Notification',
+          timeout: 8000,
+          clickToClose: true,
+          position: 'right-top',
+          onClick: () => {
+            if (event.link) router.visit(event.link);
+          }
+        });
       })
-    })
-    .error((err) => {
-      console.error('[Echo] Channel error:', err)
-    })
-    .subscribed(() => {
-      console.log(`[Echo] Successfully subscribed to ${channelName}`)
-    })
-});
+      .error((err) => console.error('[Echo] Channel error:', err));
+  } else {
+    console.warn('[Echo] No user ID found in props — cannot subscribe to channel')
+  }
 })
 
 onUnmounted(() => {
