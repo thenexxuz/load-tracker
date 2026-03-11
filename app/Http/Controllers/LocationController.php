@@ -300,7 +300,7 @@ class LocationController extends Controller
                 $waypoints[] = [$loc->longitude, $loc->latitude]; // Mapbox: [lng, lat]
             }
 
-            // If only 2 points, we can still use directions API (or fallback to straight line if preferred)
+            // If only 2 points, we can still use directions API
             if (count($waypoints) < 2) {
                 return ['error' => 'Not enough locations for a route'];
             }
@@ -330,11 +330,11 @@ class LocationController extends Controller
             $seconds = $route['duration'];
 
             return [
-                'total_km' => round($meters / 1000, 1),
-                'total_miles' => round(($meters / 1000) * 0.621371, 1),
+                'total_km'     => round($meters / 1000, 1),
+                'total_miles'  => round(($meters / 1000) * 0.621371, 1),
                 'total_duration' => $this->secondsToHumanTime($seconds),
                 'route_coords' => $route['geometry']['coordinates'] ?? [],
-                'waypoints' => $waypoints,  // exact [lng, lat] for each stop
+                'waypoints'    => $waypoints,  // exact [lng, lat] for each stop
             ];
         });
 
@@ -344,9 +344,10 @@ class LocationController extends Controller
             ->get();
 
         return Inertia::render('Admin/Locations/MultiLocationRoute', [
-            'locations' => $allLocations,
-            'route_data' => $routeData,
-            'mapbox_token' => config('services.mapbox.key'),
+            'locations'           => $allLocations,
+            'route_data'          => $routeData,
+            'mapbox_token'        => config('services.mapbox.key'),
+            'default_rate_per_mile' => 2.50,
         ]);
     }
 

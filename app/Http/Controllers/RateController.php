@@ -7,6 +7,7 @@ use App\Models\Location;
 use App\Models\Rate;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
+use Illuminate\Validation\Rule;
 
 class RateController extends Controller
 {
@@ -35,29 +36,33 @@ class RateController extends Controller
 
     public function create()
     {
-        $carriers = Carrier::select('id', 'name', 'short_code')->get();
-        $pickupLocations = Location::where('type', 'pickup')->select('id', 'short_code', 'name', 'city', 'state')->get();
-        $dcLocations = Location::where('type', 'distribution_center')->select('id', 'short_code', 'name', 'city', 'state')->get();
-
         return Inertia::render('Admin/Rates/Create', [
-            'carriers' => $carriers,
-            'pickupLocations' => $pickupLocations,
-            'dcLocations' => $dcLocations,
+            'locations' => Location::select('id', 'short_code', 'name')
+                ->orderBy('short_code')
+                ->get(),
+            'carriers' => Carrier::select('id', 'name', 'short_code')
+                ->orderBy('name')
+                ->get(),
         ]);
     }
 
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'carrier_id' => 'required|exists:carriers,id',
-            'pickup_location_id' => 'required|exists:locations,id',
-            'dc_location_id' => 'required|exists:locations,id',
-            'rate' => 'required|numeric|min:0',
+            'name'                => 'required|string|max:255',
+            'type'                => ['required', Rule::in(['flat', 'per_mile'])],
+            'rate'                => 'required|numeric|min:0.01',
+            'pickup_location_id'  => 'nullable|exists:locations,id',
+            'dc_location_id'      => 'nullable|exists:locations,id',
+            'carrier_id'          => 'nullable|exists:carriers,id',
+            'effective_from'      => 'nullable|date',
+            'effective_to'        => 'nullable|date|after_or_equal:effective_from',
         ]);
 
         Rate::create($validated);
 
-        return redirect()->route('admin.rates.index')
+        return redirect()
+            ->route('admin.rates.index')
             ->with('success', 'Rate created successfully.');
     }
 
@@ -75,27 +80,34 @@ class RateController extends Controller
 
     public function edit(Rate $rate)
     {
-        $rate->load(['carrier', 'pickupLocation', 'dcLocation']);
-
-        $carriers = Carrier::select('id', 'name', 'short_code')->get();
-        $pickupLocations = Location::where('type', 'pickup')->select('id', 'short_code', 'name')->get();
-        $dcLocations = Location::where('type', 'distribution_center')->select('id', 'short_code', 'name')->get();
+        $rate->load([
+            'pickupLocation:id,short_code,name',
+            'dcLocation:id,short_code,name',
+            'carrier:id,name,short_code',
+        ]);
 
         return Inertia::render('Admin/Rates/Edit', [
             'rate' => $rate,
-            'carriers' => $carriers,
-            'pickupLocations' => $pickupLocations,
-            'dcLocations' => $dcLocations,
+            'locations' => Location::select('id', 'short_code', 'name')
+                ->orderBy('short_code')
+                ->get(),
+            'carriers' => Carrier::select('id', 'name', 'short_code')
+                ->orderBy('name')
+                ->get(),
         ]);
     }
 
     public function update(Request $request, Rate $rate)
     {
         $validated = $request->validate([
-            'carrier_id' => 'required|exists:carriers,id',
-            'pickup_location_id' => 'required|exists:locations,id',
-            'dc_location_id' => 'required|exists:locations,id',
-            'rate' => 'required|numeric|min:0',
+            'name'                => 'required|string|max:255',
+            'type'                => ['required', Rule::in(['flat', 'per_mile'])],
+            'rate'                => 'required|numeric|min:0.01',
+            'pickup_location_id'  => 'nullable|exists:locations,id',
+            'dc_location_id'      => 'nullable|exists:locations,id',
+            'carrier_id'          => 'nullable|exists:carriers,id',
+            'effective_from'      => 'nullable|date',
+            'effective_to'        => 'nullable|date|after_or_equal:effective_from',
         ]);
 
         $rate->update($validated);

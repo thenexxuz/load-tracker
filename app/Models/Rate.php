@@ -111,4 +111,9 @@ class Rate extends Model
 
         return null;
     }
+
+    public function notes()
+    {
+        return $this->morphMany(Note::class, 'notable');
+    }
 }
