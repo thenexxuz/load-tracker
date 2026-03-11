@@ -181,8 +181,8 @@ class ShipmentController extends Controller
     public function show(Shipment $shipment)
     {
         $shipment->load([
-            'pickupLocation:id,short_code,name,latitude,longitude',
-            'dcLocation:id,short_code,name,latitude,longitude,recycling_location_id',
+            'pickupLocation:id,short_code,name,address,city,state,country,zip,latitude,longitude',
+            'dcLocation:id,short_code,name,address,city,state,country,zip,latitude,longitude,recycling_location_id', 
             'dcLocation.recyclingLocation:id,short_code,name,latitude,longitude',
             'carrier:id,name,short_code',
             'notes.user',

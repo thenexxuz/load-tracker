@@ -1,129 +1,220 @@
 <script setup lang="ts">
-import { Head, useForm } from '@inertiajs/vue3'
-import AdminLayout from '@/layouts/AppLayout.vue'
-import { Notify } from 'notiflix';
+import { Head, useForm, Link } from '@inertiajs/vue3'
+import AdminLayout from '@/layouts/AppLayout.vue' // adjust path if needed
+import InputError from '@/components/InputError.vue' // assuming you have this helper component
 
 const props = defineProps<{
-  carriers: Array<{ id: number; name: string; short_code: string }>
-  pickupLocations: Array<{ id: number; short_code: string; name: string | null }>
-  dcLocations: Array<{ id: number; short_code: string; name: string | null }>
+  locations: Array<{ id: number; short_code: string; name: string | null }>
+  carriers: Array<{ id: number; name: string; short_code?: string }>
 }>()
 
 const form = useForm({
-  carrier_id: null,
-  pickup_location_id: null,
-  dc_location_id: null,
-  rate: null,
+  name: '',
+  type: 'per_mile' as 'flat' | 'per_mile',
+  rate: null as number | null,
+  pickup_location_id: null as number | null,
+  dc_location_id: null as number | null,
+  carrier_id: null as number | null,
+  effective_from: '',
+  effective_to: '',
 })
 
 const submit = () => {
-  form.post(route('admin.rates.store'))
+  form.post(route('admin.rates.store'), {
+    onSuccess: () => {
+      form.reset()
+    },
+  })
 }
+
+const isPerMile = () => form.type === 'per_mile'
 </script>
 
 <template>
   <Head title="Create Rate" />
 
   <AdminLayout>
-    <div class="p-6">
-      <h1 class="text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100">
-        Create New Rate
-      </h1>
-
-      <!-- Error banner -->
-      <div v-if="Object.keys(form.errors).length" class="mb-6 p-4 bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-200 rounded-lg">
-        Please fix the errors below.
+    <div class="p-6 max-w-3xl mx-auto">
+      <div class="mb-8">
+        <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">
+          Create New Freight Rate
+        </h1>
+        <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
+          Define a rate for a specific lane, carrier, and validity period.
+        </p>
       </div>
 
-      <form @submit.prevent="submit" class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg dark:shadow-gray-900/30 border border-gray-200 dark:border-gray-700 max-w-2xl">
-        <div class="grid grid-cols-1 gap-6">
-          <!-- Carrier -->
-          <div>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Carrier <span class="text-red-600 dark:text-red-400">*</span>
-            </label>
-            <select
-              v-model="form.carrier_id"
-              required
-              class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none appearance-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
-            >
-              <option :value="null" disabled>Select Carrier</option>
-              <option v-for="carrier in carriers" :key="carrier.id" :value="carrier.id">
-                {{ carrier.short_code }} - {{ carrier.name }}
-              </option>
-            </select>
-            <p v-if="form.errors.carrier_id" class="mt-1 text-sm text-red-600 dark:text-red-400">
-              {{ form.errors.carrier_id }}
-            </p>
-          </div>
+      <form @submit.prevent="submit" class="space-y-8 bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
+        <!-- Name -->
+        <div>
+          <label for="name" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            Rate Name <span class="text-red-500">*</span>
+          </label>
+          <input
+            id="name"
+            v-model="form.name"
+            type="text"
+            class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+            placeholder="e.g. Dallas → Chicago - Dry Van Priority"
+            required
+          />
+          <InputError :message="form.errors.name" class="mt-2" />
+        </div>
 
-          <!-- Pickup Location -->
-          <div>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Pickup Location <span class="text-red-600 dark:text-red-400">*</span>
+        <!-- Type -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            Rate Type <span class="text-red-500">*</span>
+          </label>
+          <div class="mt-2 flex space-x-6">
+            <label class="inline-flex items-center">
+              <input
+                type="radio"
+                v-model="form.type"
+                value="per_mile"
+                class="form-radio text-blue-600"
+                required
+              />
+              <span class="ml-2 text-sm text-gray-900 dark:text-gray-100">Per Mile</span>
             </label>
-            <select
-              v-model="form.pickup_location_id"
-              required
-              class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none appearance-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
-            >
-              <option :value="null" disabled>Select Pickup Location</option>
-              <option v-for="loc in pickupLocations" :key="loc.id" :value="loc.id">
-                {{ loc.short_code }} - {{ loc.name || 'Unnamed' }} - {{ loc.city || 'Unknown City' }}, {{ loc.state || 'Unknown State' }}
-              </option>
-            </select>
-            <p v-if="form.errors.pickup_location_id" class="mt-1 text-sm text-red-600 dark:text-red-400">
-              {{ form.errors.pickup_location_id }}
-            </p>
+            <label class="inline-flex items-center">
+              <input
+                type="radio"
+                v-model="form.type"
+                value="flat"
+                class="form-radio text-blue-600"
+              />
+              <span class="ml-2 text-sm text-gray-900 dark:text-gray-100">Flat Rate</span>
+            </label>
           </div>
+          <InputError :message="form.errors.type" class="mt-2" />
+        </div>
 
-          <!-- DC Location -->
-          <div>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              DC Location <span class="text-red-600 dark:text-red-400">*</span>
-            </label>
-            <select
-              v-model="form.dc_location_id"
-              required
-              class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none appearance-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
-            >
-              <option :value="null" disabled>Select DC Location</option>
-              <option v-for="loc in dcLocations" :key="loc.id" :value="loc.id">
-                {{ loc.short_code }} - {{ loc.name || 'Unnamed' }} - {{ loc.city || 'Unknown City' }}, {{ loc.state || 'Unknown State' }}
-              </option>
-            </select>
-            <p v-if="form.errors.dc_location_id" class="mt-1 text-sm text-red-600 dark:text-red-400">
-              {{ form.errors.dc_location_id }}
-            </p>
-          </div>
-
-          <!-- Rate -->
-          <div>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Rate <span class="text-red-600 dark:text-red-400">*</span>
-            </label>
+        <!-- Rate Value -->
+        <div>
+          <label for="rate" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            Rate Amount <span class="text-red-500">*</span>
+          </label>
+          <div class="mt-1 relative rounded-md shadow-sm">
+            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <span class="text-gray-500 dark:text-gray-400 sm:text-sm">$</span>
+            </div>
             <input
-              v-model="form.rate"
+              id="rate"
+              v-model.number="form.rate"
               type="number"
               step="0.01"
-              min="0"
+              min="0.01"
+              class="block w-full pl-7 pr-12 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+              placeholder="e.g. 2.45"
               required
-              class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
             />
-            <p v-if="form.errors.rate" class="mt-1 text-sm text-red-600 dark:text-red-400">
-              {{ form.errors.rate }}
+            <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+              <span class="text-gray-500 dark:text-gray-400 sm:text-sm" v-if="isPerMile()">/ mile</span>
+              <span class="text-gray-500 dark:text-gray-400 sm:text-sm" v-else>flat</span>
+            </div>
+          </div>
+          <InputError :message="form.errors.rate" class="mt-2" />
+        </div>
+
+        <!-- Pickup Location -->
+        <div>
+          <label for="pickup_location_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            Pickup Location
+          </label>
+          <select
+            id="pickup_location_id"
+            v-model="form.pickup_location_id"
+            class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+          >
+            <option :value="null">— Select Pickup Location —</option>
+            <option v-for="loc in props.locations" :key="loc.id" :value="loc.id">
+              {{ loc.short_code }} — {{ loc.name || 'Unnamed' }}
+            </option>
+          </select>
+          <InputError :message="form.errors.pickup_location_id" class="mt-2" />
+        </div>
+
+        <!-- DC Location -->
+        <div>
+          <label for="dc_location_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            Distribution Center (DC)
+          </label>
+          <select
+            id="dc_location_id"
+            v-model="form.dc_location_id"
+            class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+          >
+            <option :value="null">— Select DC Location —</option>
+            <option v-for="loc in props.locations" :key="loc.id" :value="loc.id">
+              {{ loc.short_code }} — {{ loc.name || 'Unnamed' }}
+            </option>
+          </select>
+          <InputError :message="form.errors.dc_location_id" class="mt-2" />
+        </div>
+
+        <!-- Carrier -->
+        <div>
+          <label for="carrier_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            Carrier
+          </label>
+          <select
+            id="carrier_id"
+            v-model="form.carrier_id"
+            class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+          >
+            <option :value="null">— Select Carrier (optional) —</option>
+            <option v-for="carrier in props.carriers" :key="carrier.id" :value="carrier.id">
+              {{ carrier.name }} {{ carrier.short_code ? `(${carrier.short_code})` : '' }}
+            </option>
+          </select>
+          <InputError :message="form.errors.carrier_id" class="mt-2" />
+        </div>
+
+        <!-- Effective Dates -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label for="effective_from" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Effective From
+            </label>
+            <input
+              id="effective_from"
+              v-model="form.effective_from"
+              type="date"
+              class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+            />
+            <InputError :message="form.errors.effective_from" class="mt-2" />
+          </div>
+
+          <div>
+            <label for="effective_to" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Effective To
+            </label>
+            <input
+              id="effective_to"
+              v-model="form.effective_to"
+              type="date"
+              class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+            />
+            <InputError :message="form.errors.effective_to" class="mt-2" />
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              Leave blank if no expiration
             </p>
           </div>
         </div>
 
-        <div class="flex justify-end space-x-4 mt-8">
-          <a href="javascript:history.back()" class="px-6 py-3 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
+        <!-- Submit -->
+        <div class="flex items-center justify-end space-x-4 pt-6 border-t dark:border-gray-700">
+          <Link
+            :href="route('admin.rates.index')"
+            class="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
+          >
             Cancel
-          </a>
+          </Link>
           <button
             type="submit"
             :disabled="form.processing"
-            class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-md font-medium transition-colors disabled:opacity-50"
+            class="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
           >
             {{ form.processing ? 'Creating...' : 'Create Rate' }}
           </button>

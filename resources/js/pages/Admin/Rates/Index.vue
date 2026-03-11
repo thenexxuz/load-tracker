@@ -1,189 +1,221 @@
 <script setup lang="ts">
-import { Head, router, usePage } from '@inertiajs/vue3'
+import { Head, Link, router } from '@inertiajs/vue3'
 import AdminLayout from '@/layouts/AppLayout.vue'
-import { Confirm, Notify } from 'notiflix';
-import { onMounted } from 'vue';
-
-const page = usePage()
+import { Notify } from 'notiflix'
+import { format } from 'date-fns' // optional: better date formatting (npm install date-fns)
 
 const props = defineProps<{
   rates: {
     data: Array<{
       id: number
-      carrier: { name: string; short_code: string } | null
-      pickup_location: { short_code: string; name: string | null } | null
-      dc_location: { short_code: string; name: string | null } | null
+      name: string | null
+      type: 'flat' | 'per_mile'
       rate: number
+      pickup_location?: { short_code: string; name?: string | null }
+      dc_location?: { short_code: string; name?: string | null }
+      carrier?: { name: string; short_code?: string }
+      effective_from: string | null
+      effective_to: string | null
+      created_at: string
     }>
-    current_page: number
-    last_page: number
-    from: number
-    to: number
-    total: number
+    links: any[] // for pagination
+    meta: { current_page: number; last_page: number; total: number }
   }
 }>()
 
-const destroy = async (id: number) => {
-  const result = await Confirm.show(
+const deleteRate = (id: number) => {
+  Notify.confirm(
     'Delete Rate',
-    'Are you sure you want to delete this rate? This action cannot be undone.',
-    'Yes, delete it',
+    'Are you sure you want to delete this rate? This cannot be undone.',
+    'Yes, delete',
     'Cancel',
     () => {
       router.delete(route('admin.rates.destroy', id), {
         onSuccess: () => {
-          Notify.success('Rate has been deleted.')
+          Notify.success('Rate deleted successfully.')
         },
         onError: () => {
           Notify.failure('Failed to delete rate.')
-        }
+        },
       })
     },
-    () => {
-      // Cancelled - do nothing
-    },
+    () => {},
     {
-      titleColor: '#ff0000',
-      okButtonBackground: '#ff0000',
+      titleColor: '#ef4444',
+      okButtonBackground: '#ef4444',
     }
   )
 }
 
-const goToShow = (id: number) => {
-  router.visit(route('admin.rates.show', id))
+const formatDate = (date: string | null): string => {
+  if (!date) return '—'
+  try {
+    return format(new Date(date), 'MMM d, yyyy')
+  } catch {
+    return 'Invalid date'
+  }
 }
 
-onMounted(() => {
-  if (page.props.flash?.success) {
-    Notify.success(page.props.flash.success)
-  }
-  if (page.props.flash?.error) {
-    Notify.failure(page.props.flash.error)
-  }
-  if (page.props.flash?.info) {
-    Notify.info(page.props.flash.info)
-  }
-  if (page.props.flash?.warning) {
-    Notify.warning(page.props.flash.warning)
-  }
-})
+const isActive = (from: string | null, to: string | null): boolean => {
+  const now = new Date()
+  const start = from ? new Date(from) : null
+  const end = to ? new Date(to) : null
+
+  if (start && start > now) return false
+  if (end && end < now) return false
+  return true
+}
 </script>
 
 <template>
-  <Head title="Manage Rates" />
+  <Head title="Rates" />
 
   <AdminLayout>
     <div class="p-6">
       <div class="flex justify-between items-center mb-6">
         <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">
-          Rates Management
+          Freight Rates
         </h1>
-        <a
+        <Link
           :href="route('admin.rates.create')"
-          class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-md font-medium transition-colors"
+          class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
         >
-          Add New Rate
-        </a>
+          Create New Rate
+        </Link>
       </div>
 
       <!-- Table -->
-      <div class="overflow-x-auto">
-        <table class="w-full border-collapse bg-white dark:bg-gray-800 rounded-lg overflow-hidden shadow-md dark:shadow-gray-900/30">
-          <thead>
-            <tr class="bg-gray-100 dark:bg-gray-700 text-left">
-              <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300">Carrier</th>
-              <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300">Pickup Location</th>
-              <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300">DC Location</th>
-              <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300">Rate</th>
-              <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300 text-center">Actions</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-            <tr
-              v-for="rate in rates.data"
-              :key="rate.id"
-              class="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer transition-colors"
-              @click="goToShow(rate.id)"
-            >
-              <td class="px-6 py-4 text-gray-600 dark:text-gray-400">
-                <div v-if="rate.has_notes" 
-                    class="absolute top-1 left-1 text-blue-500 opacity-70"
-                    title="Has notes">
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-                          d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
-                  </svg>
-                </div>
-                {{ rate.carrier?.name || '—' }}
-              </td>
-              <td class="px-6 py-4 text-gray-600 dark:text-gray-400">
-                {{ rate.pickup_location?.short_code || '—' }}
-              </td>
-              <td class="px-6 py-4 text-gray-600 dark:text-gray-400">
-                {{ rate.dc_location?.short_code || '—' }}
-              </td>
-              <td class="px-6 py-4 text-gray-600 dark:text-gray-400">
-                ${{ rate.rate.toFixed(2) }}
-              </td>
-              <td class="px-6 py-4 text-center space-x-5" @click.stop>
-                <a
-                  :href="route('admin.rates.edit', rate.id)"
-                  class="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 transition-colors"
-                  title="Edit Rate"
-                  @click.stop
-                >
-                  <svg class="w-5.5 h-5.5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                  </svg>
-                </a>
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+            <thead class="bg-gray-50 dark:bg-gray-900">
+              <tr>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Name
+                </th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Type
+                </th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Rate
+                </th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Lane (Pickup → DC)
+                </th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Carrier
+                </th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Valid Period
+                </th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Status
+                </th>
+                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+              <tr v-for="rate in rates.data" :key="rate.id">
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
+                  {{ rate.name || 'Unnamed Rate' }}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100 capitalize">
+                  {{ rate.type }}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
+                  <span v-if="rate.type === 'flat'">
+                    ${{ rate.rate.toFixed(2) }} flat
+                  </span>
+                  <span v-else>
+                    ${{ rate.rate.toFixed(2) }}/mi
+                  </span>
+                </td>
+                <td class="px-6 py-4 text-sm text-gray-900 dark:text-gray-100">
+                  {{ rate.pickup_location?.short_code || '—' }}
+                  →
+                  {{ rate.dc_location?.short_code || '—' }}
+                  <div v-if="rate.pickup_location?.name || rate.dc_location?.name" class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    {{ rate.pickup_location?.name || '' }}
+                    {{ rate.dc_location?.name ? ' → ' + rate.dc_location.name : '' }}
+                  </div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
+                  {{ rate.carrier?.name || '—' }}
+                  <span v-if="rate.carrier?.short_code" class="text-xs text-gray-500 dark:text-gray-400">
+                    ({{ rate.carrier.short_code }})
+                  </span>
+                </td>
+                <td class="px-6 py-4 text-sm text-gray-900 dark:text-gray-100">
+                  <div>
+                    From: {{ formatDate(rate.effective_from) }}
+                  </div>
+                  <div>
+                    To: {{ formatDate(rate.effective_to) || 'No end date' }}
+                  </div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <span
+                    v-if="isActive(rate.effective_from, rate.effective_to)"
+                    class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                  >
+                    Active
+                  </span>
+                  <span
+                    v-else
+                    class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
+                  >
+                    Inactive
+                  </span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                  <Link
+                    :href="route('admin.rates.edit', rate.id)"
+                    class="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 mr-3"
+                  >
+                    Edit
+                  </Link>
+                  <button
+                    @click="deleteRate(rate.id)"
+                    class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
+                  >
+                    Delete
+                  </button>
+                </td>
+              </tr>
 
-                <button
-                  @click.stop="destroy(rate.id)"
-                  class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 transition-colors"
-                  title="Delete Rate"
-                >
-                  <svg class="w-5.5 h-5.5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                  </svg>
-                </button>
-              </td>
-            </tr>
+              <tr v-if="rates.data.length === 0">
+                <td colspan="8" class="px-6 py-12 text-center text-sm text-gray-500 dark:text-gray-400">
+                  No rates found. Create one to get started.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
 
-            <!-- Empty state -->
-            <tr v-if="!rates.data?.length">
-              <td colspan="5" class="px-6 py-16 text-center text-gray-500 dark:text-gray-400 text-lg font-medium">
-                No rates found
-              </td>
-            </tr>
-          </tbody>
-        </table>
-
-        <!-- Pagination -->
-        <div v-if="rates.data?.length" class="mt-6 flex flex-col sm:flex-row justify-between items-center gap-4 text-sm text-gray-700 dark:text-gray-300">
-          <div>
-            Showing {{ rates.from || 0 }} to {{ rates.to || 0 }} of {{ rates.total || 0 }} rates
+        <!-- Pagination (simple example) -->
+        <div v-if="rates?.meta?.last_page > 1" class="px-6 py-4 flex items-center justify-between border-t dark:border-gray-700">
+          <div v-if="rates && rates?.meta && rates?.meta?.last_page > 1">
+            Showing page {{ rates?.meta?.current_page }} of {{ rates?.meta?.last_page }} ...
           </div>
 
-          <div class="flex items-center space-x-2">
-            <button
-              :disabled="rates.current_page === 1"
-              @click="router.get(route('admin.rates.index', { page: rates.current_page - 1 }), {}, { preserveState: true, preserveScroll: true })"
-              class="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              Previous
-            </button>
 
-            <span class="px-4 py-2 font-medium">
-              Page {{ rates.current_page }} of {{ rates.last_page }}
-            </span>
 
-            <button
-              :disabled="rates.current_page === rates.last_page"
-              @click="router.get(route('admin.rates.index', { page: rates.current_page + 1 }), {}, { preserveState: true, preserveScroll: true })"
-              class="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              Next
-            </button>
+          <div v-if="rates?.meta?.last_page > 1" class="...">
+            <Link
+              v-for="link in rates.links"
+              :key="link.url"
+              :href="link.url"
+              v-html="link.label"
+              class="px-3 py-1 rounded-md text-sm"
+              :class="{
+                'bg-blue-600 text-white': link.active,
+                'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600': !link.active && link.url,
+                'text-gray-400 cursor-not-allowed': !link.url
+              }"
+              v-if="link.url || link.active"
+            />
           </div>
         </div>
       </div>

@@ -10,11 +10,27 @@ use Inertia\Inertia;
 
 class RateController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $rates = Rate::with(['carrier', 'pickupLocation', 'dcLocation'])->paginate(10);
+        $query = Rate::query()
+            ->with([
+                'pickupLocation:id,short_code,name',
+                'dcLocation:id,short_code,name',
+                'carrier:id,name,short_code',
+            ])
+            ->orderBy('effective_from', 'desc')
+            ->orderBy('effective_to', 'desc')
+            ->orderBy('type');
 
-        return Inertia::render('Admin/Rates/Index', ['rates' => $rates]);
+        if ($request->search) {
+            $query->where('name', 'like', '%' . $request->search . '%');
+        }
+
+        $rates = $query->paginate(15);
+
+        return Inertia::render('Admin/Rates/Index', [
+            'rates' => $rates,
+        ]);
     }
 
     public function create()
