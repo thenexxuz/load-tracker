@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, Link, router } from '@inertiajs/vue3'
+import { Head, router } from '@inertiajs/vue3'
 import AdminLayout from '@/layouts/AppLayout.vue'
 import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue'
 import mapboxgl from 'mapbox-gl'
@@ -57,7 +57,6 @@ const estimatedRate = computed(() => {
 const mapContainer = ref<HTMLDivElement | null>(null)
 let map: mapboxgl.Map | null = null
 
-// Submit selected locations to backend
 const calculateRoute = async () => {
   if (selectedLocations.value.length < 2) {
     error.value = 'Please select at least two locations'
@@ -66,7 +65,7 @@ const calculateRoute = async () => {
 
   isLoading.value = true
   error.value = null
-  routeData.value = null // Clear previous result
+  routeData.value = null
 
   router.post(route('admin.locations.multi-route-calculate'), {
     location_ids: selectedLocations.value.map(loc => loc.id),
@@ -75,9 +74,8 @@ const calculateRoute = async () => {
       routeData.value = page.props.route_data
 
       if (routeData.value?.route_coords?.length) {
-        // Wait for Vue to render the map container
         await nextTick()
-        await nextTick() // extra safety
+        await nextTick()
         if (mapContainer.value) {
           drawMap()
         } else {
@@ -96,7 +94,6 @@ const calculateRoute = async () => {
   })
 }
 
-// Draw map with improved marker placement and safety checks
 const drawMap = () => {
   if (!mapContainer.value || !routeData.value?.route_coords?.length) {
     console.warn('Cannot draw map: missing container or route coordinates')
@@ -110,8 +107,7 @@ const drawMap = () => {
 
   console.log('Drawing route with', routeData.value.route_coords.length, 'coordinates')
 
-  // Safety: Prevent loop by removing last point if it matches first
-  const coords = routeData.value.route_coords
+  const coords = routeData.value.route_coords.slice() // avoid mutating original
   if (coords.length > 2) {
     const first = coords[0]
     const last = coords[coords.length - 1]
@@ -134,6 +130,9 @@ const drawMap = () => {
   map.addControl(new mapboxgl.NavigationControl(), 'top-right')
 
   map.on('load', () => {
+    // Force resize once loaded (helps in some edge cases)
+    map!.resize()
+
     // Route line
     map!.addSource('route', {
       type: 'geojson',
@@ -164,14 +163,12 @@ const drawMap = () => {
 
     // Markers
     selectedLocations.value.forEach((loc, index) => {
-      let coord = routeData.value.waypoints?.[index] || null
+      let coord = routeData.value?.waypoints?.[index] || null
 
       if (!coord || coord.length !== 2) {
-        if (index === 0) {
-          coord = coords[0]
-        } else if (index === selectedLocations.value.length - 1) {
-          coord = coords[coords.length - 1]
-        } else {
+        if (index === 0) coord = coords[0]
+        else if (index === selectedLocations.value.length - 1) coord = coords[coords.length - 1]
+        else {
           const numSegments = selectedLocations.value.length - 1
           const segmentLengthApprox = Math.floor(coords.length / numSegments)
           const pointIndex = Math.min(index * segmentLengthApprox, coords.length - 1)
@@ -180,14 +177,14 @@ const drawMap = () => {
       }
 
       if (!coord || coord.length !== 2) {
-        console.warn(`Skipping marker for stop ${index + 1}: no valid coordinate`)
+        console.warn(`Skipping marker for stop ${index + 1}`)
         return
       }
 
       const color = index === 0 ? '#22c55e' : index === selectedLocations.value.length - 1 ? '#ef4444' : '#f59e0b'
 
       new mapboxgl.Marker({ color })
-        .setLngLat(new mapboxgl.LngLat(coord[0], coord[1]))
+        .setLngLat([coord[0], coord[1]])
         .setPopup(new mapboxgl.Popup().setText(`${index + 1}: ${loc.short_code}`))
         .addTo(map!)
     })
@@ -196,32 +193,27 @@ const drawMap = () => {
     if (coords.length >= 2) {
       const bounds = new mapboxgl.LngLatBounds()
       coords.forEach(([lng, lat]) => {
-        if (isFinite(lng) && isFinite(lat)) {
-          bounds.extend([lng, lat])
-        }
+        if (isFinite(lng) && isFinite(lat)) bounds.extend([lng, lat])
       })
 
       const sw = bounds.getSouthWest()
       const ne = bounds.getNorthEast()
 
-      const lngDiff = Math.abs(ne.lng - sw.lng)
-      const latDiff = Math.abs(ne.lat - sw.lat)
-
       if (
         isFinite(sw.lng) && isFinite(sw.lat) &&
         isFinite(ne.lng) && isFinite(ne.lat) &&
-        lngDiff > 0.00001 && latDiff > 0.00001
+        Math.abs(ne.lng - sw.lng) > 0.00001 &&
+        Math.abs(ne.lat - sw.lat) > 0.00001
       ) {
-        map!.fitBounds(bounds, {
-          padding: 100,
-          duration: 1200,
-          maxZoom: 15,
-        })
+        map!.fitBounds(bounds, { padding: 100, duration: 1200, maxZoom: 15 })
       } else {
         map!.setCenter(coords[0])
         map!.setZoom(10)
       }
     }
+
+    // Optional: resize again after fitBounds animation (helps if layout shifted)
+    setTimeout(() => map?.resize(), 1300)
   })
 }
 
@@ -289,12 +281,8 @@ onUnmounted(() => {
 
       <!-- Status / Feedback -->
       <div class="min-h-[1.5rem]">
-        <p v-if="error" class="text-red-600 dark:text-red-400">
-          {{ error }}
-        </p>
-        <p v-else-if="isLoading" class="text-blue-600 dark:text-blue-400">
-          Calculating route...
-        </p>
+        <p v-if="error" class="text-red-600 dark:text-red-400">{{ error }}</p>
+        <p v-else-if="isLoading" class="text-blue-600 dark:text-blue-400">Calculating route...</p>
         <p v-else-if="!routeData" class="text-sm text-gray-600 dark:text-gray-400">
           Select at least two locations and click "Calculate Route" to generate the route.
         </p>
@@ -343,19 +331,18 @@ onUnmounted(() => {
         </p>
       </div>
 
-      <!-- Map -->
+      <!-- Map Container – full width, fixed height for reliability -->
       <div v-if="routeData" class="mt-6">
-        <div ref="mapContainer" class="w-full h-[600px] rounded-lg border border-gray-300 dark:border-gray-700 shadow overflow-hidden"></div>
+        <div 
+          ref="mapContainer" 
+          class="w-full h-[600px] rounded-lg border border-gray-300 dark:border-gray-700 shadow overflow-hidden"
+        ></div>
       </div>
     </div>
   </AdminLayout>
 </template>
 
 <style scoped>
-:deep(.mapboxgl-map) {
-  width: 75vw;
-  height: 75vh;
-}
 :deep(.mapboxgl-popup) {
   color: black;
 }
