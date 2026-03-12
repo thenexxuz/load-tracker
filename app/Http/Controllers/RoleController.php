@@ -58,4 +58,42 @@ class RoleController extends Controller
         return redirect()->route('admin.roles.index')
             ->with('success', 'Role deleted.');
     }
+
+    public function export()
+    {
+        $roles = Role::all();
+
+        $callback = function () use ($roles) {
+            $file = fopen('php://output', 'w');
+            fputcsv($file, ['ID', 'Name', 'Guard Name']);
+
+            foreach ($roles as $role) {
+                fputcsv($file, [$role->id, $role->name, $role->guard_name]);
+            }
+            fclose($file);
+        };
+
+        return response()->stream($callback, 200, [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => 'attachment; filename="roles-' . now()->format('Y-m-d') . '.csv"',
+        ]);
+    }
+
+    public function import(Request $request)
+    {
+        $request->validate(['file' => 'required|file|mimes:csv,txt|max:2048']);
+
+        $handle = fopen($request->file('file')->getPathname(), 'r');
+        fgetcsv($handle); // skip header
+
+        while (($row = fgetcsv($handle)) !== false) {
+            Role::updateOrCreate(
+                ['name' => $row[1]],
+                ['guard_name' => $row[2] ?? 'web']
+            );
+        }
+        fclose($handle);
+
+        return back()->with('success', 'Roles imported successfully!');
+    }
 }

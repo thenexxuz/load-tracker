@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { Head, Link, router, usePage } from '@inertiajs/vue3'
 import AdminLayout from '@/layouts/AppLayout.vue'
+import { Confirm, Notify } from 'notiflix'
 import { onMounted, ref, watch } from 'vue'
-import { Confirm, Notify } from 'notiflix';
 
 const page = usePage()
 
@@ -48,14 +48,52 @@ watch([search, perPage], () => {
   })
 })
 
-// Pagination
-const changePage = (url: string | null) => {
-  if (url) {
-    router.visit(url, {
-      preserveState: true,
-      preserveScroll: true,
-    })
-  }
+// ── Export Locations ──────────────────────────────────────────────────────────
+const exportLocations = () => {
+  window.location.href = route('admin.locations.export')
+}
+
+// ── Import Locations ──────────────────────────────────────────────────────────
+const importInput = ref<HTMLInputElement | null>(null)
+
+const triggerImport = () => {
+  importInput.value?.click()
+}
+
+const handleImport = (event: Event) => {
+  const fileInput = event.target as HTMLInputElement
+  const file = fileInput.files?.[0]
+
+  if (!file) return
+
+  Confirm.show(
+    'Import Locations',
+    'This will update existing locations by short_code and add new ones. Existing data will be overwritten where matched. Continue?',
+    'Yes, import',
+    'Cancel',
+    () => {
+      const formData = new FormData()
+      formData.append('file', file)
+
+      router.post(route('admin.locations.import'), formData, {
+        onSuccess: () => {
+          Notify.success('Locations imported successfully!')
+          router.reload({ only: ['locations', 'flash'] }) // refresh table
+          fileInput.value = ''
+        },
+        onError: (errors) => {
+          Notify.failure(errors.file || 'Import failed. Please check the file format.')
+        },
+      })
+    },
+    () => {
+      fileInput.value = ''
+    },
+    {
+      okButtonBackground: '#10b981',
+      titleColor: '#111827',
+    }
+  )
 }
 
 // Delete with confirmation
@@ -75,9 +113,7 @@ const destroy = (id: number) => {
         }
       })
     },
-    () => {
-      // Cancelled - do nothing
-    },
+    () => {},
     {
       titleColor: '#ff0000',
       okButtonBackground: '#ff0000',
@@ -86,18 +122,10 @@ const destroy = (id: number) => {
 }
 
 onMounted(() => {
-  if (page.props.flash?.success) {
-    Notify.success(page.props.flash.success)
-  }
-  if (page.props.flash?.error) {
-    Notify.failure(page.props.flash.error)
-  }
-  if (page.props.flash?.info) {
-    Notify.info(page.props.flash.info)
-  }
-  if (page.props.flash?.warning) {
-    Notify.warning(page.props.flash.warning)
-  }
+  if (page.props.flash?.success) Notify.success(page.props.flash.success)
+  if (page.props.flash?.error) Notify.failure(page.props.flash.error)
+  if (page.props.flash?.info) Notify.info(page.props.flash.info)
+  if (page.props.flash?.warning) Notify.warning(page.props.flash.warning)
 })
 </script>
 
@@ -106,17 +134,48 @@ onMounted(() => {
 
   <AdminLayout>
     <div class="p-6">
-      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
         <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">
           Locations
         </h1>
 
-        <Link
-          :href="route('admin.locations.create')"
-          class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-        >
-          + New Location
-        </Link>
+        <div class="flex flex-wrap gap-3">
+          <!-- Export Button -->
+          <button
+            @click="exportLocations"
+            class="inline-flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg shadow-sm transition-colors"
+          >
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            Export Locations (CSV)
+          </button>
+
+          <!-- Import Button -->
+          <label
+            class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg shadow-sm cursor-pointer transition-colors"
+          >
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
+            </svg>
+            Import Locations (CSV)
+            <input
+              ref="importInput"
+              type="file"
+              accept=".csv,.txt"
+              class="hidden"
+              @change="handleImport"
+            />
+          </label>
+
+          <!-- Create Button -->
+          <Link
+            :href="route('admin.locations.create')"
+            class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg shadow-sm transition-colors"
+          >
+            + New Location
+          </Link>
+        </div>
       </div>
 
       <!-- Filters -->
@@ -166,7 +225,7 @@ onMounted(() => {
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Coordinates
                 </th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
@@ -179,8 +238,8 @@ onMounted(() => {
               >
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
                   <div v-if="location.has_notes" 
-                      class="absolute top-1 left-1 text-blue-500 opacity-70"
-                      title="Has notes">
+                       class="absolute top-1 left-1 text-blue-500 opacity-70"
+                       title="Has notes">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
                             d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
@@ -208,23 +267,23 @@ onMounted(() => {
                   </span>
                   <span v-else>—</span>
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  <div class="flex space-x-3">
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-center">
+                  <div class="flex justify-center space-x-4">
                     <Link
                       :href="route('admin.locations.edit', location.id)"
                       class="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300"
                     >
-                        <svg class="w-5.5 h-5.5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg class="w-5 h-5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                        </svg>
+                      </svg>
                     </Link>
                     <button
                       @click="destroy(location.id)"
                       class="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300"
                     >
-                        <svg class="w-5.5 h-5.5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg class="w-5 h-5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                        </svg>
+                      </svg>
                     </button>
                   </div>
                 </td>
@@ -240,7 +299,7 @@ onMounted(() => {
         </div>
 
         <!-- Pagination -->
-        <div v-if="locations.data.length" class="px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+        <div v-if="locations.data.length" class="px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-800 rounded-b-lg">
           <div class="text-sm text-gray-700 dark:text-gray-300 mb-4 sm:mb-0">
             Showing {{ locations.from ?? 0 }}–{{ locations.to ?? 0 }} of {{ locations.total }} locations
           </div>

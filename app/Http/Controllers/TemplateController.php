@@ -113,4 +113,68 @@ class TemplateController extends Controller
         return redirect()->route('admin.templates.index')
             ->with('success', 'Template deleted successfully.');
     }
+
+    public function export()
+    {
+        $templates = Template::all();
+
+        $callback = function () use ($templates) {
+            $file = fopen('php://output', 'w');
+            fputcsv($file, ['ID', 'Name', 'Content', 'Type', 'Created At']); // adjust columns as needed
+
+            foreach ($templates as $template) {
+                fputcsv($file, [
+                    $template->id,
+                    $template->name,
+                    $template->content ?? $template->body ?? $template->html ?? '', // adjust field name
+                    $template->type ?? 'general', // if you have a type field
+                    $template->created_at,
+                ]);
+            }
+            fclose($file);
+        };
+
+        return response()->stream($callback, 200, [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => 'attachment; filename="templates-' . now()->format('Y-m-d') . '.csv"',
+        ]);
+    }
+
+    public function import(Request $request)
+    {
+        $request->validate([
+            'file' => 'required|file|mimes:csv,txt|max:10240', // up to 10MB
+        ]);
+
+        $file = $request->file('file');
+        $handle = fopen($file->getPathname(), 'r');
+        fgetcsv($handle); // skip header row
+
+        $imported = 0;
+        $updated = 0;
+
+        while (($row = fgetcsv($handle)) !== false) {
+            if (empty($row[1]))
+                continue; // skip if name is empty
+
+            $template = Template::updateOrCreate(
+                ['name' => trim($row[1])],
+                [
+                    'content' => trim($row[2] ?? ''), // adjust field name
+                    'type' => trim($row[3] ?? 'general'),
+                    // add more fields if needed
+                ]
+            );
+
+            if ($template->wasRecentlyCreated) {
+                $imported++;
+            } else {
+                $updated++;
+            }
+        }
+
+        fclose($handle);
+
+        return back()->with('success', "Import complete: {$imported} new templates added, {$updated} updated.");
+    }
 }

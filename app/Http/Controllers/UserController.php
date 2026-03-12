@@ -76,4 +76,59 @@ class UserController extends Controller
         return redirect()->route('admin.users.index')
             ->with('success', 'User roles updated successfully.');
     }
+
+    public function export()
+    {
+        $users = User::with('roles')->get();
+
+        $callback = function () use ($users) {
+            $file = fopen('php://output', 'w');
+            fputcsv($file, ['ID', 'Name', 'Email', 'Roles (comma-separated)', 'Created At']);
+
+            foreach ($users as $user) {
+                $roles = $user->roles->pluck('name')->join(', ');
+                fputcsv($file, [
+                    $user->id,
+                    $user->name,
+                    $user->email,
+                    $roles,
+                    $user->created_at,
+                ]);
+            }
+            fclose($file);
+        };
+
+        return response()->stream($callback, 200, [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => 'attachment; filename="users-' . now()->format('Y-m-d') . '.csv"',
+        ]);
+    }
+
+    public function import(Request $request)
+    {
+        $request->validate([
+            'file' => 'required|file|mimes:csv,txt|max:2048',
+        ]);
+
+        $file = $request->file('file');
+        $handle = fopen($file->getPathname(), 'r');
+        fgetcsv($handle); // skip header
+
+        while (($row = fgetcsv($handle)) !== false) {
+            $user = User::updateOrCreate(
+                ['email' => $row[2]],
+                ['name' => $row[1]]
+            );
+
+            // Preserve roles
+            if (!empty($row[3])) {
+                $roleNames = array_map('trim', explode(',', $row[3]));
+                $user->syncRoles($roleNames);
+            }
+        }
+
+        fclose($handle);
+
+        return back()->with('success', 'Users imported successfully with roles preserved!');
+    }
 }

@@ -458,4 +458,84 @@ class LocationController extends Controller
             $dc->distanceTo($recycling, true);
         }
     }
+
+    public function export()
+    {
+        $locations = Location::all();
+
+        $callback = function () use ($locations) {
+            $file = fopen('php://output', 'w');
+            fputcsv($file, [
+                'ID',
+                'Short Code',
+                'Name',
+                'Address',
+                'City',
+                'State',
+                'ZIP',
+                'Country',
+                'Latitude',
+                'Longitude',
+                'Type',
+                'Created At'
+            ]);
+
+            foreach ($locations as $loc) {
+                fputcsv($file, [
+                    $loc->id,
+                    $loc->short_code,
+                    $loc->name ?? '',
+                    $loc->address ?? '',
+                    $loc->city ?? '',
+                    $loc->state ?? '',
+                    $loc->zip ?? '',
+                    $loc->country ?? '',
+                    $loc->latitude ?? '',
+                    $loc->longitude ?? '',
+                    $loc->type ?? '',
+                    $loc->created_at,
+                ]);
+            }
+            fclose($file);
+        };
+
+        return response()->stream($callback, 200, [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => 'attachment; filename="locations-' . now()->format('Y-m-d') . '.csv"',
+        ]);
+    }
+
+    public function import(Request $request)
+    {
+        $request->validate([
+            'file' => 'required|file|mimes:csv,txt|max:10240',
+        ]);
+
+        $handle = fopen($request->file('file')->getPathname(), 'r');
+        fgetcsv($handle); // skip header
+
+        while (($row = fgetcsv($handle)) !== false) {
+            if (empty(trim($row[1] ?? '')))
+                continue; // skip if short_code empty
+
+            Location::updateOrCreate(
+                ['short_code' => trim($row[1])],
+                [
+                    'name' => trim($row[2] ?? null),
+                    'address' => trim($row[3] ?? null),
+                    'city' => trim($row[4] ?? null),
+                    'state' => trim($row[5] ?? null),
+                    'zip' => trim($row[6] ?? null),
+                    'country' => trim($row[7] ?? null),
+                    'latitude' => is_numeric($row[8]) ? (float) $row[8] : null,
+                    'longitude' => is_numeric($row[9]) ? (float) $row[9] : null,
+                    'type' => trim($row[10] ?? null),
+                ]
+            );
+        }
+
+        fclose($handle);
+
+        return back()->with('success', 'Locations imported successfully!');
+    }
 }
