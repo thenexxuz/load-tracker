@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Inertia\Inertia;
+use Illuminate\Validation\Rule;
 
 class LocationController extends Controller
 {
@@ -65,19 +66,26 @@ class LocationController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'short_code' => 'required|string|max:50|unique:locations',
-            'name' => 'nullable|string|max:255',
-            'type' => 'required|in:distribution_center,recycling,pickup',
-            'address' => 'nullable|string|max:255',
-            'city' => 'nullable|string|max:255',
-            'state' => 'nullable|string|max:255',
-            'zip' => 'nullable|string|max:20',
-            'country' => 'nullable|string|max:255',
-            'latitude' => 'nullable|numeric|between:-90,90',
-            'longitude' => 'nullable|numeric|between:-180,180',
+            'short_code' => [
+                'required',
+                'string',
+                'max:50',
+                Rule::unique('locations', 'short_code')
+                    ->where(fn ($query) => $query->where('type', '!=', 'recycling'))
+                    ->ignore($this->location ?? null), // for update
+            ],
+            'name'       => 'nullable|string|max:255',
+            'type'       => 'required|in:pickup,distribution_center,warehouse,recycling', // adjust allowed types
+            'address'    => 'nullable|string|max:255',
+            'city'       => 'nullable|string|max:100',
+            'state'      => 'nullable|string|max:50',
+            'zip'        => 'nullable|string|max:20',
+            'country'    => 'nullable|string|max:100',
+            'latitude'   => 'nullable|numeric',
+            'longitude'  => 'nullable|numeric',
         ]);
 
-        Location::create($validated);
+        $location = Location::create($validated);
 
         return redirect()->route('admin.locations.index')
             ->with('success', 'Location created successfully.');
@@ -117,7 +125,15 @@ class LocationController extends Controller
     public function update(Request $request, Location $location)
     {
         $validated = $request->validate([
-            'short_code' => 'required|string|max:50|unique:locations,short_code,'.$location->id,
+            'short_code' => [
+                'required',
+                'string',
+                'max:50',
+                // Unique only if NOT a recycling location
+                Rule::unique('locations', 'short_code')
+                    ->where(fn ($query) => $query->where('type', '!=', 'recycling'))
+                    ->ignore($location->id),
+            ],
             'name' => 'nullable|string|max:255',
             'type' => 'required|in:distribution_center,recycling,pickup',
             'address' => 'nullable|string|max:255',
@@ -134,15 +150,21 @@ class LocationController extends Controller
         $addressFields = ['address', 'city', 'state', 'zip', 'country'];
         $addressChanged = $location->wasChanged($addressFields);
 
-        if (($location->type === 'distribution_center' && $validated['type'] !== 'distribution_center') || ($location->type !== 'distribution_center' && $validated['type'] !== 'distribution_center')) {
+        // If changing type away from distribution_center (or to non-DC), clear recycling link
+        if (
+            ($location->type === 'distribution_center' && $validated['type'] !== 'distribution_center') ||
+            ($location->type !== 'distribution_center' && $validated['type'] !== 'distribution_center')
+        ) {
             $validated['recycling_location_id'] = null;
         }
 
+        // Update the location
         $location->update($validated);
 
         // Recalculate distances if relevant fields changed
         if ($location->type === 'distribution_center') {
-            $recyclingChanged = $location->wasChanged('recycling_location_id') || $oldRecyclingId !== $location->recycling_location_id;
+            $recyclingChanged = $location->wasChanged('recycling_location_id') 
+                            || $oldRecyclingId !== $location->recycling_location_id;
 
             if ($recyclingChanged || $addressChanged) {
                 $this->recalculateDistancesForDc($location);

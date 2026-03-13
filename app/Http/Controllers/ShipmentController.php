@@ -547,7 +547,7 @@ class ShipmentController extends Controller
                             $shipment->notes()->create([
                                 'title'    => 'PBI Import Update',
                                 'content'  => $noteContent,
-                                'is_admin' => true,
+                                'is_admin' => false,
                                 'user_id'  => auth()->id() ?? null,
                             ]);
                         }
