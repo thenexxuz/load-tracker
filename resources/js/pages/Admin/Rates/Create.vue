@@ -9,6 +9,8 @@ const props = defineProps<{
     id: number
     short_code: string
     name: string | null
+    city: string | null
+    state: string | null
   }>
   carriers: Array<{
     id: number
@@ -146,7 +148,7 @@ const rateLabel = computed(() => {
             >
               <option :value="null">— Select Pickup —</option>
               <option v-for="loc in props.locations" :key="loc.id" :value="loc.id">
-                {{ loc.short_code }} — {{ loc.name || 'Unnamed' }}
+                {{ loc.short_code }} — {{ loc.name || 'Unnamed' }} ({{ loc.city }}, {{ loc.state }})
               </option>
             </select>
             <InputError :message="form.errors.pickup_location_id" class="mt-1.5 text-sm" />
@@ -164,7 +166,7 @@ const rateLabel = computed(() => {
             >
               <option :value="null">— Select DC —</option>
               <option v-for="loc in props.locations" :key="loc.id" :value="loc.id">
-                {{ loc.short_code }} — {{ loc.name || 'Unnamed' }}
+                {{ loc.short_code }} — {{ loc.name || 'Unnamed' }} ({{ loc.city }}, {{ loc.state }})
               </option>
             </select>
             <InputError :message="form.errors.dc_location_id" class="mt-1.5 text-sm" />

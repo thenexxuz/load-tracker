@@ -37,7 +37,7 @@ class RateController extends Controller
     public function create()
     {
         return Inertia::render('Admin/Rates/Create', [
-            'locations' => Location::select('id', 'short_code', 'name')
+            'locations' => Location::select('id', 'short_code', 'name', 'city', 'state')
                 ->orderBy('short_code')
                 ->get(),
             'carriers' => Carrier::select('id', 'name', 'short_code')
@@ -81,14 +81,14 @@ class RateController extends Controller
     public function edit(Rate $rate)
     {
         $rate->load([
-            'pickupLocation:id,short_code,name',
-            'dcLocation:id,short_code,name',
+            'pickupLocation:id,short_code,name,city,state',
+            'dcLocation:id,short_code,name,city,state',
             'carrier:id,name,short_code',
         ]);
 
         return Inertia::render('Admin/Rates/Edit', [
             'rate' => $rate,
-            'locations' => Location::select('id', 'short_code', 'name')
+            'locations' => Location::select('id', 'short_code', 'name', 'city', 'state')
                 ->orderBy('short_code')
                 ->get(),
             'carriers' => Carrier::select('id', 'name', 'short_code')
