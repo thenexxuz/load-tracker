@@ -30,7 +30,7 @@ class Location extends Model
         'recycling_location_id',
         'latitude',
         'longitude',
-        // Add any other fields specific to your app
+        'emails',
     ];
 
     /**
@@ -39,6 +39,7 @@ class Location extends Model
      * @var array<string, string>
      */
     protected $casts = [
+        'emails' => 'array',
         'latitude' => 'float',
         'longitude' => 'float',
         'recycling_location_id' => 'integer',
@@ -276,5 +277,18 @@ class Location extends Model
     public function notes()
     {
         return $this->morphMany(Note::class, 'notable');
+    }
+
+    public function getEmailListAttribute(): string
+    {
+        return collect($this->emails ?? [])->join(', ');
+    }
+
+    public function setEmailsAttribute($value)
+    {
+        if (is_string($value)) {
+            $value = array_filter(array_map('trim', explode(',', $value)));
+        }
+        $this->attributes['emails'] = json_encode($value ?: []);
     }
 }

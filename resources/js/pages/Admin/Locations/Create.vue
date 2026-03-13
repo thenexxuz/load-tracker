@@ -25,7 +25,7 @@ const form = useForm({
   longitude: null as number | null,
   is_active: true,
   recycling_location_id: null as number | null,
-  email: '',
+  emails: '', // ← changed: comma-separated string
   expected_arrival_time: null,
 })
 
@@ -99,7 +99,6 @@ watch(
             <p v-if="form.errors.short_code" class="mt-1 text-sm text-red-600 dark:text-red-400">
               {{ form.errors.short_code }}
             </p>
-            <!-- New helper text for recycling grouping -->
             <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
               Note: Multiple <strong>recycling</strong> locations can share the same short code (grouping).
             </p>
@@ -260,24 +259,27 @@ watch(
             </div>
           </div>
 
-          <!-- Email -->
+          <!-- Emails (updated: comma-separated list) -->
           <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Email
+              Emails (comma-separated)
             </label>
-            <input
-              v-model="form.email"
-              type="email"
+            <textarea
+              v-model="form.emails"
+              rows="2"
               :class="[
-                'w-full p-3 border rounded-md focus:ring-2 focus:outline-none',
-                form.errors.email
+                'w-full p-3 border rounded-md focus:ring-2 focus:outline-none resize-none',
+                form.errors.emails
                   ? 'border-red-500 focus:ring-red-500 bg-red-50 dark:bg-red-950/30'
                   : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500'
               ]"
-              placeholder="location@example.com"
-            />
-            <p v-if="form.errors.email" class="mt-1 text-sm text-red-600 dark:text-red-400">
-              {{ form.errors.email }}
+              placeholder="location1@example.com, location2@example.com"
+            ></textarea>
+            <p v-if="form.errors.emails" class="mt-1 text-sm text-red-600 dark:text-red-400">
+              {{ form.errors.emails }}
+            </p>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              Multiple emails allowed (e.g. primary and backup contacts)
             </p>
           </div>
 

@@ -70,24 +70,38 @@ class LocationController extends Controller
                 'required',
                 'string',
                 'max:50',
+                // Unique only if NOT recycling
                 Rule::unique('locations', 'short_code')
-                    ->where(fn ($query) => $query->where('type', '!=', 'recycling'))
-                    ->ignore($this->location ?? null), // for update
+                    ->where(fn ($query) => $query->where('type', '!=', 'recycling')),
             ],
-            'name'       => 'nullable|string|max:255',
-            'type'       => 'required|in:pickup,distribution_center,warehouse,recycling', // adjust allowed types
-            'address'    => 'nullable|string|max:255',
-            'city'       => 'nullable|string|max:100',
-            'state'      => 'nullable|string|max:50',
-            'zip'        => 'nullable|string|max:20',
-            'country'    => 'nullable|string|max:100',
-            'latitude'   => 'nullable|numeric',
-            'longitude'  => 'nullable|numeric',
+            'name' => 'nullable|string|max:255',
+            'type' => 'required|in:distribution_center,recycling,pickup',
+            'address' => 'nullable|string|max:255',
+            'city' => 'nullable|string|max:255',
+            'state' => 'nullable|string|max:255',
+            'zip' => 'nullable|string|max:20',
+            'country' => 'nullable|string|max:255',
+            'latitude' => 'nullable|numeric|between:-90,90',
+            'longitude' => 'nullable|numeric|between:-180,180',
+            'is_active' => 'boolean',
+            'recycling_location_id' => 'nullable|exists:locations,id',
+            'emails' => 'nullable|string', // comma-separated list
+            'expected_arrival_time' => 'nullable|date_format:H:i',
         ]);
 
+        // Parse comma-separated emails into array
+        $emails = $validated['emails'] 
+            ? array_filter(array_map('trim', explode(',', $validated['emails']))) 
+            : [];
+
+        // Store as JSON array
+        $validated['emails'] = $emails;
+
+        // Create location
         $location = Location::create($validated);
 
-        return redirect()->route('admin.locations.index')
+        return redirect()
+            ->route('admin.locations.index')
             ->with('success', 'Location created successfully.');
     }
 
@@ -143,7 +157,10 @@ class LocationController extends Controller
             'country' => 'nullable|string|max:255',
             'latitude' => 'nullable|numeric|between:-90,90',
             'longitude' => 'nullable|numeric|between:-180,180',
+            'is_active' => 'boolean',
             'recycling_location_id' => 'nullable|exists:locations,id',
+            'emails' => 'nullable|string', // comma-separated list
+            'expected_arrival_time' => 'nullable|date_format:H:i',
         ]);
 
         $oldRecyclingId = $location->recycling_location_id;
@@ -157,6 +174,12 @@ class LocationController extends Controller
         ) {
             $validated['recycling_location_id'] = null;
         }
+
+        // Parse comma-separated emails into array
+        $emails = $validated['emails'] 
+            ? array_filter(array_map('trim', explode(',', $validated['emails']))) 
+            : [];
+        $validated['emails'] = $emails;
 
         // Update the location
         $location->update($validated);
