@@ -31,7 +31,7 @@ class ShipmentController extends Controller
         $perPage = $request->input('per_page', 15);
         $search = trim($request->input('search') ?? '');
 
-        $query = Shipment::query()
+        $query = Shipment::query()->withCount('notes')
             ->with(['pickupLocation', 'dcLocation', 'carrier'])
             ->latest();
 

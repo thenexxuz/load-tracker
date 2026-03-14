@@ -21,6 +21,7 @@ const props = defineProps<{
       delivery_date: string | null
       carrier: { name: string; short_code: string } | null
       trailer: string | null
+      notes_count: number
     }>
     current_page: number
     last_page: number
@@ -521,6 +522,15 @@ onMounted(() => {
               @click="goToShow(shipment.id)"
             >
               <td class="px-6 py-4 capitalize text-gray-600 dark:text-gray-400">
+                <div v-if="shipment.notes_count > 0" class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400" title="Has notes">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                  </svg>
+                  <span v-if="shipment.notes_count > 1" class="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                    {{ shipment.notes_count }}
+                  </span>
+                </div>
+                <span v-else class="text-gray-400 dark:text-gray-600">—</span>
                 {{ shipment.status }}
               </td>
               <td class="px-6 py-4 text-gray-600 dark:text-gray-400">
