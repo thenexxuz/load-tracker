@@ -70,9 +70,6 @@ class LocationController extends Controller
                 'required',
                 'string',
                 'max:50',
-                // Unique only if NOT recycling
-                Rule::unique('locations', 'short_code')
-                    ->where(fn ($query) => $query->where('type', '!=', 'recycling')),
             ],
             'name' => 'nullable|string|max:255',
             'type' => 'required|in:distribution_center,recycling,pickup',
@@ -143,10 +140,6 @@ class LocationController extends Controller
                 'required',
                 'string',
                 'max:50',
-                // Unique only if NOT a recycling location
-                Rule::unique('locations', 'short_code')
-                    ->where(fn ($query) => $query->where('type', '!=', 'recycling'))
-                    ->ignore($location->id),
             ],
             'name' => 'nullable|string|max:255',
             'type' => 'required|in:distribution_center,recycling,pickup',
