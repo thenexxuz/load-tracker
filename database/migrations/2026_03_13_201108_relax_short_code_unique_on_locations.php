@@ -6,23 +6,22 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
-    public function up(): void
+    public function up()
     {
         Schema::table('locations', function (Blueprint $table) {
-            //
+            // Drop the existing unique index if it exists
+            $table->dropUnique(['short_code']);
+
+            $table->unique(['short_code', 'type'], 'short_code_type_unique')
+                ->where('type', '!=', 'recycling');
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
-    public function down(): void
+    public function down()
     {
         Schema::table('locations', function (Blueprint $table) {
-            //
+            $table->dropUnique('short_code_type_unique');
+            $table->unique('short_code');
         });
     }
 };
