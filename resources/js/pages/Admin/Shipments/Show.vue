@@ -77,15 +77,19 @@ const props = defineProps<{
     }> | null
   } | null
   mapbox_token: string
-  lane_rates: Array<{
-    carrier: { name: string; short_code: string; wt_code?: string } | null
+  rates: Array<{
+    id: number
+    carrier: { id: number; name: string; short_code: string; wt_code?: string } | null
     rate_per_mile: number
-    estimated_total: number | null
-  }> | null
-  market_rate_per_mile?: number
+    minimum_charge: number | null
+    effective_date: string | null
+    expires_at: string | null
+    notes: string | null
+  }>
+  hasAssignedCarrier: boolean
 }>()
 
-const { shipment, route_data, lane_rates = [], market_rate_per_mile = 2.50 } = props
+const { shipment, route_data, rates = [], hasAssignedCarrier } = props
 
 const mapContainer = ref<HTMLDivElement | null>(null)
 let map: mapboxgl.Map | null = null
@@ -189,10 +193,6 @@ const formatDate = (date: string | null, withTime = false) => {
   return `${month}/${day}/${year} ${hours}:${minutes}`
 }
 
-const { auth } = usePage().props
-const userRoles = auth?.user?.roles || []
-const hasAdminAccess = userRoles.includes('administrator') || userRoles.includes('supervisor')
-
 // Helper to build readable address string
 const formatLocationAddress = (loc: any) => {
   if (!loc) return 'No location data'
@@ -211,6 +211,10 @@ const formatLocationAddress = (loc: any) => {
 
   return parts.length > 0 ? parts.join('\n') : 'No address recorded'
 }
+
+const { auth } = usePage().props
+const userRoles = auth?.user?.roles || []
+const hasAdminAccess = userRoles.includes('administrator') || userRoles.includes('supervisor')
 </script>
 
 <template>
@@ -403,15 +407,17 @@ const formatLocationAddress = (loc: any) => {
         </div>
       </div>
 
-      <!-- Known Lane Rates -->
-      <div v-if="lane_rates.length > 0" class="bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+      <!-- Rates Table - Integrated per your request -->
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
         <div class="p-6 border-b dark:border-gray-700">
           <h2 class="text-xl font-semibold text-gray-900 dark:text-gray-100">
-            Known Lane Rates (Pickup → Distribution Center)
+            {{ hasAssignedCarrier ? 'Rate for Assigned Carrier' : 'Available Rates' }}
           </h2>
           <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
-            Rates stored for this specific lane. Estimated totals based on 
-            {{ route_data?.total_miles?.toFixed(1) ?? 'unknown' }} miles.
+            {{ shipment.pickup_location?.short_code || '—' }} → {{ shipment.dc_location?.short_code || '—' }}
+            <span v-if="route_data?.total_miles" class="ml-2 text-gray-500">
+              ({{ route_data.total_miles.toFixed(1) }} miles)
+            </span>
           </p>
         </div>
 
@@ -419,33 +425,47 @@ const formatLocationAddress = (loc: any) => {
           <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
             <thead class="bg-gray-50 dark:bg-gray-900/50">
               <tr>
-                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Carrier
                 </th>
-                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Rate per Mile
                 </th>
-                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Estimated Total
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Minimum Charge
+                </th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Effective Date
+                </th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Expires
                 </th>
               </tr>
             </thead>
             <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-              <tr v-for="(rate, index) in lane_rates" :key="index">
+              <tr v-for="rate in rates" :key="rate.id" class="hover:bg-gray-50 dark:hover:bg-gray-700">
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
                   {{ rate.carrier?.name ?? 'Unknown Carrier' }}
-                  <span v-if="rate.carrier?.wt_code" class="ml-1 text-xs text-gray-500 dark:text-gray-400">
-                    ({{ rate.carrier.wt_code }})
+                  <span v-if="rate.carrier?.short_code" class="ml-1 text-xs text-gray-500 dark:text-gray-400">
+                    ({{ rate.carrier.short_code }})
                   </span>
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100 font-medium">
                   ${{ rate.rate_per_mile.toFixed(2) }}
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-bold text-green-700 dark:text-green-400">
-                  <span v-if="rate.estimated_total !== null">
-                    ${{ rate.estimated_total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}
-                  </span>
-                  <span v-else class="text-gray-500 dark:text-gray-400">—</span>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
+                  {{ rate.minimum_charge ? '$' + Number(rate.minimum_charge).toFixed(2) : '—' }}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                  {{ rate.effective_date ?? '—' }}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                  {{ rate.expires_at ?? '—' }}
+                </td>
+              </tr>
+              <tr v-if="rates.length === 0">
+                <td colspan="5" class="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
+                  No rates found for this lane.
                 </td>
               </tr>
             </tbody>
@@ -453,14 +473,7 @@ const formatLocationAddress = (loc: any) => {
         </div>
       </div>
 
-      <div v-else-if="route_data?.total_miles" class="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded-lg p-6">
-        <p class="text-sm text-yellow-800 dark:text-yellow-200">
-          No stored lane-specific rates found for this pickup → DC pair.<br>
-          Current national dry van spot market average (March 2026): ≈ ${{ market_rate_per_mile.toFixed(2) }}/mile<br>
-          Rough estimate for this load: <strong>${{ (route_data.total_miles * market_rate_per_mile).toFixed(2) }}</strong>
-        </p>
-      </div>
-
+      <!-- Notes Section -->
       <NotesSection
         :entity="shipment"
         entity-type="App\Models\Shipment"

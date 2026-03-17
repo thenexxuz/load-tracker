@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Carrier;
 use App\Models\Location;
+use App\Models\Rate;
 use App\Models\Shipment;
 use App\Models\Template;
 use Exception;
@@ -182,7 +183,7 @@ class ShipmentController extends Controller
     {
         $shipment->load([
             'pickupLocation:id,short_code,name,address,city,state,country,zip,latitude,longitude',
-            'dcLocation:id,short_code,name,address,city,state,country,zip,latitude,longitude,recycling_location_id', 
+            'dcLocation:id,short_code,name,address,city,state,country,zip,latitude,longitude,recycling_location_id',
             'dcLocation.recyclingLocation:id,short_code,name,latitude,longitude',
             'carrier:id,name,short_code',
             'notes.user',
@@ -249,22 +250,38 @@ class ShipmentController extends Controller
                             'total_km' => round($route['distance'] / 1000, 1),
                             'total_miles' => round(($route['distance'] / 1000) * 0.621371, 1),
                             'duration' => $this->secondsToHumanTime($route['duration']),
-                            'waypoints' => $waypoints, // for exact marker positions
+                            'waypoints' => $waypoints,
                         ];
                     } else {
                         throw new Exception();
                     }
-                } catch(\Exception $e) {
+                } catch (\Exception $e) {
                     Log::warning("Failed to fetch route for shipment {$shipment->id}");
                 }
-
             }
         }
+
+        // Rates for the lane (pickup → DC)
+        $ratesQuery = Rate::query()
+            ->where('pickup_location_id', $shipment->pickup_location_id)
+            ->where('distribution_center_id', $shipment->dc_location_id ?? $shipment->distribution_center_id)
+            ->with('carrier:id,name,short_code')
+            ->orderBy('carrier_id')
+            ->orderBy('rate');
+
+        // If carrier is assigned, show only rates for that carrier
+        if ($shipment->carrier_id) {
+            $ratesQuery->where('carrier_id', $shipment->carrier_id);
+        }
+
+        $rates = $ratesQuery->get();
 
         return Inertia::render('Admin/Shipments/Show', [
             'shipment' => $shipment,
             'route_data' => $routeData,
             'mapbox_token' => config('services.mapbox.key'),
+            'rates' => $rates,
+            'hasAssignedCarrier' => (bool) $shipment->carrier_id,
         ]);
     }
 
@@ -374,7 +391,7 @@ class ShipmentController extends Controller
             }
 
             $imported = 0;
-            $updated   = 0;
+            $updated = 0;
             $failedRows = [];
             $headerRow = $rows[2] ?? [];
 
@@ -412,17 +429,19 @@ class ShipmentController extends Controller
                 // Parse dates
                 try {
                     $pickupDateRaw = Carbon::createFromFormat('m/d/Y', $validated['ship date']);
-                    if (! $pickupDateRaw) throw new \Exception;
+                    if (!$pickupDateRaw)
+                        throw new \Exception;
                 } catch (\Exception $e) {
                     $failedRows[] = array_merge($originalRow, ['ERROR' => "Invalid 'Ship Date' format (expected m/d/Y)"]);
                     continue;
                 }
 
                 $deliveryDateRaw = null;
-                if (! empty($validated['deliver date'])) {
+                if (!empty($validated['deliver date'])) {
                     try {
                         $deliveryDateRaw = Carbon::createFromFormat('m/d/Y', $validated['deliver date']);
-                        if (! $deliveryDateRaw) throw new \Exception;
+                        if (!$deliveryDateRaw)
+                            throw new \Exception;
                     } catch (\Exception $e) {
                         $failedRows[] = array_merge($originalRow, ['ERROR' => "Invalid 'Deliver Date' format (expected m/d/Y)"]);
                         continue;
@@ -431,10 +450,10 @@ class ShipmentController extends Controller
 
                 // Lookup / create locations
                 $pickup = Location::firstOrCreate(
-                    ['short_code' => $validated['origin']],
+                    ['short_code' => strtoupper($validated['origin'])],
                     [
                         'guid' => \Str::uuid(),
-                        'name' => $validated['origin'],
+                        'name' => strtoupper($validated['origin']),
                         'address' => 'Unknown Address',
                         'city' => 'Unknown City',
                         'state' => 'Unknown State',
@@ -446,10 +465,10 @@ class ShipmentController extends Controller
                 );
 
                 $dc = Location::firstOrCreate(
-                    ['short_code' => $validated['destination']],
+                    ['short_code' => strtoupper($validated['destination'])],
                     [
                         'guid' => \Str::uuid(),
-                        'name' => $validated['destination'],
+                        'name' => strtoupper($validated['destination']),
                         'address' => 'Unknown Address',
                         'city' => 'Unknown City',
                         'state' => 'Unknown State',
@@ -500,7 +519,7 @@ class ShipmentController extends Controller
                 ]);
 
                 // Only save if something changed (or new)
-                if ($shipment->isDirty() || ! $wasExisting) {
+                if ($shipment->isDirty() || !$wasExisting) {
                     $shipment->save();
 
                     $shipment->calculateBol();
@@ -511,14 +530,14 @@ class ShipmentController extends Controller
 
                         // Fields to track (add/remove as needed)
                         $trackedFields = [
-                            'status'          => 'Status',
-                            'po_number'       => 'PO Number',
+                            'status' => 'Status',
+                            'po_number' => 'PO Number',
                             'pickup_location_id' => 'Pickup Location',
-                            'dc_location_id'  => 'DC Location',
-                            'drop_date'       => 'Drop Date',
-                            'pickup_date'     => 'Pickup Date',
-                            'delivery_date'   => 'Delivery Date',
-                            'rack_qty'        => 'Pallets/Rack Qty',
+                            'dc_location_id' => 'DC Location',
+                            'drop_date' => 'Drop Date',
+                            'pickup_date' => 'Pickup Date',
+                            'delivery_date' => 'Delivery Date',
+                            'rack_qty' => 'Pallets/Rack Qty',
                         ];
 
                         foreach ($trackedFields as $field => $label) {
@@ -541,14 +560,14 @@ class ShipmentController extends Controller
                             }
                         }
 
-                        if (! empty($changes)) {
+                        if (!empty($changes)) {
                             $noteContent = "PBI import updated this shipment:\n" . implode("\n", $changes);
 
                             $shipment->notes()->create([
-                                'title'    => 'PBI Import Update',
-                                'content'  => $noteContent,
+                                'title' => 'PBI Import Update',
+                                'content' => $noteContent,
                                 'is_admin' => false,
-                                'user_id'  => auth()->id() ?? null,
+                                'user_id' => auth()->id() ?? null,
                             ]);
                         }
                     }
@@ -558,7 +577,7 @@ class ShipmentController extends Controller
             }
 
             // ── Handle failed rows (unchanged) ──────────────────────
-            if (! empty($failedRows)) {
+            if (!empty($failedRows)) {
                 // ... your existing TSV generation and session flash ...
             }
 
