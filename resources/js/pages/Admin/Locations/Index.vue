@@ -48,6 +48,16 @@ watch([search, perPage], () => {
   })
 })
 
+const changePage = (url: string | null) => {
+  if (!url) return
+
+  router.get(url, {}, {
+    preserveState: true,
+    preserveScroll: true,
+    replace: true,
+  })
+}
+
 // ── Export Locations ──────────────────────────────────────────────────────────
 const exportLocations = () => {
   window.location.href = route('admin.locations.export')
@@ -78,7 +88,7 @@ const handleImport = (event: Event) => {
       router.post(route('admin.locations.import'), formData, {
         onSuccess: () => {
           Notify.success('Locations imported successfully!')
-          router.reload({ only: ['locations', 'flash'] }) // refresh table
+          router.reload({ only: ['locations', 'flash'] })
           fileInput.value = ''
         },
         onError: (errors) => {
@@ -237,14 +247,6 @@ onMounted(() => {
                 class="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
               >
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
-                  <div v-if="location.has_notes" 
-                       class="absolute top-1 left-1 text-blue-500 opacity-70"
-                       title="Has notes">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-                            d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
-                    </svg>
-                  </div>
                   <Link
                     :href="route('admin.locations.show', location.id)"
                     class="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline"
