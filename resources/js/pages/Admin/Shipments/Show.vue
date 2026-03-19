@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, router, usePage } from '@inertiajs/vue3'
-import { onMounted, onUnmounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref, computed } from 'vue'
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import AdminLayout from '@/layouts/AppLayout.vue'
@@ -120,6 +120,21 @@ const calculateRateTotal = (rate: typeof rates[0]): number | null => {
 
   return miles * rate.rate_per_mile
 }
+
+const totalRateCost = computed(() => {
+  if (!hasAssignedCarrier || !route_data) return null
+
+  return rates.reduce((total, rate) => {
+    const rateTotal = calculateRateTotal(rate)
+    if (rateTotal !== null) {
+      return total + rateTotal
+    }
+    if (rate.type === 'flat') {
+      return total + rate.rate_per_mile
+    }
+    return total
+  }, 0)
+})
 
 onMounted(() => {
   if (!mapContainer.value || !route_data?.route_coords?.length) return
@@ -446,6 +461,16 @@ const hasAdminAccess = userRoles.includes('administrator') || userRoles.includes
               ({{ route_data.total_miles.toFixed(1) }} miles)
             </span>
           </p>
+          <div v-if="hasAssignedCarrier && totalRateCost !== null" class="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800">
+            <div class="flex items-center justify-between">
+              <span class="text-sm font-medium text-blue-800 dark:text-blue-200">
+                Total Rate Cost:
+              </span>
+              <span class="text-lg font-bold text-blue-900 dark:text-blue-100">
+                ${{ totalRateCost.toFixed(2) }}
+              </span>
+            </div>
+          </div>
         </div>
 
         <div class="overflow-x-auto">
