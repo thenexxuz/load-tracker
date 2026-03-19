@@ -9,16 +9,24 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('locations', function (Blueprint $table) {
-            // Drop the unique index (SQLite calls it by the column name usually)
-            $table->dropUnique(['short_code']);
+            // Drop the unique index if it exists
+            if (Schema::hasIndex('locations', 'locations_short_code_unique') ||
+                Schema::hasIndex('locations', 'short_code') ||
+                Schema::hasIndex('locations', 'short_code_unique')) {
+                $table->dropUnique(['short_code']);
+            }
         });
     }
 
     public function down(): void
     {
         Schema::table('locations', function (Blueprint $table) {
-            // Optional: restore unique constraint on rollback
-            $table->unique('short_code');
+            // Restore unique constraint if it doesn't exist
+            if (!Schema::hasIndex('locations', 'locations_short_code_unique') &&
+                !Schema::hasIndex('locations', 'short_code') &&
+                !Schema::hasIndex('locations', 'short_code_unique')) {
+                $table->unique('short_code');
+            }
         });
     }
 };
