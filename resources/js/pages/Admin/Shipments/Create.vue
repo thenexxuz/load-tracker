@@ -35,7 +35,6 @@ const form = useForm({
   seal_number: '',                         // new
   drivers_id: '',                          // new
   consolidation_number: '',
-  notes: '',
   other: '',
 })
 
@@ -398,20 +397,6 @@ const submit = () => {
             />
             <p v-if="form.errors.consolidation_number" class="mt-1 text-sm text-red-600 dark:text-red-400">
               {{ form.errors.consolidation_number }}
-            </p>
-          </div>
-
-          <!-- Notes -->
-          <div class="md:col-span-2 lg:col-span-3">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Notes</label>
-            <textarea
-              v-model="form.notes"
-              rows="4"
-              class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
-              placeholder="Additional notes..."
-            ></textarea>
-            <p v-if="form.errors.notes" class="mt-1 text-sm text-red-600 dark:text-red-400">
-              {{ form.errors.notes }}
             </p>
           </div>
         </div>

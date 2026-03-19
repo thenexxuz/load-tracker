@@ -106,7 +106,7 @@ class ShipmentController extends Controller
             'shipments' => $shipments,
             'statuses' => Shipment::distinct('status')->pluck('status')->sort()->values(),
             'all_shipper_codes' => Location::where('type', 'pickup')->pluck('short_code')->sort()->values(),
-            'all_dc_codes' => Location::where('type', 'distribution_center')->pluck('short_code')->sort()->values(),
+            'all_dc_codes' => Location::whereIn('type', ['distribution_center', 'pickup'])->pluck('short_code')->sort()->values(),
             'all_carrier_names' => Carrier::pluck('name')->sort()->values(),
             // Pass current filters back for frontend state restoration
             'filters' => $request->only([
@@ -128,7 +128,7 @@ class ShipmentController extends Controller
             ->select('id', 'short_code', 'name')
             ->get();
 
-        $dcLocations = Location::where('type', 'distribution_center')
+        $dcLocations = Location::whereIn('type', ['distribution_center', 'pickup'])
             ->select('id', 'short_code', 'name')
             ->get();
 
@@ -365,7 +365,7 @@ class ShipmentController extends Controller
             ->select('id', 'short_code', 'name')
             ->get();
 
-        $dcLocations = Location::where('type', 'distribution_center')
+        $dcLocations = Location::whereIn('type', ['distribution_center', 'pickup'])
             ->select('id', 'short_code', 'name')
             ->get();
 

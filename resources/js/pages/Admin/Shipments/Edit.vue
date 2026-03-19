@@ -31,7 +31,6 @@ const props = defineProps<{
     seal_number: string | null      // ← new
     drivers_id: string | null       // ← new
     consolidation_number: string | null
-    notes: string | null
     other: object | null | string
   }
   pickupLocations: Array<{ id: number; short_code: string; name: string | null }>
@@ -64,7 +63,6 @@ const form = useForm({
   seal_number: props.shipment.seal_number || '',          // ← new
   drivers_id: props.shipment.drivers_id || '',            // ← new
   consolidation_number: props.shipment.consolidation_number || '',
-  notes: props.shipment.notes || '',
   other: props.shipment.other ? JSON.stringify(props.shipment.other, null, 2) : '',
 })
 
@@ -465,20 +463,6 @@ const hasAdminAccess = userRoles.includes('administrator') || userRoles.includes
             />
             <p v-if="form.errors.consolidation_number" class="mt-1 text-sm text-red-600 dark:text-red-400">
               {{ form.errors.consolidation_number }}
-            </p>
-          </div>
-
-          <!-- Notes -->
-          <div class="md:col-span-2 lg:col-span-3">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Notes</label>
-            <textarea
-              v-model="form.notes"
-              rows="4"
-              class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
-              placeholder="Additional notes..."
-            ></textarea>
-            <p v-if="form.errors.notes" class="mt-1 text-sm text-red-600 dark:text-red-400">
-              {{ form.errors.notes }}
             </p>
           </div>
         </div>
