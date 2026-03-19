@@ -14,10 +14,9 @@ const props = defineProps<{
       short_code: string
       name: string | null
     } | null
-    dc_location?: {
-      short_code: string
-      name: string | null
-    } | null
+    destination_city: string | null
+    destination_state: string | null
+    destination_country: string | null
     carrier?: {
       name: string
       short_code: string | null
@@ -111,7 +110,7 @@ const rateDisplay = computed(() => {
 
             <!-- Lane -->
             <div class="col-span-full">
-              <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Lane (Pickup → DC)</dt>
+              <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Lane (Pickup → Destination)</dt>
               <dd class="mt-1.5 text-gray-900 dark:text-gray-100">
                 <div class="flex items-center gap-3">
                   <span class="font-medium">
@@ -122,10 +121,10 @@ const rateDisplay = computed(() => {
                   </span>
                   <span class="text-gray-500 dark:text-gray-400">→</span>
                   <span class="font-medium">
-                    {{ rate.dc_location?.short_code || '—' }}
-                    <span v-if="rate.dc_location?.name" class="text-gray-600 dark:text-gray-400 ml-1">
-                      ({{ rate.dc_location.name }})
+                    <span v-if="rate.destination_city || rate.destination_state || rate.destination_country">
+                      {{ [rate.destination_city, rate.destination_state, rate.destination_country].filter(Boolean).join(', ') }}
                     </span>
+                    <span v-else>—</span>
                   </span>
                 </div>
               </dd>

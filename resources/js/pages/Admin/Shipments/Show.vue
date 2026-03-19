@@ -66,6 +66,8 @@ const props = defineProps<{
     route_coords: number[][] | null
     total_km: number | null
     total_miles: number | null
+    pickup_to_dc_miles: number | null
+    dc_to_recycling_miles: number | null
     duration: string | null
     waypoints: Array<{
       id: number
@@ -81,10 +83,12 @@ const props = defineProps<{
     id: number
     carrier: { id: number; name: string; short_code: string; wt_code?: string } | null
     rate_per_mile: number
-    minimum_charge: number | null
     effective_date: string | null
     expires_at: string | null
     notes: string | null
+    type: string
+    name: string | null
+    calculation_type: string
   }>
   hasAssignedCarrier: boolean
 }>()
@@ -93,6 +97,29 @@ const { shipment, route_data, rates = [], hasAssignedCarrier } = props
 
 const mapContainer = ref<HTMLDivElement | null>(null)
 let map: mapboxgl.Map | null = null
+
+const calculateRateTotal = (rate: typeof rates[0]): number | null => {
+  if (!route_data) return null
+
+  let miles: number | null = null
+
+  switch (rate.calculation_type) {
+    case 'pickup_to_dc':
+      miles = route_data.pickup_to_dc_miles || null
+      break
+    case 'dc_to_recycling':
+      miles = route_data.dc_to_recycling_miles || null
+      break
+    case 'full_route':
+    default:
+      miles = route_data.total_miles || null
+      break
+  }
+
+  if (miles === null || rate.type !== 'per_mile') return null
+
+  return miles * rate.rate_per_mile
+}
 
 onMounted(() => {
   if (!mapContainer.value || !route_data?.route_coords?.length) return
@@ -432,7 +459,7 @@ const hasAdminAccess = userRoles.includes('administrator') || userRoles.includes
                   Rate per Mile
                 </th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Minimum Charge
+                  Total Cost
                 </th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Effective Date
@@ -453,8 +480,16 @@ const hasAdminAccess = userRoles.includes('administrator') || userRoles.includes
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100 font-medium">
                   ${{ rate.rate_per_mile.toFixed(2) }}
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
-                  {{ rate.minimum_charge ? '$' + Number(rate.minimum_charge).toFixed(2) : '—' }}
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100 font-semibold">
+                  <span v-if="calculateRateTotal(rate)">
+                    ${{ calculateRateTotal(rate)!.toFixed(2) }}
+                  </span>
+                  <span v-else-if="rate.type === 'flat'">
+                    ${{ rate.rate_per_mile.toFixed(2) }} flat
+                  </span>
+                  <span v-else class="text-gray-500">
+                    N/A
+                  </span>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                   {{ rate.effective_date ?? '—' }}

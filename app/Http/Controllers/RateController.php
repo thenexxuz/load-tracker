@@ -6,8 +6,8 @@ use App\Models\Carrier;
 use App\Models\Location;
 use App\Models\Rate;
 use Illuminate\Http\Request;
-use Inertia\Inertia;
 use Illuminate\Validation\Rule;
+use Inertia\Inertia;
 
 class RateController extends Controller
 {
@@ -16,7 +16,6 @@ class RateController extends Controller
         $query = Rate::query()
             ->with([
                 'pickupLocation:id,short_code,name',
-                'dcLocation:id,short_code,name',
                 'carrier:id,name,short_code',
             ])
             ->orderBy('effective_from', 'desc')
@@ -24,7 +23,7 @@ class RateController extends Controller
             ->orderBy('type');
 
         if ($request->search) {
-            $query->where('name', 'like', '%' . $request->search . '%');
+            $query->where('name', 'like', '%'.$request->search.'%');
         }
 
         $rates = $query->paginate(15);
@@ -49,14 +48,16 @@ class RateController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'name'                => 'required|string|max:255',
-            'type'                => ['required', Rule::in(['flat', 'per_mile'])],
-            'rate'                => 'required|numeric|min:0.01',
-            'pickup_location_id'  => 'nullable|exists:locations,id',
-            'dc_location_id'      => 'nullable|exists:locations,id',
-            'carrier_id'          => 'nullable|exists:carriers,id',
-            'effective_from'      => 'nullable|date',
-            'effective_to'        => 'nullable|date|after_or_equal:effective_from',
+            'name' => 'required|string|max:255',
+            'type' => ['required', Rule::in(['flat', 'per_mile'])],
+            'rate' => 'required|numeric|min:0.01',
+            'pickup_location_id' => 'nullable|exists:locations,id',
+            'destination_city' => 'nullable|string|max:255',
+            'destination_state' => 'nullable|string|max:2',
+            'destination_country' => 'nullable|string|max:2',
+            'carrier_id' => 'nullable|exists:carriers,id',
+            'effective_from' => 'nullable|date',
+            'effective_to' => 'nullable|date|after_or_equal:effective_from',
         ]);
 
         Rate::create($validated);
@@ -71,7 +72,6 @@ class RateController extends Controller
         $rate->load([
             'carrier',
             'pickupLocation',
-            'dcLocation',
             'notes.user',
         ]);
 
@@ -82,7 +82,6 @@ class RateController extends Controller
     {
         $rate->load([
             'pickupLocation:id,short_code,name,city,state',
-            'dcLocation:id,short_code,name,city,state',
             'carrier:id,name,short_code',
         ]);
 
@@ -100,14 +99,16 @@ class RateController extends Controller
     public function update(Request $request, Rate $rate)
     {
         $validated = $request->validate([
-            'name'                => 'required|string|max:255',
-            'type'                => ['required', Rule::in(['flat', 'per_mile'])],
-            'rate'                => 'required|numeric|min:0.01',
-            'pickup_location_id'  => 'nullable|exists:locations,id',
-            'dc_location_id'      => 'nullable|exists:locations,id',
-            'carrier_id'          => 'nullable|exists:carriers,id',
-            'effective_from'      => 'nullable|date',
-            'effective_to'        => 'nullable|date|after_or_equal:effective_from',
+            'name' => 'required|string|max:255',
+            'type' => ['required', Rule::in(['flat', 'per_mile'])],
+            'rate' => 'required|numeric|min:0.01',
+            'pickup_location_id' => 'nullable|exists:locations,id',
+            'destination_city' => 'nullable|string|max:255',
+            'destination_state' => 'nullable|string|max:2',
+            'destination_country' => 'nullable|string|max:2',
+            'carrier_id' => 'nullable|exists:carriers,id',
+            'effective_from' => 'nullable|date',
+            'effective_to' => 'nullable|date|after_or_equal:effective_from',
         ]);
 
         $rate->update($validated);

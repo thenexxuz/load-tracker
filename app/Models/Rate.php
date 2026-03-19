@@ -18,7 +18,9 @@ class Rate extends Model
         'name',
         'type',  // 'flat' or 'per_mile'
         'pickup_location_id',
-        'dc_location_id',
+        'destination_city',
+        'destination_state',
+        'destination_country',
         'carrier_id',
         'rate',
         'effective_from',
@@ -45,14 +47,6 @@ class Rate extends Model
     public function pickupLocation()
     {
         return $this->belongsTo(Location::class, 'pickup_location_id');
-    }
-
-    /**
-     * Get the destination (DC) location this rate applies to.
-     */
-    public function dcLocation()
-    {
-        return $this->belongsTo(Location::class, 'dc_location_id');
     }
 
     /**
@@ -95,9 +89,6 @@ class Rate extends Model
 
     /**
      * Calculate the total rate for a given mileage.
-     *
-     * @param float|null $miles
-     * @return float|null
      */
     public function calculateTotal(?float $miles = null): ?float
     {

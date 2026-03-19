@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Head, Link, router } from '@inertiajs/vue3'
 import AdminLayout from '@/layouts/AppLayout.vue'
-import { Notify } from 'notiflix'
+import { Confirm, Notify } from 'notiflix'
 import { format } from 'date-fns' // optional: better date formatting (npm install date-fns)
 
 const props = defineProps<{
@@ -12,7 +12,9 @@ const props = defineProps<{
       type: 'flat' | 'per_mile'
       rate: number
       pickup_location?: { short_code: string; name?: string | null }
-      dc_location?: { short_code: string; name?: string | null }
+      destination_city: string | null
+      destination_state: string | null
+      destination_country: string | null
       carrier?: { name: string; short_code?: string }
       effective_from: string | null
       effective_to: string | null
@@ -24,9 +26,10 @@ const props = defineProps<{
 }>()
 
 const deleteRate = (id: number) => {
-  Notify.confirm(
+  Confirm.prompt(
     'Delete Rate',
-    'Are you sure you want to delete this rate? This cannot be undone.',
+    'Are you sure you want to delete this rate?',
+    'This cannot be undone.',
     'Yes, delete',
     'Cancel',
     () => {
@@ -100,7 +103,7 @@ const isActive = (from: string | null, to: string | null): boolean => {
                   Rate
                 </th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Lane (Pickup → DC)
+                  Lane (Pickup → Destination)
                 </th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Carrier
@@ -135,10 +138,12 @@ const isActive = (from: string | null, to: string | null): boolean => {
                 <td class="px-6 py-4 text-sm text-gray-900 dark:text-gray-100">
                   {{ rate.pickup_location?.short_code || '—' }}
                   →
-                  {{ rate.dc_location?.short_code || '—' }}
-                  <div v-if="rate.pickup_location?.name || rate.dc_location?.name" class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    {{ rate.pickup_location?.name || '' }}
-                    {{ rate.dc_location?.name ? ' → ' + rate.dc_location.name : '' }}
+                  <span v-if="rate.destination_city || rate.destination_state || rate.destination_country">
+                    {{ [rate.destination_city, rate.destination_state, rate.destination_country].filter(Boolean).join(', ') }}
+                  </span>
+                  <span v-else>—</span>
+                  <div v-if="rate.pickup_location?.name" class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    {{ rate.pickup_location.name }}
                   </div>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">

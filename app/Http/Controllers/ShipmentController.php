@@ -245,10 +245,24 @@ class ShipmentController extends Controller
                     if (!empty($response['routes'])) {
                         $route = $response['routes'][0];
 
+                        $totalMiles = round(($route['distance'] / 1000) * 0.621371, 1);
+
+                        // Calculate segment distances
+                        $pickupToDcMiles = $totalMiles;
+                        $dcToRecyclingMiles = 0;
+
+                        if (count($waypoints) === 3) {
+                            // Approximate: pickup->DC is 2/3, DC->recycling is 1/3
+                            $pickupToDcMiles = round($totalMiles * 0.67, 1);
+                            $dcToRecyclingMiles = round($totalMiles * 0.33, 1);
+                        }
+
                         $routeData = [
                             'route_coords' => $route['geometry']['coordinates'] ?? [],
                             'total_km' => round($route['distance'] / 1000, 1),
-                            'total_miles' => round(($route['distance'] / 1000) * 0.621371, 1),
+                            'total_miles' => $totalMiles,
+                            'pickup_to_dc_miles' => $pickupToDcMiles,
+                            'dc_to_recycling_miles' => $dcToRecyclingMiles,
                             'duration' => $this->secondsToHumanTime($route['duration']),
                             'waypoints' => $waypoints,
                         ];
@@ -261,26 +275,76 @@ class ShipmentController extends Controller
             }
         }
 
-        // Rates for the lane (pickup → DC)
+        // Rates for the lane (pickup → destination)
+        $dcLocation = $shipment->dcLocation;
+
+        // Base query for regular rates
         $ratesQuery = Rate::query()
             ->where('pickup_location_id', $shipment->pickup_location_id)
-            ->where('distribution_center_id', $shipment->dc_location_id ?? $shipment->distribution_center_id)
-            ->with('carrier:id,name,short_code')
-            ->orderBy('carrier_id')
-            ->orderBy('rate');
+            ->where(function ($query) use ($dcLocation) {
+                $query->where(function ($q) use ($dcLocation) {
+                    // Exact destination match
+                    $q->where('destination_city', $dcLocation?->city)
+                      ->where('destination_state', $dcLocation?->state)
+                      ->where('destination_country', $dcLocation?->country);
+                })->orWhere(function ($q) {
+                    // No destination specified (fallback)
+                    $q->whereNull('destination_city')
+                      ->whereNull('destination_state')
+                      ->whereNull('destination_country');
+                });
+            })
+            ->with('carrier:id,name,short_code');
 
         // If carrier is assigned, show only rates for that carrier
         if ($shipment->carrier_id) {
             $ratesQuery->where('carrier_id', $shipment->carrier_id);
         }
 
-        $rates = $ratesQuery->get();
+        // Get regular rates
+        $regularRates = $ratesQuery->orderBy('carrier_id')->orderBy('rate')->get();
+
+        // Get recycling rates (separate query)
+        $recyclingRates = Rate::query()
+            ->where('name', 'Recycling')
+            ->where('pickup_location_id', $shipment->dc_location_id)
+            ->with('carrier:id,name,short_code')
+            ->orderBy('carrier_id')
+            ->orderBy('rate')
+            ->get();
+
+        // Combine rates, with regular rates first, then recycling rates
+        $rates = $regularRates->merge($recyclingRates);
+
+        // Transform rates to match frontend expectations
+        $transformedRates = $rates->map(function ($rate) use ($shipment) {
+            // Determine calculation type
+            $calculationType = 'full_route'; // default
+
+            if ($rate->name === 'Recycling') {
+                $calculationType = 'dc_to_recycling';
+            } elseif ($rate->destination_city === null && $rate->destination_state === null && $rate->destination_country === null) {
+                $calculationType = 'pickup_to_dc';
+            }
+
+            return [
+                'id' => $rate->id,
+                'carrier' => $rate->carrier,
+                'rate_per_mile' => $rate->rate,
+                'effective_date' => $rate->effective_from?->format('Y-m-d'),
+                'expires_at' => $rate->effective_to?->format('Y-m-d'),
+                'notes' => $rate->notes,
+                'type' => $rate->type,
+                'name' => $rate->name,
+                'calculation_type' => $calculationType,
+            ];
+        });
 
         return Inertia::render('Admin/Shipments/Show', [
             'shipment' => $shipment,
             'route_data' => $routeData,
             'mapbox_token' => config('services.mapbox.key'),
-            'rates' => $rates,
+            'rates' => $transformedRates,
             'hasAssignedCarrier' => (bool) $shipment->carrier_id,
         ]);
     }
