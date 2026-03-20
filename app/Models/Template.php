@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 
 class Template extends Model
@@ -27,6 +28,11 @@ class Template extends Model
     public function getRelatedModelAttribute()
     {
         return $this->model;
+    }
+
+    public function scheduledItems(): HasMany
+    {
+        return $this->hasMany(ScheduledItem::class);
     }
 
     public function notes()

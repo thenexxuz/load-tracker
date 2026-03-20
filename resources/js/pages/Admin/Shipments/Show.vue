@@ -542,7 +542,7 @@ const hasAdminAccess = userRoles.includes('administrator') || userRoles.includes
 
       <div class="text-center mt-10">
         <a
-          href="javascript:history.back()"
+          :href="route('admin.shipments.index')"
           class="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
         >
           ← Back to Shipments List

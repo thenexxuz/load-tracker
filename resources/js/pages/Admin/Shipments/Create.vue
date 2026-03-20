@@ -402,7 +402,7 @@ const submit = () => {
         </div>
 
         <div class="flex justify-end space-x-4 mt-8">
-          <a href="javascript:history.back()" class="px-6 py-3 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
+          <a :href="route('admin.shipments.index')" class="px-6 py-3 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
             Cancel
           </a>
           <button

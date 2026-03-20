@@ -158,7 +158,7 @@ const submit = () => {
 
                 <!-- Submit & Cancel -->
                 <div class="flex justify-end space-x-4">
-                    <a href="javascript:history.back()"
+                    <a :href="route('admin.carriers.index')"
                        class="px-6 py-3 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
                         Cancel
                     </a>

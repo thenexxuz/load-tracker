@@ -12,6 +12,7 @@ import {
   Ruler,
   Locate,
   AtSign,
+  Clock,
 } from 'lucide-vue-next'
 import { ref, computed } from 'vue'
 import { route } from 'ziggy-js'
@@ -41,6 +42,7 @@ const hasAuditAccess = userRoles.includes('administrator') || userRoles.includes
 const hasRatesAccess = userRoles.includes('administrator') || userRoles.includes('supervisor')
 const hasCarrierAccess = userRoles.includes('administrator') || userRoles.includes('supervisor') || userRoles.includes('carrier')
 const hasTemplateAccess = userRoles.includes('administrator') || userRoles.includes('supervisor')
+const hasScheduledItemsAccess = userRoles.includes('administrator') || userRoles.includes('supervisor')
 const hasLocationsAccess = userRoles.includes('administrator') || userRoles.includes('supervisor')
 const hasShipmentAccess = userRoles.includes('administrator') || userRoles.includes('supervisor') || userRoles.includes('truckload') || userRoles.includes('data-entry') || userRoles.includes('carrier')
 
@@ -91,6 +93,13 @@ const mainNavItems: NavItem[] = [
         title: 'Template Management',
         href: route('admin.templates.index'),
         icon: NotepadTextDashed,
+      }]
+    : []),
+  ...(hasScheduledItemsAccess
+    ? [{
+        title: 'Scheduled Items',
+        href: route('admin.scheduled-items.index'),
+        icon: Clock,
       }]
     : []),
   ...(hasRatesAccess

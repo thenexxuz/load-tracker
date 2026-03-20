@@ -395,7 +395,7 @@ watch(
 
       <!-- Back Link -->
       <div class="mt-8 text-center">
-        <a href="javascript:history.back()" class="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors">
+        <a :href="route('admin.locations.index')" class="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors">
           ← Back to Locations List
         </a>
       </div>

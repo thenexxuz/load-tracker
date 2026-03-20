@@ -45,9 +45,17 @@ watch(() => form.model_type, (newType, oldType) => {
 
 const submit = () => {
   // TinyMCE content is already in form.message via v-model
+  const modelTypeMap: { [key: string]: string } = {
+    'carrier': 'App\\Models\\Carrier',
+    'location': 'App\\Models\\Location',
+    'scheduled_item': 'App\\Models\\ScheduledItem',
+  }
+
   const payload = {
     ...form.data(),
-    model_type: form.model_type === 'carrier' ? 'App\\Models\\Carrier' : 'App\\Models\\Location',
+    model_type: modelTypeMap[form.model_type] || form.model_type,
+    // For scheduled_item, explicitly set model_id to null
+    model_id: form.model_type === 'scheduled_item' ? null : form.model_id,
   }
 
   form.post(route('admin.templates.store'), {
@@ -99,11 +107,12 @@ const submit = () => {
               <option value="" disabled>Select type</option>
               <option value="carrier">Carrier</option>
               <option value="location">Location</option>
+              <option value="scheduled_item">Scheduled Item</option>
             </select>
             <p v-if="form.errors.model_type" class="mt-1 text-sm text-red-600">{{ form.errors.model_type }}</p>
           </div>
 
-          <div>
+          <div v-if="form.model_type !== 'scheduled_item'">
             <label class="block text-sm font-medium mb-1">Related Model <span class="text-red-600">*</span></label>
             <select
               v-model="form.model_id"
@@ -164,7 +173,7 @@ const submit = () => {
         </div>
 
         <div class="flex justify-end gap-4 mt-6">
-          <a href="javascript:history.back()" class="px-6 py-2 bg-gray-200 rounded hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600">
+          <a :href="route('admin.templates.index')" class="px-6 py-2 bg-gray-200 rounded hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600">
             Cancel
           </a>
           <button

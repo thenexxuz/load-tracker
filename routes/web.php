@@ -7,13 +7,13 @@ use App\Http\Controllers\LocationController;
 use App\Http\Controllers\NoteController;
 use App\Http\Controllers\RateController;
 use App\Http\Controllers\RoleController;
+use App\Http\Controllers\ScheduledItemController;
 use App\Http\Controllers\ShipmentController;
 use App\Http\Controllers\TemplateController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
-
 
 // explicitly attach our validation middleware to the auth route
 // (``Broadcast::routes`` lives inside the existing ``web`` group so we
@@ -38,7 +38,7 @@ Route::get('dashboard', [DashboardController::class, 'index'])->middleware(['aut
 Route::middleware(['auth', 'role:administrator'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('audits', [AuditController::class, 'index'])->name('audits.index');
 
-    // Role Routes                      
+    // Role Routes
     Route::get('roles/export', [RoleController::class, 'export'])->name('roles.export');
     Route::post('roles/import', [RoleController::class, 'import'])->name('roles.import');
     Route::resource('roles', RoleController::class);
@@ -64,6 +64,9 @@ Route::middleware(['auth', 'role:administrator|supervisor'])->prefix('admin')->n
     Route::get('templates/export', [TemplateController::class, 'export'])->name('templates.export');
     Route::post('templates/import', [TemplateController::class, 'import'])->name('templates.import');
     Route::resource('templates', TemplateController::class);
+
+    // Scheduled Items
+    Route::resource('scheduled-items', ScheduledItemController::class);
     // Location Routes
     Route::get('locations/recycling-distances', [LocationController::class, 'recyclingDistances'])->name('locations.recycling-distances');
     Route::get('locations/recycling-distances/{dc_id}/{rec_id}/map', [LocationController::class, 'recyclingDistanceMap'])->name('locations.recycling-distance-map');
