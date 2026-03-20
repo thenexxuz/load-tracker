@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, Link, router, usePage } from '@inertiajs/vue3'
 import AdminLayout from '@/layouts/AppLayout.vue'
+import Pagination from '@/components/Pagination.vue'
 import { Confirm, Notify } from 'notiflix'
 import { onMounted, ref, watch } from 'vue'
 
@@ -33,14 +34,11 @@ const props = defineProps<{
 }>()
 
 const search = ref('')
-const perPage = ref(props.locations.per_page || 15)
 
-// Watch search & per-page → reload with query params
-watch([search, perPage], () => {
+// Watch search → reload with query params
+watch(search, () => {
   router.get(route('admin.locations.index'), {
     search: search.value || null,
-    per_page: perPage.value,
-    page: 1, // reset to first page on filter change
   }, {
     preserveState: true,
     preserveScroll: true,
@@ -48,10 +46,20 @@ watch([search, perPage], () => {
   })
 })
 
-const changePage = (url: string | null) => {
-  if (!url) return
-
+const changePage = (url: string) => {
   router.get(url, {}, {
+    preserveState: true,
+    preserveScroll: true,
+    replace: true,
+  })
+}
+
+const changePerPage = (value: number) => {
+  router.get(route('admin.locations.index'), {
+    search: search.value || null,
+    per_page: value,
+    page: 1,
+  }, {
     preserveState: true,
     preserveScroll: true,
     replace: true,
@@ -301,27 +309,11 @@ onMounted(() => {
         </div>
 
         <!-- Pagination -->
-        <div v-if="locations.data.length" class="px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-800 rounded-b-lg">
-          <div class="text-sm text-gray-700 dark:text-gray-300 mb-4 sm:mb-0">
-            Showing {{ locations.from ?? 0 }}–{{ locations.to ?? 0 }} of {{ locations.total }} locations
-          </div>
-
-          <div class="flex flex-wrap items-center gap-1 sm:gap-2">
-            <button
-              v-for="(link, index) in locations.links"
-              :key="index"
-              :disabled="!link.url"
-              @click="changePage(link.url)"
-              class="px-3 py-2 rounded-md text-sm font-medium transition-colors"
-              :class="{
-                'bg-blue-600 text-white': link.active,
-                'bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700': !link.active && link.url,
-                'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed': !link.url && !link.active
-              }"
-              v-html="link.label"
-            ></button>
-          </div>
-        </div>
+        <Pagination
+          :pagination="locations"
+          @pageChange="changePage"
+          @perPageChange="changePerPage"
+        />
       </div>
     </div>
   </AdminLayout>

@@ -3,6 +3,7 @@ import { Head, router, usePage } from '@inertiajs/vue3'
 import { useForm } from '@inertiajs/vue3'
 import { ref, watch, onMounted } from 'vue'
 import { route } from 'ziggy-js'
+import Pagination from '@/components/Pagination.vue'
 
 import AdminLayout from '@/layouts/AppLayout.vue'
 import { Confirm, Notify } from 'notiflix'
@@ -160,18 +161,15 @@ const getEmailInfo = (emails: string | null) => {
 }
 
 // Change page
-const changePage = (url: string | null) => {
-  if (url) {
-    router.visit(url, {
-      preserveState: true,
-      preserveScroll: true,
-    })
-  }
+const changePage = (url: string) => {
+  router.visit(url, {
+    preserveState: true,
+    preserveScroll: true,
+  })
 }
 
 // Change per page
-const changePerPage = (e: Event) => {
-  const value = (e.target as HTMLSelectElement).value
+const changePerPage = (value: number) => {
   router.get(
     route('admin.carriers.index'),
     { search: search.value || null, per_page: value, page: 1 },
@@ -297,20 +295,6 @@ const hasAdminAccess = userRoles.includes('administrator') || userRoles.includes
             class="w-full border border-gray-300 dark:border-gray-600 rounded-md p-2.5 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:outline-none"
           />
         </div>
-
-        <div class="flex items-center space-x-3">
-          <label class="text-sm text-gray-700 dark:text-gray-300">Items per page:</label>
-          <select
-            @change="changePerPage"
-            :value="carriers.per_page"
-            class="border border-gray-300 dark:border-gray-600 rounded-md px-3 py-1 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option :value="10">10</option>
-            <option :value="15">15</option>
-            <option :value="20">20</option>
-            <option :value="25">25</option>
-          </select>
-        </div>
       </div>
 
       <!-- Empty state -->
@@ -388,32 +372,12 @@ const hasAdminAccess = userRoles.includes('administrator') || userRoles.includes
         </table>
       </div>
 
-      <!-- Pagination – restyled to match app-wide style -->
-      <div v-if="carriers.data?.length" class="px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-800 rounded-b-lg">
-        <!-- Showing info -->
-        <div class="text-sm text-gray-700 dark:text-gray-300 mb-4 sm:mb-0">
-          Showing {{ carriers.from ?? 0 }}–{{ carriers.to ?? 0 }} of {{ carriers.total }} entries
-        </div>
-
-        <!-- Pagination buttons -->
-        <div class="flex flex-wrap items-center gap-1 sm:gap-2">
-          <!-- Page numbers -->
-          <template v-for="(link, index) in carriers.links" :key="index">
-            <button
-              v-if="link.label !== 'Previous' && link.label !== 'Next'"
-              :disabled="!link.url"
-              @click="changePage(link.url)"
-              class="px-3 py-2 rounded-md text-sm font-medium transition-colors"
-              :class="{
-                'bg-blue-600 text-white': link.active,
-                'bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700': !link.active && link.url,
-                'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed': !link.url
-              }"
-              v-html="link.label"
-            ></button>
-          </template>
-        </div>
-      </div>
+      <!-- Pagination -->
+      <Pagination
+        :pagination="carriers"
+        @pageChange="changePage"
+        @perPageChange="changePerPage"
+      />
     </div>
   </AdminLayout>
 </template>

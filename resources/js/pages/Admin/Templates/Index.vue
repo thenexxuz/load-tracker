@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, router, usePage } from '@inertiajs/vue3'
 import AdminLayout from '@/layouts/AppLayout.vue'
+import Pagination from '@/components/Pagination.vue'
 import { Confirm, Notify } from 'notiflix'
 import { onMounted, ref } from 'vue'
 
@@ -109,17 +110,14 @@ const goToShow = (id: number) => {
   router.visit(route('admin.templates.show', id))
 }
 
-const changePage = (url: string | null) => {
-  if (url) {
-    router.visit(url, {
-      preserveState: true,
-      preserveScroll: true,
-    })
-  }
+const changePage = (url: string) => {
+  router.visit(url, {
+    preserveState: true,
+    preserveScroll: true,
+  })
 }
 
-const changePerPage = (e: Event) => {
-  const value = (e.target as HTMLSelectElement).value
+const changePerPage = (value: number) => {
   router.get(
     route('admin.templates.index'),
     { search: search.value || null, per_page: value, page: 1 },
@@ -252,28 +250,11 @@ onMounted(() => {
       </div>
 
       <!-- Pagination -->
-      <div v-if="templates.data?.length" class="px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-800 rounded-b-lg">
-        <div class="text-sm text-gray-700 dark:text-gray-300 mb-4 sm:mb-0">
-          Showing {{ templates.from ?? 0 }}–{{ templates.to ?? 0 }} of {{ templates.total }} entries
-        </div>
-
-        <div class="flex flex-wrap items-center gap-1 sm:gap-2">
-          <template v-for="(link, index) in templates.links" :key="index">
-            <button
-              v-if="link.label !== 'Previous' && link.label !== 'Next'"
-              :disabled="!link.url"
-              @click="changePage(link.url)"
-              class="px-3 py-2 rounded-md text-sm font-medium transition-colors"
-              :class="{
-                'bg-blue-600 text-white': link.active,
-                'bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700': !link.active && link.url,
-                'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed': !link.url
-              }"
-              v-html="link.label"
-            ></button>
-          </template>
-        </div>
-      </div>
+      <Pagination
+        :pagination="templates"
+        @pageChange="changePage"
+        @perPageChange="changePerPage"
+      />
     </div>
   </AdminLayout>
 </template>

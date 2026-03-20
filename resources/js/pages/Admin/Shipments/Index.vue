@@ -2,7 +2,9 @@
 import { Head, router, usePage, useForm } from '@inertiajs/vue3'
 import { onClickOutside } from '@vueuse/core'
 import { ref, watch, onMounted, computed, nextTick } from 'vue'
-import { debounce } from 'lodash' // npm install lodash
+import { debounce } from 'lodash'
+import { route } from 'ziggy-js'
+import Pagination from '@/components/Pagination.vue'
 
 import AdminLayout from '@/layouts/AppLayout.vue'
 import { Notify } from 'notiflix'
@@ -158,19 +160,16 @@ const clearDropDate = () => {
 }
 
 // ── Pagination ──────────────────────────────────────────────────────────
-const changePage = (url: string | null) => {
-  if (url) {
-    console.log('[Pagination] Navigating to:', url, 'with filters:', currentFilters.value)
-    router.get(url, currentFilters.value, {
-      preserveState: true,
-      preserveScroll: true,
-      replace: true,
-    })
-  }
+const changePage = (url: string) => {
+  console.log('[Pagination] Navigating to:', url, 'with filters:', currentFilters.value)
+  router.get(url, currentFilters.value, {
+    preserveState: true,
+    preserveScroll: true,
+    replace: true,
+  })
 }
 
-const changePerPage = (e: Event) => {
-  const value = Number((e.target as HTMLSelectElement).value)
+const changePerPage = (value: number) => {
   console.log('[Per Page] Changing to:', value)
   router.get(route('admin.shipments.index'), {
     ...currentFilters.value,
@@ -590,28 +589,11 @@ onMounted(() => {
       </div>
 
       <!-- Pagination -->
-      <div v-if="shipments.data.length" class="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between text-sm text-gray-700 dark:text-gray-300">
-        <div>
-          Showing {{ shipments.from || 0 }}–{{ shipments.to || 0 }} of {{ shipments.total }}
-        </div>
-
-        <div class="flex gap-1 mt-2 sm:mt-0">
-          <template v-for="(link, i) in shipments.links" :key="i">
-            <button
-              v-if="link.label !== 'Previous' && link.label !== 'Next'"
-              :disabled="!link.url"
-              @click="changePage(link.url)"
-              class="px-3 py-1 rounded"
-              :class="{
-                'bg-blue-600 text-white': link.active,
-                'bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600': !link.active && link.url,
-                'opacity-50 cursor-not-allowed': !link.url
-              }"
-              v-html="link.label"
-            />
-          </template>
-        </div>
-      </div>
+      <Pagination
+        :pagination="shipments"
+        @pageChange="changePage"
+        @perPageChange="changePerPage"
+      />
     </div>
 
     <!-- Teleported Dropdowns -->

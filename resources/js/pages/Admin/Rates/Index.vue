@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, Link, router } from '@inertiajs/vue3'
 import AdminLayout from '@/layouts/AppLayout.vue'
+import Pagination from '@/components/Pagination.vue'
 import { Confirm, Notify } from 'notiflix'
 import { format } from 'date-fns' // optional: better date formatting (npm install date-fns)
 
@@ -20,9 +21,15 @@ const props = defineProps<{
       effective_to: string | null
       created_at: string
     }>
-    links: any[] // for pagination
-    meta: { current_page: number; last_page: number; total: number }
+    current_page: number
+    last_page: number
+    from: number
+    to: number
+    total: number
+    per_page: number
+    links: Array<{ url: string | null; label: string; active: boolean }>
   }
+  filters?: Record<string, any>
 }>()
 
 const deleteRate = (id: number) => {
@@ -67,6 +74,22 @@ const isActive = (from: string | null, to: string | null): boolean => {
   if (start && start > now) return false
   if (end && end < now) return false
   return true
+}
+
+// Pagination functions
+const changePage = (url: string) => {
+  router.visit(url, {
+    preserveState: true,
+    preserveScroll: true,
+  })
+}
+
+const changePerPage = (value: number) => {
+  router.get(
+    route('admin.rates.index'),
+    { per_page: value, page: 1 },
+    { preserveState: true, preserveScroll: true, replace: true }
+  )
 }
 </script>
 
@@ -199,30 +222,12 @@ const isActive = (from: string | null, to: string | null): boolean => {
           </table>
         </div>
 
-        <!-- Pagination (simple example) -->
-        <div v-if="rates?.meta?.last_page > 1" class="px-6 py-4 flex items-center justify-between border-t dark:border-gray-700">
-          <div v-if="rates && rates?.meta && rates?.meta?.last_page > 1">
-            Showing page {{ rates?.meta?.current_page }} of {{ rates?.meta?.last_page }} ...
-          </div>
-
-
-
-          <div v-if="rates?.meta?.last_page > 1" class="...">
-            <Link
-              v-for="link in rates.links"
-              :key="link.url"
-              :href="link.url"
-              v-html="link.label"
-              class="px-3 py-1 rounded-md text-sm"
-              :class="{
-                'bg-blue-600 text-white': link.active,
-                'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600': !link.active && link.url,
-                'text-gray-400 cursor-not-allowed': !link.url
-              }"
-              v-if="link.url || link.active"
-            />
-          </div>
-        </div>
+        <!-- Pagination -->
+        <Pagination
+          :pagination="rates"
+          @pageChange="changePage"
+          @perPageChange="changePerPage"
+        />
       </div>
     </div>
   </AdminLayout>

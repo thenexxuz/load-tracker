@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, Link, router, usePage } from '@inertiajs/vue3'
 import AdminLayout from '@/layouts/AppLayout.vue'
+import Pagination from '@/components/Pagination.vue'
 import { Confirm, Notify } from 'notiflix'
 import { onMounted } from 'vue'
 import { route } from 'ziggy-js'
@@ -97,13 +98,19 @@ const getSchedulableLabel = (item: any): string => {
   return item.schedulable.name
 }
 
-const changePage = (url: string | null) => {
-  if (url) {
-    router.visit(url, {
-      preserveState: true,
-      preserveScroll: true,
-    })
-  }
+const changePage = (url: string) => {
+  router.visit(url, {
+    preserveState: true,
+    preserveScroll: true,
+  })
+}
+
+const changePerPage = (value: number) => {
+  router.get(
+    route('admin.scheduled-items.index'),
+    { per_page: value, page: 1 },
+    { preserveState: true, preserveScroll: true, replace: true }
+  )
 }
 
 onMounted(() => {
@@ -194,23 +201,11 @@ onMounted(() => {
       </div>
 
       <!-- Pagination -->
-      <div v-if="props.scheduledItems.links.length > 3" class="mt-6 flex justify-center space-x-2">
-        <template v-for="link in props.scheduledItems.links" :key="link.label">
-          <button
-            v-if="link.label !== '&laquo; Previous' && link.label !== 'Next &raquo;'"
-            @click="changePage(link.url)"
-            :disabled="!link.url"
-            :class="[
-              'px-3 py-1 rounded border dark:border-gray-600 text-sm',
-              link.active
-                ? 'bg-blue-600 text-white dark:bg-blue-700'
-                : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700'
-            ]"
-          >
-            {{ link.label.replace('&laquo; ', '').replace(' &raquo;', '') }}
-          </button>
-        </template>
-      </div>
+      <Pagination
+        :pagination="props.scheduledItems"
+        @pageChange="changePage"
+        @perPageChange="changePerPage"
+      />
     </div>
   </AdminLayout>
 </template>

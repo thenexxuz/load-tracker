@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { Head, router, usePage } from '@inertiajs/vue3'
 import { ref, watch, onMounted } from 'vue'
+import { route } from 'ziggy-js'
 
 import AdminLayout from '@/layouts/AppLayout.vue'
+import Pagination from '@/components/Pagination.vue'
 import { Notify } from 'notiflix';
 
 const props = defineProps<{
@@ -56,6 +58,23 @@ onMounted(() => {
     }
     if (page.props.flash?.warning) {
         Notify.warning(page.props.flash.warning)
+    }
+})
+
+const changePage = (url: string) => {
+  router.visit(url, {
+    preserveState: true,
+    preserveScroll: true,
+  })
+}
+
+const changePerPage = (value: number) => {
+  router.get(
+    route('admin.audits.index'),
+    { per_page: value, page: 1 },
+    { preserveState: true, preserveScroll: true, replace: true }
+  )
+}
     }
 })
 </script>
@@ -141,34 +160,12 @@ onMounted(() => {
                     </tbody>
                 </table>
 
-                <!-- Pagination (same as Locations) -->
-                <div v-if="logs.data?.length" class="mt-6 flex flex-col sm:flex-row justify-between items-center gap-4 text-sm text-gray-700 dark:text-gray-300">
-                    <div>
-                        Showing {{ logs.from || 0 }} to {{ logs.to || 0 }} of {{ logs.total || 0 }} audit records
-                    </div>
-
-                    <div class="flex items-center space-x-2">
-                        <button
-                            :disabled="logs.current_page === 1"
-                            @click="router.get(route('admin.audits.index', { page: logs.current_page - 1 }), {}, { preserveState: true, preserveScroll: true })"
-                            class="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        >
-                            Previous
-                        </button>
-
-                        <span class="px-4 py-2 font-medium">
-                          Page {{ logs.current_page }} of {{ logs.last_page }}
-                        </span>
-
-                        <button
-                            :disabled="logs.current_page === logs.last_page"
-                            @click="router.get(route('admin.audits.index', { page: logs.current_page + 1 }), {}, { preserveState: true, preserveScroll: true })"
-                            class="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        >
-                            Next
-                        </button>
-                    </div>
-                </div>
+                <!-- Pagination -->
+                <Pagination
+                  :pagination="logs"
+                  @pageChange="changePage"
+                  @perPageChange="changePerPage"
+                />
             </div>
         </div>
     </AdminLayout>

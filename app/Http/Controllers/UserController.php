@@ -10,25 +10,31 @@ use Spatie\Permission\Models\Role;
 
 class UserController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $users = User::with('roles')->get();
+        $validated = $request->validate([
+            'per_page' => 'nullable|integer|min:1|max:25',
+            'search' => 'nullable|string|max:500',
+        ]);
+
+        $query = User::with('roles');
+
+        if ($validated['search'] ?? false) {
+            $search = $validated['search'];
+            $query->where('name', 'like', "%{$search}%")
+                ->orWhere('email', 'like', "%{$search}%");
+        }
+
+        $users = $query
+            ->orderBy('name')
+            ->paginate($validated['per_page'] ?? 15)
+            ->withQueryString();
 
         return Inertia::render('Admin/Users/Index', [
-            'users' => $users->map(function ($user) {
-                return [
-                    'id' => $user->id,
-                    'name' => $user->name,
-                    'email' => $user->email,
-                    'roles' => $user->roles->pluck('name'),
-                    'is_active' => $user->is_active,
-                    'deleted_at' => $user->deleted_at,
-                    'edit_url' => route('admin.users.edit', $user->id),
-                    'disable_url' => route('admin.users.disable', $user->id),
-                    'delete_url' => route('admin.users.delete', $user->id),
-                    'restore_url' => $user->trashed() ? route('admin.users.restore', $user->id) : null,
-                ];
-            }),
+            'users' => $users,
+            'filters' => [
+                'search' => $validated['search'] ?? null,
+            ],
         ]);
     }
 

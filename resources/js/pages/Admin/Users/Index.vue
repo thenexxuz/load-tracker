@@ -1,35 +1,68 @@
 <script setup lang="ts">
 import AdminLayout from '@/layouts/AppLayout.vue'
+import Pagination from '@/components/Pagination.vue'
 import { Head, router, usePage } from '@inertiajs/vue3'
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { Confirm, Notify } from 'notiflix'
+import { route } from 'ziggy-js'
 
 const props = defineProps<{
-  users: Array<{
-    id: number
-    name: string
-    email: string
-    roles: string[]
-    is_active: boolean
-    deleted_at: string | null
-    edit_url: string
-    disable_url: string
-    delete_url: string
-    restore_url: string | null
-  }>
-  flash?: {
-    success?: string
-    error?: string
+  users: {
+    data: Array<{
+      id: number
+      name: string
+      email: string
+      roles: string[]
+      is_active: boolean
+      deleted_at: string | null
+    }>
+    current_page: number
+    last_page: number
+    from: number
+    to: number
+    total: number
+    per_page: number
+    links: Array<{ url: string | null; label: string; active: boolean }>
   }
+  filters: Record<string, any>
 }>()
 
 const page = usePage()
+const search = ref(props.filters.search || '')
+
+// Live search
+watch(search, (value) => {
+  router.get(
+    route('admin.users.index'),
+    { search: value },
+    { preserveState: true, replace: true }
+  )
+})
 
 // Show flashed messages on load
 onMounted(() => {
   if (page.props.flash?.success) Notify.success(page.props.flash.success)
   if (page.props.flash?.error) Notify.failure(page.props.flash.error)
 })
+
+// Change page
+const changePage = (url: string | null) => {
+  if (url) {
+    router.visit(url, {
+      preserveState: true,
+      preserveScroll: true,
+    })
+  }
+}
+
+// Change per page
+const changePerPage = (value: number) => {
+  router.get(
+    route('admin.users.index'),
+    { search: search.value || null, per_page: value, page: 1 },
+    { preserveState: true, preserveScroll: true, replace: true }
+  )
+}
 
 // ── Export Users ─────────────────────────────────────────────────────────────
 const exportUsers = () => {
@@ -80,14 +113,14 @@ const handleImport = (event: Event) => {
 }
 
 // ── Disable User ──────────────────────────────────────────────────────────────
-const disableUser = (user: (typeof props.users)[number]) => {
+const disableUser = (user: (typeof props.users.data)[number]) => {
   Confirm.show(
     'Disable User',
     `Are you sure you want to disable ${user.name}? They will not be able to log in.`,
     'Yes, disable',
     'Cancel',
     () => {
-      router.patch(user.disable_url, {}, {
+      router.patch(route('admin.users.disable', user.id), {}, {
         onSuccess: () => {
           Notify.success(`${user.name} has been disabled.`)
           router.reload({ only: ['users', 'flash'] })
@@ -106,7 +139,7 @@ const disableUser = (user: (typeof props.users)[number]) => {
 }
 
 // ── Enable User ───────────────────────────────────────────────────────────────
-const enableUser = (user: (typeof props.users)[number]) => {
+const enableUser = (user: (typeof props.users.data)[number]) => {
   router.patch(route('admin.users.enable', user.id), {}, {
     onSuccess: () => {
       Notify.success(`${user.name} has been enabled.`)
@@ -119,14 +152,14 @@ const enableUser = (user: (typeof props.users)[number]) => {
 }
 
 // ── Delete User (Soft Delete) ─────────────────────────────────────────────────
-const deleteUser = (user: (typeof props.users)[number]) => {
+const deleteUser = (user: (typeof props.users.data)[number]) => {
   Confirm.show(
     'Delete User',
     `Are you sure you want to delete ${user.name}? This action can be undone.`,
     'Yes, delete',
     'Cancel',
     () => {
-      router.delete(user.delete_url, {}, {
+      router.delete(route('admin.users.delete', user.id), {}, {
         onSuccess: () => {
           Notify.success(`${user.name} has been deleted.`)
           router.reload({ only: ['users', 'flash'] })
@@ -145,16 +178,14 @@ const deleteUser = (user: (typeof props.users)[number]) => {
 }
 
 // ── Restore User ──────────────────────────────────────────────────────────────
-const restoreUser = (user: (typeof props.users)[number]) => {
-  if (!user.restore_url) return
-
+const restoreUser = (user: (typeof props.users.data)[number]) => {
   Confirm.show(
     'Restore User',
     `Are you sure you want to restore ${user.name}?`,
     'Yes, restore',
     'Cancel',
     () => {
-      router.patch(user.restore_url, {}, {
+      router.patch(route('admin.users.restore', user.id), {}, {
         onSuccess: () => {
           Notify.success(`${user.name} has been restored.`)
           router.reload({ only: ['users', 'flash'] })
@@ -222,6 +253,16 @@ const restoreUser = (user: (typeof props.users)[number]) => {
         {{ page.props.flash.success }}
       </div>
 
+      <!-- Search Bar -->
+      <div class="mb-6">
+        <input
+          v-model="search"
+          type="text"
+          placeholder="Search by name or email..."
+          class="w-full border border-gray-300 dark:border-gray-600 rounded-md p-2.5 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+        />
+      </div>
+
       <!-- Users Table -->
       <div class="overflow-x-auto rounded-lg shadow dark:shadow-gray-900/30">
         <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-800">
@@ -245,7 +286,7 @@ const restoreUser = (user: (typeof props.users)[number]) => {
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-            <tr v-for="user in users" :key="user.id" :class="{ 'opacity-60': user.deleted_at || !user.is_active }">
+            <tr v-for="user in users.data" :key="user.id" :class="{ 'opacity-60': user.deleted_at || !user.is_active }">
               <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
                 {{ user.name }}
               </td>
@@ -269,7 +310,7 @@ const restoreUser = (user: (typeof props.users)[number]) => {
               <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
                 <!-- Edit Button -->
                 <a
-                  :href="user.edit_url"
+                  :href="route('admin.users.edit', user.id)"
                   class="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 transition-colors"
                   title="Edit User"
                 >
@@ -315,7 +356,7 @@ const restoreUser = (user: (typeof props.users)[number]) => {
 
                 <!-- Restore Button -->
                 <button
-                  v-else-if="user.deleted_at && user.restore_url"
+                  v-else-if="user.deleted_at"
                   @click="restoreUser(user)"
                   class="text-purple-600 hover:text-purple-800 dark:text-purple-400 dark:hover:text-purple-300 transition-colors"
                   title="Restore User"
@@ -327,7 +368,7 @@ const restoreUser = (user: (typeof props.users)[number]) => {
               </td>
             </tr>
 
-            <tr v-if="!users.length">
+            <tr v-if="!users.data.length">
               <td colspan="5" class="px-6 py-12 text-center text-sm text-gray-500 dark:text-gray-400">
                 No users found.
               </td>
@@ -335,6 +376,13 @@ const restoreUser = (user: (typeof props.users)[number]) => {
           </tbody>
         </table>
       </div>
+
+      <!-- Pagination -->
+      <Pagination
+        :pagination="users"
+        @pageChange="changePage"
+        @perPageChange="changePerPage"
+      />
     </div>
   </AdminLayout>
 </template>
