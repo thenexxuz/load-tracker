@@ -373,8 +373,20 @@ class ShipmentController extends Controller
             ->where('is_active', true)
             ->get();
 
+        // Convert to array and format dates for proper display in HTML date/datetime-local inputs
+        $shipmentData = $shipment->toArray();
+        $shipmentData['drop_date'] = $shipment->drop_date?->format('Y-m-d');
+        $shipmentData['pickup_date'] = $shipment->pickup_date?->format('Y-m-d\TH:i');
+        $shipmentData['delivery_date'] = $shipment->delivery_date?->format('Y-m-d\TH:i');
+        $shipmentData['on_site'] = $shipment->on_site?->format('Y-m-d\TH:i');
+        $shipmentData['shipped'] = $shipment->shipped?->format('Y-m-d\TH:i');
+        $shipmentData['crossed'] = $shipment->crossed?->format('Y-m-d\TH:i');
+        $shipmentData['recycling_sent'] = $shipment->recycling_sent?->format('Y-m-d\TH:i');
+        $shipmentData['paperwork_sent'] = $shipment->paperwork_sent?->format('Y-m-d\TH:i');
+        $shipmentData['delivery_alert_sent'] = $shipment->delivery_alert_sent?->format('Y-m-d\TH:i');
+
         return Inertia::render('Admin/Shipments/Edit', [
-            'shipment' => $shipment,
+            'shipment' => $shipmentData,
             'pickupLocations' => $pickupLocations,
             'dcLocations' => $dcLocations,
             'carriers' => $carriers,
