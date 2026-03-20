@@ -46,6 +46,10 @@ Route::middleware(['auth', 'role:administrator'])->prefix('admin')->name('admin.
     // User Routes
     Route::get('users/export', [UserController::class, 'export'])->name('users.export');
     Route::post('users/import', [UserController::class, 'import'])->name('users.import');
+    Route::patch('users/{user}/disable', [UserController::class, 'disable'])->name('users.disable');
+    Route::patch('users/{user}/enable', [UserController::class, 'enable'])->name('users.enable');
+    Route::delete('users/{user}/delete', [UserController::class, 'delete'])->name('users.delete');
+    Route::patch('users/{user}/restore', [UserController::class, 'restore'])->withTrashed()->name('users.restore');
     Route::resource('users', UserController::class)->only(['index', 'edit', 'update']);
 });
 

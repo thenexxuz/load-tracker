@@ -21,7 +21,12 @@ class UserController extends Controller
                     'name' => $user->name,
                     'email' => $user->email,
                     'roles' => $user->roles->pluck('name'),
+                    'is_active' => $user->is_active,
+                    'deleted_at' => $user->deleted_at,
                     'edit_url' => route('admin.users.edit', $user->id),
+                    'disable_url' => route('admin.users.disable', $user->id),
+                    'delete_url' => route('admin.users.delete', $user->id),
+                    'restore_url' => $user->trashed() ? route('admin.users.restore', $user->id) : null,
                 ];
             }),
         ]);
@@ -100,7 +105,7 @@ class UserController extends Controller
 
         return response()->stream($callback, 200, [
             'Content-Type' => 'text/csv',
-            'Content-Disposition' => 'attachment; filename="users-' . now()->format('Y-m-d') . '.csv"',
+            'Content-Disposition' => 'attachment; filename="users-'.now()->format('Y-m-d').'.csv"',
         ]);
     }
 
@@ -121,7 +126,7 @@ class UserController extends Controller
             );
 
             // Preserve roles
-            if (!empty($row[3])) {
+            if (! empty($row[3])) {
                 $roleNames = array_map('trim', explode(',', $row[3]));
                 $user->syncRoles($roleNames);
             }
@@ -130,5 +135,48 @@ class UserController extends Controller
         fclose($handle);
 
         return back()->with('success', 'Users imported successfully with roles preserved!');
+    }
+
+    public function disable(User $user)
+    {
+        // Prevent disabling yourself
+        if (auth()->id() === $user->id) {
+            return back()->with('error', 'You cannot disable your own account.');
+        }
+
+        $user->update(['is_active' => false]);
+
+        return back()->with('success', "{$user->name} has been disabled.");
+    }
+
+    public function enable(User $user)
+    {
+        // Prevent enabling if you don't have permission
+        if (auth()->id() === $user->id && ! auth()->user()->hasRole('administrator')) {
+            return back()->with('error', 'You do not have permission to enable this account.');
+        }
+
+        $user->update(['is_active' => true]);
+
+        return back()->with('success', "{$user->name} has been enabled.");
+    }
+
+    public function delete(User $user)
+    {
+        // Prevent soft-deleting yourself
+        if (auth()->id() === $user->id) {
+            return back()->with('error', 'You cannot delete your own account.');
+        }
+
+        $user->delete();
+
+        return back()->with('success', "{$user->name} has been deleted.");
+    }
+
+    public function restore(User $user)
+    {
+        $user->restore();
+
+        return back()->with('success', "{$user->name} has been restored.");
     }
 }
