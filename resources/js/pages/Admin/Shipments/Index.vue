@@ -53,7 +53,7 @@ const page = usePage()
 const selectedStatuses = ref<string[]>(
   props.filters?.excluded_statuses
     ? props.statuses.filter(s => !props.filters.excluded_statuses.includes(s))
-    : [...props.statuses]
+    : props.statuses.filter(s => s !== 'Delivered')
 )
 
 const selectedPickupLocations = ref<string[]>(
