@@ -109,8 +109,41 @@ class LocationController extends Controller
     {
         $location->load('recyclingLocation');
 
+        $routeData = null;
+        if ($location->recyclingLocation) {
+            $routeData = LocationDistance::where('from_location_id', $location->id)
+                ->where('to_location_id', $location->recyclingLocation->id)
+                ->select('distance_km', 'distance_miles', 'duration_text', 'duration_minutes', 'route_coords')
+                ->first();
+        }
+
         return Inertia::render('Admin/Locations/Show', [
-            'location' => $location,
+            'location' => [
+                'id' => $location->id,
+                'short_code' => $location->short_code,
+                'name' => $location->name,
+                'type' => $location->type,
+                'address' => $location->address,
+                'city' => $location->city,
+                'state' => $location->state,
+                'zip' => $location->zip,
+                'country' => $location->country,
+                'latitude' => $location->latitude,
+                'longitude' => $location->longitude,
+                'emails' => $location->emails,
+                'expected_arrival_time' => $location->expected_arrival_time,
+                'is_active' => $location->is_active,
+                'recycling_location' => $location->recyclingLocation ? [
+                    'id' => $location->recyclingLocation->id,
+                    'short_code' => $location->recyclingLocation->short_code,
+                    'name' => $location->recyclingLocation->name,
+                    'latitude' => $location->recyclingLocation->latitude,
+                    'longitude' => $location->recyclingLocation->longitude,
+                ] : null,
+                'created_at' => $location->created_at,
+                'updated_at' => $location->updated_at,
+            ],
+            'routeData' => $routeData,
             'mapbox_token' => config('services.mapbox.key'),
         ]);
     }

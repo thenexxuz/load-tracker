@@ -2,7 +2,9 @@
 import { Head, Link } from '@inertiajs/vue3'
 import AdminLayout from '@/layouts/AppLayout.vue'
 import { format } from 'date-fns'
-import { computed } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
+import mapboxgl from 'mapbox-gl'
+import 'mapbox-gl/dist/mapbox-gl.css'
 
 const props = defineProps<{
   location: {
@@ -24,13 +26,26 @@ const props = defineProps<{
       id: number
       short_code: string
       name: string | null
+      latitude?: number | null
+      longitude?: number | null
     } | null
     created_at: string
     updated_at: string
   }
+  routeData?: {
+    distance_km: number
+    distance_miles: number
+    duration_text: string
+    duration_minutes: number
+    route_coords: Array<[number, number]>
+  } | null
+  mapbox_token: string
 }>()
 
 const { location } = props
+
+const mapContainer = ref<HTMLDivElement | null>(null)
+let map: mapboxgl.Map | null = null
 
 const formatDate = (date: string | null): string => {
   if (!date) return '—'
@@ -44,6 +59,88 @@ const formatDate = (date: string | null): string => {
 const emailsDisplay = computed(() => {
   if (!location.emails?.length) return '—'
   return location.emails.join(', ')
+})
+
+onMounted(() => {
+  if (!mapContainer.value || !location.latitude || !location.longitude) return
+
+  mapboxgl.accessToken = props.mapbox_token
+
+  map = new mapboxgl.Map({
+    container: mapContainer.value,
+    style: 'mapbox://styles/mapbox/streets-v12',
+    center: [location.longitude, location.latitude],
+    zoom: 10,
+  })
+
+  map.addControl(new mapboxgl.NavigationControl(), 'top-right')
+
+  map.on('load', () => {
+    // Add route if available
+    if (props.routeData?.route_coords && props.routeData.route_coords.length > 0) {
+      map!.addSource('route', {
+        type: 'geojson',
+        data: {
+          type: 'Feature',
+          properties: {},
+          geometry: {
+            type: 'LineString',
+            coordinates: props.routeData.route_coords,
+          },
+        },
+      })
+
+      map!.addLayer({
+        id: 'route',
+        type: 'line',
+        source: 'route',
+        layout: { 'line-join': 'round', 'line-cap': 'round' },
+        paint: { 'line-color': '#3b82f6', 'line-width': 4, 'line-opacity': 0.7 },
+      })
+    }
+
+    // Add marker for location
+    new mapboxgl.Marker({ color: '#22c55e' })
+      .setLngLat([location.longitude!, location.latitude!])
+      .setPopup(
+        new mapboxgl.Popup().setHTML(`
+          <strong>${location.short_code}</strong><br>
+          ${location.name || 'Unnamed'}<br>
+          <span class="text-xs capitalize">${location.type.replace('_', ' ')}</span>
+        `)
+      )
+      .addTo(map!)
+
+    // Add marker for recycling location if available and has coordinates
+    if (location.recycling_location?.latitude && location.recycling_location?.longitude) {
+      new mapboxgl.Marker({ color: '#ef4444' })
+        .setLngLat([location.recycling_location.longitude, location.recycling_location.latitude])
+        .setPopup(
+          new mapboxgl.Popup().setHTML(`
+            <strong>${location.recycling_location.short_code}</strong><br>
+            ${location.recycling_location.name || 'Unnamed'}<br>
+            <span class="text-xs">Recycling Location</span>
+          `)
+        )
+        .addTo(map!)
+
+      // Fit bounds to both markers (and route if it exists)
+      const bounds = new mapboxgl.LngLatBounds()
+      bounds.extend([location.longitude!, location.latitude!])
+      bounds.extend([location.recycling_location.longitude, location.recycling_location.latitude])
+
+      // If route exists, extend bounds to include all route coordinates
+      if (props.routeData?.route_coords && props.routeData.route_coords.length > 0) {
+        props.routeData.route_coords.forEach(([lng, lat]) => bounds.extend([lng, lat]))
+      }
+
+      map!.fitBounds(bounds, { padding: 80 })
+    }
+  })
+})
+
+onUnmounted(() => {
+  map?.remove()
 })
 </script>
 
@@ -73,6 +170,11 @@ const emailsDisplay = computed(() => {
             Back to List
           </Link>
         </div>
+      </div>
+
+      <!-- Map -->
+      <div v-if="location.latitude && location.longitude" class="mb-6 rounded-lg overflow-hidden shadow-lg border border-gray-200 dark:border-gray-700 h-96">
+        <div ref="mapContainer" class="w-full h-full" />
       </div>
 
       <!-- Recycling grouping note (if applicable) -->
