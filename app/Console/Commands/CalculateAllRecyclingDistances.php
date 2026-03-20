@@ -29,6 +29,9 @@ class CalculateAllRecyclingDistances extends Command
      */
     public function handle()
     {
+        // Clear all existing distance calculations
+        LocationDistance::truncate();
+
         $dcs = Location::where('type', 'distribution_center')->get();
 
         foreach ($dcs as $dc) {
@@ -37,28 +40,56 @@ class CalculateAllRecyclingDistances extends Command
                 continue;
             }
 
-            $distance = $this->calculateDistance($dc->address, $rec->address);
+            // Get all recycling locations in the same short_code group as the assigned recycling location
+            $recyclingGroup = Location::where('short_code', $rec->short_code)
+                ->where('type', 'recycling')
+                ->get();
 
-            if (isset($distance['error'])) {
-                Log::warning("Failed for DC {$dc->id}: ".$distance['error']);
-
+            if ($recyclingGroup->isEmpty()) {
                 continue;
             }
 
-            LocationDistance::updateOrCreate(
-                ['dc_id' => $dc->id, 'recycling_id' => $rec->id],
-                [
-                    'distance_km' => $distance['km'],
-                    'distance_miles' => $distance['miles'],
-                    'duration_text' => $distance['duration_text'],
-                    'duration_minutes' => $distance['duration_minutes'],
-                    'route_coords' => $distance['route_coords'],
-                    'calculated_at' => now(),
-                ]
-            );
+            $closest = null;
+            $closestDistance = PHP_INT_MAX;
+
+            // Calculate distances to all recycling locations in the group
+            foreach ($recyclingGroup as $recycling) {
+                $distance = $this->calculateDistance($dc->address, $recycling->address);
+
+                if (isset($distance['error'])) {
+                    Log::warning("Failed for DC {$dc->id} to Recycling {$recycling->id}: ".$distance['error']);
+
+                    continue;
+                }
+
+                // Store the distance record
+                LocationDistance::updateOrCreate(
+                    ['from_location_id' => $dc->id, 'to_location_id' => $recycling->id],
+                    [
+                        'distance_km' => $distance['km'],
+                        'distance_miles' => $distance['miles'],
+                        'duration_text' => $distance['duration_text'],
+                        'duration_minutes' => $distance['duration_minutes'],
+                        'route_coords' => $distance['route_coords'],
+                        'calculated_at' => now(),
+                    ]
+                );
+
+                // Track the closest recycling location
+                if ($distance['km'] < $closestDistance) {
+                    $closestDistance = $distance['km'];
+                    $closest = $recycling;
+                }
+            }
+
+            // If the closest recycling location is different from the currently assigned one, update it
+            if ($closest && $closest->id !== $rec->id) {
+                $dc->update(['recycling_location_id' => $closest->id]);
+                Log::info("Updated DC {$dc->id} recycling location from {$rec->id} to {$closest->id}");
+            }
         }
 
-        $this->info('All recycling distances calculated.');
+        $this->info('All recycling distances calculated and assignments verified.');
     }
 
     private function calculateDistance($originAddress, $destinationAddress)
