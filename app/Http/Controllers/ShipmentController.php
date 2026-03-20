@@ -41,7 +41,8 @@ class ShipmentController extends Controller
             $query->where(function ($q) use ($search) {
                 $q->where('shipment_number', 'like', "%{$search}%")
                     ->orWhere('bol', 'like', "%{$search}%")
-                    ->orWhere('po_number', 'like', "%{$search}%");
+                    ->orWhere('po_number', 'like', "%{$search}%")
+                    ->orWhere('trailer', 'like', "%{$search}%");
             });
         }
 
