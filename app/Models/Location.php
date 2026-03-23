@@ -31,6 +31,7 @@ class Location extends Model
         'latitude',
         'longitude',
         'emails',
+        'expected_arrival_time',
     ];
 
     /**
@@ -43,6 +44,7 @@ class Location extends Model
         'latitude' => 'float',
         'longitude' => 'float',
         'recycling_location_id' => 'integer',
+        'expected_arrival_time' => 'datetime',
     ];
 
     /**

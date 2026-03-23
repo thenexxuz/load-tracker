@@ -80,6 +80,7 @@ const editForm = ref({
   trailer_id: null as number | null,
   loaned_from_trailer_id: null as number | null,
 })
+const trailerSearchInput = ref('')
 const isSubmitting = ref(false)
 const editError = ref<string | null>(null)
 
@@ -97,6 +98,61 @@ const emailsDisplay = computed(() => {
   return location.emails.join(', ')
 })
 
+const filteredShipments = computed(() => {
+  if (!props.shipments) return []
+  // Filter out delivered and cancelled shipments
+  return props.shipments.filter(shipment => 
+    shipment.status !== 'delivered' && shipment.status !== 'cancelled'
+  )
+})
+
+const carrierTrailers = computed(() => {
+  if (!props.trailers || !editForm.value.carrier_id) return []
+  // Filter trailers by selected carrier, exclude those currently on loan
+  return props.trailers.filter(t => 
+    t.carrier_id === editForm.value.carrier_id && 
+    !onLoanTrailers.value.has(t.id)
+  )
+})
+
+const onLoanTrailers = computed(() => {
+  if (!props.shipments) return new Set<number>()
+  // Get all trailers that are currently on loan (used by a different carrier)
+  const loanedTrailerIds = new Set<number>()
+  props.shipments.forEach(shipment => {
+    if (shipment.carrier_id && shipment.trailer_id) {
+      const trailer = props.trailers?.find(t => t.id === shipment.trailer_id)
+      if (trailer && trailer.carrier_id && trailer.carrier_id !== shipment.carrier_id) {
+        loanedTrailerIds.add(shipment.trailer_id)
+      }
+    }
+  })
+  return loanedTrailerIds
+})
+
+const filteredTrailers = computed(() => {
+  if (!trailerSearchInput.value) return carrierTrailers.value
+  
+  const searchLower = trailerSearchInput.value.toLowerCase()
+  return carrierTrailers.value.filter(t =>
+    t.number.toLowerCase().includes(searchLower)
+  )
+})
+
+const loanedFromCarrierId = ref<number | null>(null)
+
+const loanedFromCarrierTrailers = computed(() => {
+  if (!loanedFromCarrierId.value || !props.trailers) return []
+  
+  return props.trailers.filter(t => t.carrier_id === loanedFromCarrierId.value && !onLoanTrailers.value.has(t.id))
+})
+
+const getLoanedTrailerCarrier = (shipment: Exclude<typeof props.shipments, undefined>[0] | undefined) => {
+  if (!shipment?.loaned_from_trailer_id || !props.trailers) return null
+  const loanedTrailer = props.trailers.find(t => t.id === shipment.loaned_from_trailer_id)
+  return loanedTrailer?.carrier_name || null
+}
+
 const openEditModal = (shipment: typeof selectedShipment.value) => {
   selectedShipment.value = shipment
   editForm.value = {
@@ -104,6 +160,8 @@ const openEditModal = (shipment: typeof selectedShipment.value) => {
     trailer_id: shipment?.trailer_id || null,
     loaned_from_trailer_id: shipment?.loaned_from_trailer_id || null,
   }
+  trailerSearchInput.value = ''
+  loanedFromCarrierId.value = null
   editError.value = null
   showEditModal.value = true
 }
@@ -116,6 +174,8 @@ const closeEditModal = () => {
     trailer_id: null,
     loaned_from_trailer_id: null,
   }
+  trailerSearchInput.value = ''
+  loanedFromCarrierId.value = null
   editError.value = null
 }
 
@@ -412,9 +472,9 @@ onUnmounted(() => {
       </div>
 
       <!-- Pickup Shipments Section -->
-      <div v-if="shipments && shipments.length > 0" class="mt-8">
+      <div v-if="shipments && filteredShipments.length > 0" class="mt-8">
         <h2 class="text-xl font-bold text-gray-900 dark:text-gray-100 mb-4">
-          Pickup Shipments ({{ shipments.length }})
+          Pickup Shipments ({{ filteredShipments.length }})
         </h2>
 
         <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
@@ -443,7 +503,7 @@ onUnmounted(() => {
                 </tr>
               </thead>
               <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                <tr v-for="shipment in shipments" :key="shipment.id" class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                <tr v-for="shipment in filteredShipments" :key="shipment.id" class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                   <td class="px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">
                     {{ shipment.shipment_number }}
                   </td>
@@ -468,7 +528,7 @@ onUnmounted(() => {
                   <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
                     <div>{{ shipment.trailer_number || '—' }}</div>
                     <div v-if="shipment.loaned_from_trailer_id" class="text-xs text-amber-600 dark:text-amber-400 font-semibold">
-                      (Loaned)
+                      (on loan from {{ getLoanedTrailerCarrier(shipment) }})
                     </div>
                   </td>
                   <td class="px-4 py-3 text-sm">
@@ -497,92 +557,150 @@ onUnmounted(() => {
     </div>
 
     <!-- Quick Edit Modal -->
-    <div v-if="showEditModal" class="fixed inset-0 z-50 overflow-y-auto">
-      <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-        <!-- Background overlay -->
-        <div
-          class="fixed inset-0 bg-gray-500 dark:bg-gray-900 bg-opacity-75 dark:bg-opacity-75 transition-opacity"
-          @click="closeEditModal"
-        />
+  <div v-if="showEditModal" class="fixed inset-0 z-50 flex items-center justify-center overflow-hidden">
+    <!-- Background overlay -->
+    <div
+      class="absolute inset-0 bg-gray-500 dark:bg-gray-900 bg-opacity-75 dark:bg-opacity-75 transition-opacity"
+      @click="closeEditModal"
+    />
 
-        <!-- Modal panel -->
-        <div class="inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg shadow-xl transform transition-all sm:my-8 sm:align-middle sm:w-full sm:max-w-md">
-          <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-            <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">
-              Edit Shipment: {{ selectedShipment?.shipment_number }}
-            </h3>
+    <!-- Modal panel -->
+    <div class="relative z-10 inline-block align-middle bg-white dark:bg-gray-800 rounded-lg shadow-xl transform transition-all w-full mx-4 sm:max-w-md">
+        <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+          <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">
+            Edit Shipment: {{ selectedShipment?.shipment_number }}
+          </h3>
+        </div>
+
+        <div class="px-6 py-4 space-y-4">
+          <!-- Error message -->
+          <div v-if="editError" class="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-sm text-red-700 dark:text-red-300">
+            {{ editError }}
           </div>
 
-          <div class="px-6 py-4 space-y-4">
-            <!-- Error message -->
-            <div v-if="editError" class="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-sm text-red-700 dark:text-red-300">
-              {{ editError }}
-            </div>
+          <!-- Carrier select -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Carrier
+            </label>
+            <select
+              v-model.number="editForm.carrier_id"
+              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option :value="null">— Select Carrier —</option>
+              <option v-for="carrier in carriers" :key="carrier.id" :value="carrier.id">
+                {{ carrier.name }}
+              </option>
+            </select>
+          </div>
 
-            <!-- Carrier select -->
+          <!-- Trailer select -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Trailer
+            </label>
+            <div class="relative">
+              <input
+                v-model="trailerSearchInput"
+                type="text"
+                placeholder="Type trailer number or select from list..."
+                :disabled="!editForm.carrier_id"
+                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              />
+              <!-- Dropdown of available trailers -->
+              <div
+                v-if="editForm.carrier_id && filteredTrailers.length > 0 && trailerSearchInput"
+                class="absolute z-10 w-full mt-1 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg"
+              >
+                <div class="max-h-48 overflow-y-auto">
+                  <button
+                    v-for="trailer in filteredTrailers"
+                    :key="trailer.id"
+                    type="button"
+                    @click="() => {
+                      editForm.trailer_id = trailer.id
+                      trailerSearchInput = trailer.number
+                    }"
+                    class="w-full px-3 py-2 text-left text-sm text-gray-900 dark:text-gray-100 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors"
+                  >
+                    {{ trailer.number }}
+                  </button>
+                </div>
+              </div>
+              <!-- Message when no carrier selected -->
+              <div v-if="!editForm.carrier_id" class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Select a carrier first
+              </div>
+              <!-- Message when no matching trailers -->
+              <div v-else-if="filteredTrailers.length === 0 && trailerSearchInput" class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                No trailers found for "{{ trailerSearchInput }}"
+              </div>
+            </div>
+          </div>
+
+          <!-- Borrow trailer from another carrier -->
+          <div class="space-y-3">
             <div>
               <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Carrier
+                Borrow From Carrier (optional)
               </label>
+              <p class="text-xs text-gray-600 dark:text-gray-400 mb-2">
+                Select a carrier to borrow a trailer from
+              </p>
               <select
-                v-model.number="editForm.carrier_id"
+                v-model.number="loanedFromCarrierId"
                 class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               >
-                <option :value="null">— Select Carrier —</option>
-                <option v-for="carrier in carriers" :key="carrier.id" :value="carrier.id">
+                <option :value="null">-- Select Carrier --</option>
+                <option
+                  v-for="carrier in carriers"
+                  :key="carrier.id"
+                  :value="carrier.id"
+                  :disabled="carrier.id === editForm.carrier_id"
+                >
                   {{ carrier.name }}
                 </option>
               </select>
             </div>
 
-            <!-- Trailer select -->
-            <div>
+            <div v-if="loanedFromCarrierId">
               <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Trailer
-              </label>
-              <select
-                v-model.number="editForm.trailer_id"
-                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              >
-                <option :value="null">— Select Trailer —</option>
-                <option v-for="trailer in trailers" :key="trailer.id" :value="trailer.id">
-                  {{ trailer.number }} ({{ trailer.carrier_name || 'Unassigned' }})
-                </option>
-              </select>
-            </div>
-
-            <!-- Loaned from trailer select -->
-            <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Loaned From Trailer (if applicable)
+                Select Trailer to Loan
               </label>
               <select
                 v-model.number="editForm.loaned_from_trailer_id"
                 class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               >
-                <option :value="null">— None —</option>
-                <option v-for="trailer in trailers" :key="trailer.id" :value="trailer.id">
-                  {{ trailer.number }} ({{ trailer.carrier_name || 'Unassigned' }})
+                <option :value="null">-- Select Trailer --</option>
+                <option
+                  v-for="trailer in loanedFromCarrierTrailers"
+                  :key="trailer.id"
+                  :value="trailer.id"
+                >
+                  {{ trailer.number }}
                 </option>
               </select>
+              <p v-if="loanedFromCarrierTrailers.length === 0" class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                No available trailers for this carrier
+              </p>
             </div>
           </div>
+        </div>
 
-          <div class="px-6 py-4 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
-            <button
-              @click="closeEditModal"
-              class="px-4 py-2 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 font-medium transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              @click="submitEdit"
-              :disabled="isSubmitting"
-              class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white font-medium rounded-lg transition-colors"
-            >
-              {{ isSubmitting ? 'Saving...' : 'Save Changes' }}
-            </button>
-          </div>
+        <div class="px-6 py-4 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
+          <button
+            @click="closeEditModal"
+            class="px-4 py-2 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 font-medium transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            @click="submitEdit"
+            :disabled="isSubmitting"
+            class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white font-medium rounded-lg transition-colors"
+          >
+            {{ isSubmitting ? 'Saving...' : 'Save Changes' }}
+          </button>
         </div>
       </div>
     </div>

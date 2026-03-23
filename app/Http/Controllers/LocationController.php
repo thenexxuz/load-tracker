@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Location;
 use App\Models\LocationDistance;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -93,6 +94,9 @@ class LocationController extends Controller
 
         // Store as JSON array
         $validated['emails'] = $emails;
+        $validated['expected_arrival_time'] = $this->normalizeExpectedArrivalTime(
+            $validated['expected_arrival_time'] ?? null
+        );
 
         // Create location
         $location = Location::create($validated);
@@ -124,6 +128,7 @@ class LocationController extends Controller
                 'trailer:id,number,carrier_id',
                 'loanedFromTrailer:id,number,carrier_id',
             ])
+            ->whereRaw("LOWER(status) NOT IN ('delivered', 'cancelled')")
             ->orderBy('created_at', 'desc')
             ->limit(50)
             ->get()
@@ -170,7 +175,7 @@ class LocationController extends Controller
                 'latitude' => $location->latitude,
                 'longitude' => $location->longitude,
                 'emails' => $location->emails,
-                'expected_arrival_time' => $location->expected_arrival_time,
+                'expected_arrival_time' => $this->formatExpectedArrivalTime($location->expected_arrival_time),
                 'is_active' => $location->is_active,
                 'recycling_location' => $location->recyclingLocation ? [
                     'id' => $location->recyclingLocation->id,
@@ -201,7 +206,23 @@ class LocationController extends Controller
 
         return Inertia::render('Admin/Locations/Edit', [
             'availableRecyclingLocations' => $recyclingLocations,
-            'location' => $location,
+            'location' => [
+                'id' => $location->id,
+                'short_code' => $location->short_code,
+                'name' => $location->name,
+                'address' => $location->address,
+                'city' => $location->city,
+                'state' => $location->state,
+                'zip' => $location->zip,
+                'country' => $location->country,
+                'latitude' => $location->latitude,
+                'longitude' => $location->longitude,
+                'type' => $location->type,
+                'is_active' => $location->is_active,
+                'recycling_location_id' => $location->recycling_location_id,
+                'emails' => $location->emails,
+                'expected_arrival_time' => $this->formatExpectedArrivalTime($location->expected_arrival_time),
+            ],
         ]);
     }
 
@@ -248,6 +269,9 @@ class LocationController extends Controller
             ? array_filter(array_map('trim', explode(',', $validated['emails']))) 
             : [];
         $validated['emails'] = $emails;
+        $validated['expected_arrival_time'] = $this->normalizeExpectedArrivalTime(
+            $validated['expected_arrival_time'] ?? null
+        );
 
         // Update the location
         $location->update($validated);
@@ -268,6 +292,26 @@ class LocationController extends Controller
 
         return redirect()->route('admin.locations.show', $location)
             ->with('success', 'Location updated successfully.');
+    }
+
+    private function normalizeExpectedArrivalTime(?string $time): ?string
+    {
+        if (blank($time)) {
+            return null;
+        }
+
+        return Carbon::createFromFormat('H:i', $time)
+            ->setDate(1970, 1, 1)
+            ->format('Y-m-d H:i:s');
+    }
+
+    private function formatExpectedArrivalTime($value): ?string
+    {
+        if (blank($value)) {
+            return null;
+        }
+
+        return Carbon::parse($value)->format('H:i');
     }
 
     /**
