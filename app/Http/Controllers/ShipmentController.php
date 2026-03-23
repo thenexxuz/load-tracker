@@ -409,6 +409,8 @@ class ShipmentController extends Controller
             'pickup_location_id' => 'required|exists:locations,id',
             'dc_location_id' => 'nullable|exists:locations,id',
             'carrier_id' => 'nullable|exists:carriers,id',
+            'trailer_id' => 'nullable|exists:trailers,id',
+            'loaned_from_trailer_id' => 'nullable|exists:trailers,id',
             'drop_date' => ['nullable', 'date'],
             'pickup_date' => ['nullable', 'date', 'after_or_equal:drop_date'],
             'delivery_date' => ['nullable', 'date', 'after_or_equal:pickup_date'],
@@ -439,6 +441,31 @@ class ShipmentController extends Controller
 
         return redirect()->route('admin.shipments.index')
             ->with('success', 'Shipment deleted successfully.');
+    }
+
+    /**
+     * Quick update for carrier and/or trailer on a single shipment
+     * Used for inline editing on Location Show page
+     */
+    public function quickUpdate(Request $request, Shipment $shipment)
+    {
+        $validated = $request->validate([
+            'carrier_id' => 'nullable|exists:carriers,id',
+            'trailer_id' => 'nullable|exists:trailers,id',
+            'loaned_from_trailer_id' => 'nullable|exists:trailers,id',
+        ]);
+
+        $shipment->update($validated);
+
+        return response()->json([
+            'message' => 'Shipment updated successfully.',
+            'shipment' => [
+                'id' => $shipment->id,
+                'carrier_id' => $shipment->carrier_id,
+                'trailer_id' => $shipment->trailer_id,
+                'loaned_from_trailer_id' => $shipment->loaned_from_trailer_id,
+            ],
+        ]);
     }
 
     /**

@@ -24,6 +24,8 @@ class Shipment extends Model
         'pickup_location_id',
         'dc_location_id',
         'carrier_id',
+        'trailer_id',
+        'loaned_from_trailer_id',
         'drop_date',
         'pickup_date',
         'delivery_date',
@@ -78,6 +80,16 @@ class Shipment extends Model
     public function carrier(): BelongsTo
     {
         return $this->belongsTo(Carrier::class);
+    }
+
+    public function trailer(): BelongsTo
+    {
+        return $this->belongsTo(Trailer::class);
+    }
+
+    public function loanedFromTrailer(): BelongsTo
+    {
+        return $this->belongsTo(Trailer::class, 'loaned_from_trailer_id');
     }
 
     // Scopes

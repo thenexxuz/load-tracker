@@ -117,6 +117,45 @@ class LocationController extends Controller
                 ->first();
         }
 
+        // Load shipments for this location as pickup point
+        $shipments = $location->pickupShipments()
+            ->with([
+                'carrier:id,name,short_code',
+                'trailer:id,number,carrier_id',
+                'loanedFromTrailer:id,number,carrier_id',
+            ])
+            ->orderBy('created_at', 'desc')
+            ->limit(50)
+            ->get()
+            ->map(function ($shipment) {
+                return [
+                    'id' => $shipment->id,
+                    'shipment_number' => $shipment->shipment_number,
+                    'bol' => $shipment->bol,
+                    'status' => $shipment->status,
+                    'carrier_id' => $shipment->carrier_id,
+                    'carrier_name' => $shipment->carrier?->name,
+                    'trailer_id' => $shipment->trailer_id,
+                    'trailer_number' => $shipment->trailer?->number,
+                    'loaned_from_trailer_id' => $shipment->loaned_from_trailer_id,
+                    'drop_date' => $shipment->drop_date,
+                    'pickup_date' => $shipment->pickup_date,
+                    'delivery_date' => $shipment->delivery_date,
+                ];
+            });
+
+        // Get all carriers and trailers for the quick edit dropdowns
+        $carriers = \App\Models\Carrier::where('is_active', true)
+            ->orderBy('name')
+            ->select('id', 'name', 'short_code')
+            ->get();
+
+        $trailers = \App\Models\Trailer::where('is_active', true)
+            ->with('carrier:id,name')
+            ->orderBy('number')
+            ->select('id', 'number', 'carrier_id', 'status')
+            ->get();
+
         return Inertia::render('Admin/Locations/Show', [
             'location' => [
                 'id' => $location->id,
@@ -143,6 +182,9 @@ class LocationController extends Controller
                 'created_at' => $location->created_at,
                 'updated_at' => $location->updated_at,
             ],
+            'shipments' => $shipments,
+            'carriers' => $carriers,
+            'trailers' => $trailers,
             'routeData' => $routeData,
             'mapbox_token' => config('services.mapbox.key'),
         ]);

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3'
+import { Head, Link, router } from '@inertiajs/vue3'
 import AdminLayout from '@/layouts/AppLayout.vue'
 import { format } from 'date-fns'
 import { computed, ref, onMounted, onUnmounted } from 'vue'
@@ -32,6 +32,31 @@ const props = defineProps<{
     created_at: string
     updated_at: string
   }
+  shipments?: Array<{
+    id: number
+    shipment_number: string
+    bol: string | null
+    status: string
+    carrier_id: number | null
+    carrier_name: string | null
+    trailer_id: number | null
+    trailer_number: string | null
+    loaned_from_trailer_id: number | null
+    created_at: string
+    updated_at: string
+  }>
+  carriers?: Array<{
+    id: number
+    name: string
+    is_active: boolean
+  }>
+  trailers?: Array<{
+    id: number
+    number: string
+    type: string | null
+    carrier_id: number | null
+    carrier_name: string | null
+  }>
   routeData?: {
     distance_km: number
     distance_miles: number
@@ -47,6 +72,17 @@ const { location } = props
 const mapContainer = ref<HTMLDivElement | null>(null)
 let map: mapboxgl.Map | null = null
 
+// Modal state for quick edit
+const showEditModal = ref(false)
+const selectedShipment = ref<(typeof props.shipments)[0] | null>(null)
+const editForm = ref({
+  carrier_id: null as number | null,
+  trailer_id: null as number | null,
+  loaned_from_trailer_id: null as number | null,
+})
+const isSubmitting = ref(false)
+const editError = ref<string | null>(null)
+
 const formatDate = (date: string | null): string => {
   if (!date) return '—'
   try {
@@ -60,6 +96,64 @@ const emailsDisplay = computed(() => {
   if (!location.emails?.length) return '—'
   return location.emails.join(', ')
 })
+
+const openEditModal = (shipment: typeof selectedShipment.value) => {
+  selectedShipment.value = shipment
+  editForm.value = {
+    carrier_id: shipment?.carrier_id || null,
+    trailer_id: shipment?.trailer_id || null,
+    loaned_from_trailer_id: shipment?.loaned_from_trailer_id || null,
+  }
+  editError.value = null
+  showEditModal.value = true
+}
+
+const closeEditModal = () => {
+  showEditModal.value = false
+  selectedShipment.value = null
+  editForm.value = {
+    carrier_id: null,
+    trailer_id: null,
+    loaned_from_trailer_id: null,
+  }
+  editError.value = null
+}
+
+const submitEdit = async () => {
+  if (!selectedShipment.value) return
+
+  isSubmitting.value = true
+  editError.value = null
+
+  try {
+    const response = await fetch(
+      route('admin.shipments.quick-update', selectedShipment.value.id),
+      {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content || '',
+        },
+        body: JSON.stringify(editForm.value),
+      }
+    )
+
+    if (!response.ok) {
+      const error = await response.json()
+      editError.value = error.message || 'Failed to update shipment'
+      return
+    }
+
+    closeEditModal()
+    // Reload page to reflect changes
+    router.visit(window.location.href)
+  } catch (error) {
+    editError.value = 'An error occurred while updating the shipment'
+    console.error(error)
+  } finally {
+    isSubmitting.value = false
+  }
+}
 
 onMounted(() => {
   if (!mapContainer.value || !location.latitude || !location.longitude) return
@@ -314,6 +408,181 @@ onUnmounted(() => {
           >
             Edit This Location
           </Link>
+        </div>
+      </div>
+
+      <!-- Pickup Shipments Section -->
+      <div v-if="shipments && shipments.length > 0" class="mt-8">
+        <h2 class="text-xl font-bold text-gray-900 dark:text-gray-100 mb-4">
+          Pickup Shipments ({{ shipments.length }})
+        </h2>
+
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead>
+                <tr class="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                    Shipment #
+                  </th>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                    BOL
+                  </th>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                    Carrier
+                  </th>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                    Trailer
+                  </th>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                <tr v-for="shipment in shipments" :key="shipment.id" class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                  <td class="px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">
+                    {{ shipment.shipment_number }}
+                  </td>
+                  <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
+                    {{ shipment.bol || '—' }}
+                  </td>
+                  <td class="px-4 py-3 text-sm">
+                    <span
+                      :class="{
+                        'inline-flex px-2.5 py-0.5 text-xs font-semibold rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200': shipment.status === 'pending',
+                        'inline-flex px-2.5 py-0.5 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200': shipment.status === 'in_transit',
+                        'inline-flex px-2.5 py-0.5 text-xs font-semibold rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200': shipment.status === 'delivered',
+                        'inline-flex px-2.5 py-0.5 text-xs font-semibold rounded-full bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200': shipment.status === 'cancelled',
+                      }"
+                    >
+                      {{ shipment.status.replace('_', ' ') }}
+                    </span>
+                  </td>
+                  <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
+                    {{ shipment.carrier_name || '—' }}
+                  </td>
+                  <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
+                    <div>{{ shipment.trailer_number || '—' }}</div>
+                    <div v-if="shipment.loaned_from_trailer_id" class="text-xs text-amber-600 dark:text-amber-400 font-semibold">
+                      (Loaned)
+                    </div>
+                  </td>
+                  <td class="px-4 py-3 text-sm">
+                    <button
+                      @click="openEditModal(shipment)"
+                      class="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 font-medium"
+                    >
+                      Edit
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- No Shipments Message -->
+      <div v-else-if="shipments" class="mt-8">
+        <div class="p-6 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 text-center">
+          <p class="text-gray-600 dark:text-gray-400">
+            No shipments found with this location as a pickup point.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Edit Modal -->
+    <div v-if="showEditModal" class="fixed inset-0 z-50 overflow-y-auto">
+      <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+        <!-- Background overlay -->
+        <div
+          class="fixed inset-0 bg-gray-500 dark:bg-gray-900 bg-opacity-75 dark:bg-opacity-75 transition-opacity"
+          @click="closeEditModal"
+        />
+
+        <!-- Modal panel -->
+        <div class="inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg shadow-xl transform transition-all sm:my-8 sm:align-middle sm:w-full sm:max-w-md">
+          <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+            <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">
+              Edit Shipment: {{ selectedShipment?.shipment_number }}
+            </h3>
+          </div>
+
+          <div class="px-6 py-4 space-y-4">
+            <!-- Error message -->
+            <div v-if="editError" class="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-sm text-red-700 dark:text-red-300">
+              {{ editError }}
+            </div>
+
+            <!-- Carrier select -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Carrier
+              </label>
+              <select
+                v-model.number="editForm.carrier_id"
+                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option :value="null">— Select Carrier —</option>
+                <option v-for="carrier in carriers" :key="carrier.id" :value="carrier.id">
+                  {{ carrier.name }}
+                </option>
+              </select>
+            </div>
+
+            <!-- Trailer select -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Trailer
+              </label>
+              <select
+                v-model.number="editForm.trailer_id"
+                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option :value="null">— Select Trailer —</option>
+                <option v-for="trailer in trailers" :key="trailer.id" :value="trailer.id">
+                  {{ trailer.number }} ({{ trailer.carrier_name || 'Unassigned' }})
+                </option>
+              </select>
+            </div>
+
+            <!-- Loaned from trailer select -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Loaned From Trailer (if applicable)
+              </label>
+              <select
+                v-model.number="editForm.loaned_from_trailer_id"
+                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option :value="null">— None —</option>
+                <option v-for="trailer in trailers" :key="trailer.id" :value="trailer.id">
+                  {{ trailer.number }} ({{ trailer.carrier_name || 'Unassigned' }})
+                </option>
+              </select>
+            </div>
+          </div>
+
+          <div class="px-6 py-4 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
+            <button
+              @click="closeEditModal"
+              class="px-4 py-2 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 font-medium transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              @click="submitEdit"
+              :disabled="isSubmitting"
+              class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white font-medium rounded-lg transition-colors"
+            >
+              {{ isSubmitting ? 'Saving...' : 'Save Changes' }}
+            </button>
+          </div>
         </div>
       </div>
     </div>

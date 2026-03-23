@@ -49,6 +49,14 @@ class Carrier extends Model
         return $this->hasMany(Shipment::class);
     }
 
+    /**
+     * Get all trailers owned by this carrier.
+     */
+    public function trailers()
+    {
+        return $this->hasMany(Trailer::class);
+    }
+
     public function users()
     {
         return $this->hasMany(User::class);

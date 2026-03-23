@@ -55,6 +55,22 @@ class Location extends Model
     }
 
     /**
+     * Get all shipments with this location as pickup point.
+     */
+    public function pickupShipments()
+    {
+        return $this->hasMany(Shipment::class, 'pickup_location_id');
+    }
+
+    /**
+     * Get all shipments with this location as distribution center.
+     */
+    public function dcShipments()
+    {
+        return $this->hasMany(Shipment::class, 'dc_location_id');
+    }
+
+    /**
      * Get the full formatted address.
      */
     public function fullAddress(): string
