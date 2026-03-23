@@ -75,8 +75,6 @@ const changePerPage = (value: number) => {
     { preserveState: true, preserveScroll: true, replace: true }
   )
 }
-    }
-})
 </script>
 
 <template>
