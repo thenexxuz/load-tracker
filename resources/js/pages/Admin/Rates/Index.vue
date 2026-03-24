@@ -4,6 +4,7 @@ import AdminLayout from '@/layouts/AppLayout.vue'
 import Pagination from '@/components/Pagination.vue'
 import { Confirm, Notify } from 'notiflix'
 import { format } from 'date-fns' // optional: better date formatting (npm install date-fns)
+import { computed, ref, watch } from 'vue'
 
 const props = defineProps<{
   rates: {
@@ -29,8 +30,54 @@ const props = defineProps<{
     per_page: number
     links: Array<{ url: string | null; label: string; active: boolean }>
   }
-  filters?: Record<string, any>
+  carriers: Array<{
+    id: number
+    name: string
+    short_code?: string | null
+  }>
+  filters?: {
+    search?: string | null
+    type?: 'flat' | 'per_mile' | null
+    carrier_id?: number | string | null
+    status?: 'active' | 'inactive' | null
+    sort_by?: 'name' | null
+    sort_direction?: 'asc' | 'desc' | null
+  }
 }>()
+
+const typeFilter = ref(props.filters?.type ?? '')
+const carrierFilter = ref(props.filters?.carrier_id ? String(props.filters.carrier_id) : '')
+const statusFilter = ref(props.filters?.status ?? '')
+const suppressFilterWatch = ref(false)
+
+const currentParams = computed(() => ({
+  search: props.filters?.search || undefined,
+  type: typeFilter.value || undefined,
+  carrier_id: carrierFilter.value || undefined,
+  status: statusFilter.value || undefined,
+  sort_by: props.filters?.sort_by || undefined,
+  sort_direction: props.filters?.sort_direction || undefined,
+  per_page: props.rates.per_page,
+}))
+
+const applyFilters = () => {
+  router.get(
+    route('admin.rates.index'),
+    {
+      ...currentParams.value,
+      page: 1,
+    },
+    { preserveState: true, preserveScroll: true, replace: true }
+  )
+}
+
+watch([typeFilter, carrierFilter, statusFilter], () => {
+  if (suppressFilterWatch.value) {
+    return
+  }
+
+  applyFilters()
+})
 
 const deleteRate = (id: number) => {
   Confirm.prompt(
@@ -76,6 +123,56 @@ const isActive = (from: string | null, to: string | null): boolean => {
   return true
 }
 
+const toggleSort = (column: 'name') => {
+  const isCurrentColumn = props.filters?.sort_by === column
+  const nextDirection = isCurrentColumn && props.filters?.sort_direction === 'asc' ? 'desc' : 'asc'
+
+  router.get(
+    route('admin.rates.index'),
+    {
+      ...currentParams.value,
+      sort_by: column,
+      sort_direction: nextDirection,
+      page: 1,
+    },
+    { preserveState: true, preserveScroll: true, replace: true }
+  )
+}
+
+const clearFilters = () => {
+  suppressFilterWatch.value = true
+  typeFilter.value = ''
+  carrierFilter.value = ''
+  statusFilter.value = ''
+
+  router.get(
+    route('admin.rates.index'),
+    {
+      search: props.filters?.search || undefined,
+      sort_by: props.filters?.sort_by || undefined,
+      sort_direction: props.filters?.sort_direction || undefined,
+      per_page: props.rates.per_page,
+      page: 1,
+    },
+    {
+      preserveState: true,
+      preserveScroll: true,
+      replace: true,
+      onFinish: () => {
+        suppressFilterWatch.value = false
+      },
+    }
+  )
+}
+
+const sortIndicator = (column: 'name'): string => {
+  if (props.filters?.sort_by !== column) {
+    return 'Sort'
+  }
+
+  return props.filters.sort_direction === 'desc' ? 'Descending' : 'Ascending'
+}
+
 // Pagination functions
 const changePage = (url: string) => {
   router.visit(url, {
@@ -87,7 +184,7 @@ const changePage = (url: string) => {
 const changePerPage = (value: number) => {
   router.get(
     route('admin.rates.index'),
-    { per_page: value, page: 1 },
+    { ...currentParams.value, per_page: value, page: 1 },
     { preserveState: true, preserveScroll: true, replace: true }
   )
 }
@@ -110,6 +207,65 @@ const changePerPage = (value: number) => {
         </Link>
       </div>
 
+      <div class="mb-6 rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+        <div class="flex flex-col gap-4 lg:flex-row lg:items-end">
+          <div class="grid flex-1 gap-4 sm:grid-cols-3">
+            <div>
+              <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Type
+              </label>
+              <select
+                v-model="typeFilter"
+                class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"
+              >
+                <option value="">All types</option>
+                <option value="flat">Flat</option>
+                <option value="per_mile">Per mile</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Carrier
+              </label>
+              <select
+                v-model="carrierFilter"
+                class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"
+              >
+                <option value="">All carriers</option>
+                <option v-for="carrier in carriers" :key="carrier.id" :value="String(carrier.id)">
+                  {{ carrier.short_code ? `${carrier.name} (${carrier.short_code})` : carrier.name }}
+                </option>
+              </select>
+            </div>
+
+            <div>
+              <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Status
+              </label>
+              <select
+                v-model="statusFilter"
+                class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"
+              >
+                <option value="">All statuses</option>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="flex justify-end">
+            <button
+              type="button"
+              class="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
+              @click="clearFilters"
+            >
+              Clear Filters
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- Table -->
       <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
         <div class="overflow-x-auto">
@@ -117,7 +273,16 @@ const changePerPage = (value: number) => {
             <thead class="bg-gray-50 dark:bg-gray-900">
               <tr>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Name
+                  <button
+                    type="button"
+                    class="inline-flex items-center gap-2 text-left uppercase tracking-wider transition-colors hover:text-gray-700 dark:hover:text-gray-200"
+                    @click="toggleSort('name')"
+                  >
+                    <span>Name</span>
+                    <span class="text-[10px] font-semibold normal-case">
+                      {{ sortIndicator('name') }}
+                    </span>
+                  </button>
                 </th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Type

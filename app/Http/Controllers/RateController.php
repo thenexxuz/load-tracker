@@ -13,23 +13,73 @@ class RateController extends Controller
 {
     public function index(Request $request)
     {
+        $sortBy = $request->input('sort_by');
+        $sortDirection = $request->input('sort_direction') === 'desc' ? 'desc' : 'asc';
+        $status = $request->input('status');
+        $type = $request->input('type');
+        $carrierId = $request->input('carrier_id');
+
         $query = Rate::query()
             ->with([
                 'pickupLocation:id,short_code,name',
                 'carrier:id,name,short_code',
-            ])
-            ->orderBy('effective_from', 'desc')
-            ->orderBy('effective_to', 'desc')
-            ->orderBy('type');
+            ]);
 
         if ($request->search) {
             $query->where('name', 'like', '%'.$request->search.'%');
         }
 
-        $rates = $query->paginate(15);
+        if (in_array($type, ['flat', 'per_mile'], true)) {
+            $query->where('type', $type);
+        }
+
+        if ($carrierId !== null && $carrierId !== '') {
+            $query->where('carrier_id', $carrierId);
+        }
+
+        if ($status === 'active') {
+            $query->active();
+        }
+
+        if ($status === 'inactive') {
+            $query->where(function ($inactiveQuery) {
+                $inactiveQuery
+                    ->where('effective_from', '>', now())
+                    ->orWhere('effective_to', '<', now());
+            });
+        }
+
+        if ($sortBy === 'name') {
+            $query
+                ->orderByRaw('case when name is null then 1 else 0 end')
+                ->orderBy('name', $sortDirection);
+        } else {
+            $sortBy = null;
+        }
+
+        $query
+            ->orderBy('effective_from', 'desc')
+            ->orderBy('effective_to', 'desc')
+            ->orderBy('type');
+
+        $rates = $query
+            ->paginate($request->integer('per_page', 15))
+            ->withQueryString();
 
         return Inertia::render('Admin/Rates/Index', [
             'rates' => $rates,
+            'carriers' => Carrier::query()
+                ->select('id', 'name', 'short_code')
+                ->orderBy('name')
+                ->get(),
+            'filters' => [
+                'search' => $request->input('search'),
+                'type' => $type,
+                'carrier_id' => $carrierId,
+                'status' => $status,
+                'sort_by' => $sortBy,
+                'sort_direction' => $sortBy === 'name' ? $sortDirection : null,
+            ],
         ]);
     }
 

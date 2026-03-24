@@ -91,7 +91,7 @@ watch(
       <!-- Form -->
       <form
         @submit.prevent="submit"
-        class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg dark:shadow-gray-900/30 border border-gray-200 dark:border-gray-700 max-w-3xl"
+        class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg dark:shadow-gray-900/30 border border-gray-200 dark:border-gray-700"
       >
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
           <!-- Short Code -->

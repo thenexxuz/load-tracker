@@ -67,7 +67,7 @@ const updateScheduleType = (type: 'daily' | 'weekly' | 'monthly') => {
   <Head title="Edit Scheduled Item" />
 
   <AdminLayout>
-    <div class="p-6 max-w-4xl mx-auto">
+    <div class="p-6">
       <div class="mb-8">
         <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">
           Edit Scheduled Email Item
