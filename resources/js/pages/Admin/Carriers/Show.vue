@@ -24,6 +24,14 @@ const props = defineProps<{
       user?: { name: string } | null
     }>
   }
+  activeTrailerAssignments: Array<{
+    id: number
+    trailer_number: string | null
+    shipment_number: string | null
+    bol: string | null
+    pickup_location_name: string | null
+    pickup_location_short_code: string | null
+  }>
 }>()
 
 const page = usePage()
@@ -155,6 +163,62 @@ onMounted(() => {
               <p class="text-gray-900 dark:text-gray-100">{{ formattedUpdatedAt }}</p>
             </div>
           </div>
+        </div>
+      </div>
+
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg dark:shadow-gray-900/30 border border-gray-200 dark:border-gray-700 overflow-hidden mb-8">
+        <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+          <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
+            Trailers Assigned To Undelivered Shipments
+          </h2>
+          <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+            Shows each trailer assigned to a shipment that has not been delivered yet.
+          </p>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+            <thead class="bg-gray-50 dark:bg-gray-900/50">
+              <tr>
+                <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                  Trailer Number
+                </th>
+                <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                  Shipment Number
+                </th>
+                <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                  BOL
+                </th>
+                <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                  Pickup Location
+                </th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800">
+              <tr v-for="assignment in activeTrailerAssignments" :key="assignment.id" class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
+                  {{ assignment.trailer_number ?? '—' }}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
+                  {{ assignment.shipment_number ?? '—' }}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
+                  {{ assignment.bol ?? '—' }}
+                </td>
+                <td class="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
+                  {{ assignment.pickup_location_name ?? '—' }}
+                  <span v-if="assignment.pickup_location_short_code" class="ml-1 text-xs text-gray-500 dark:text-gray-400">
+                    ({{ assignment.pickup_location_short_code }})
+                  </span>
+                </td>
+              </tr>
+              <tr v-if="activeTrailerAssignments.length === 0">
+                <td colspan="4" class="px-6 py-12 text-center text-sm text-gray-500 dark:text-gray-400">
+                  No trailers are currently assigned to undelivered shipments.
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
 

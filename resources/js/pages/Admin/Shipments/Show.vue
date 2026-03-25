@@ -478,6 +478,9 @@ const hasAdminAccess = userRoles.includes('administrator') || userRoles.includes
             <thead class="bg-gray-50 dark:bg-gray-900/50">
               <tr>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Name
+                </th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Carrier
                 </th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
@@ -496,6 +499,9 @@ const hasAdminAccess = userRoles.includes('administrator') || userRoles.includes
             </thead>
             <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
               <tr v-for="rate in rates" :key="rate.id" class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
+                  {{ rate.name ?? 'Unnamed Rate' }}
+                </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
                   {{ rate.carrier?.name ?? 'Unknown Carrier' }}
                   <span v-if="rate.carrier?.short_code" class="ml-1 text-xs text-gray-500 dark:text-gray-400">
@@ -524,7 +530,7 @@ const hasAdminAccess = userRoles.includes('administrator') || userRoles.includes
                 </td>
               </tr>
               <tr v-if="rates.length === 0">
-                <td colspan="5" class="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
+                <td colspan="6" class="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
                   No rates found for this lane.
                 </td>
               </tr>

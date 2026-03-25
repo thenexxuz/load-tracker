@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { Head, Link, router } from '@inertiajs/vue3'
+import { onClickOutside } from '@vueuse/core'
 import AdminLayout from '@/layouts/AppLayout.vue'
 import Pagination from '@/components/Pagination.vue'
 import { Confirm, Notify } from 'notiflix'
 import { format } from 'date-fns' // optional: better date formatting (npm install date-fns)
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 
 const props = defineProps<{
   rates: {
@@ -48,7 +49,6 @@ const props = defineProps<{
 const typeFilter = ref(props.filters?.type ?? '')
 const carrierFilter = ref(props.filters?.carrier_id ? String(props.filters.carrier_id) : '')
 const statusFilter = ref(props.filters?.status ?? '')
-const suppressFilterWatch = ref(false)
 
 const currentParams = computed(() => ({
   search: props.filters?.search || undefined,
@@ -72,12 +72,129 @@ const applyFilters = () => {
 }
 
 watch([typeFilter, carrierFilter, statusFilter], () => {
-  if (suppressFilterWatch.value) {
+  applyFilters()
+})
+
+const typeHeaderText = computed(() => {
+  if (typeFilter.value === 'flat') {
+    return 'Type: Flat'
+  }
+
+  if (typeFilter.value === 'per_mile') {
+    return 'Type: Per Mile'
+  }
+
+  return 'Type'
+})
+
+const selectedCarrier = computed(() => {
+  if (!carrierFilter.value) {
+    return null
+  }
+
+  return props.carriers.find((carrier) => String(carrier.id) === carrierFilter.value) ?? null
+})
+
+const carrierHeaderText = computed(() => {
+  if (!selectedCarrier.value) {
+    return 'Carrier'
+  }
+
+  return selectedCarrier.value.short_code ?? selectedCarrier.value.name
+})
+
+const statusHeaderText = computed(() => {
+  if (statusFilter.value === 'active') {
+    return 'Status: Active'
+  }
+
+  if (statusFilter.value === 'inactive') {
+    return 'Status: Inactive'
+  }
+
+  return 'Status'
+})
+
+const showTypeFilter = ref(false)
+const showCarrierFilter = ref(false)
+const showStatusFilter = ref(false)
+
+const typeFilterRef = ref<HTMLElement | null>(null)
+const carrierFilterRef = ref<HTMLElement | null>(null)
+const statusFilterRef = ref<HTMLElement | null>(null)
+
+const typeDropdownRoot = ref<HTMLElement | null>(null)
+const carrierDropdownRoot = ref<HTMLElement | null>(null)
+const statusDropdownRoot = ref<HTMLElement | null>(null)
+
+const typeDropdownStyle = ref({ top: '0px', left: '0px' })
+const carrierDropdownStyle = ref({ top: '0px', left: '0px' })
+const statusDropdownStyle = ref({ top: '0px', left: '0px' })
+
+const updatePosition = (
+  headerRef: typeof typeFilterRef,
+  styleRef: typeof typeDropdownStyle
+) => {
+  if (!headerRef.value) {
     return
   }
 
-  applyFilters()
-})
+  const rect = headerRef.value.getBoundingClientRect()
+
+  styleRef.value = {
+    top: `${rect.bottom + window.scrollY + 8}px`,
+    left: `${rect.left + window.scrollX}px`,
+  }
+}
+
+watch(showTypeFilter, (value) => value && nextTick(() => updatePosition(typeFilterRef, typeDropdownStyle)))
+watch(showCarrierFilter, (value) => value && nextTick(() => updatePosition(carrierFilterRef, carrierDropdownStyle)))
+watch(showStatusFilter, (value) => value && nextTick(() => updatePosition(statusFilterRef, statusDropdownStyle)))
+
+onClickOutside(typeFilterRef, () => {
+  showTypeFilter.value = false
+}, { ignore: [typeDropdownRoot] })
+
+onClickOutside(carrierFilterRef, () => {
+  showCarrierFilter.value = false
+}, { ignore: [carrierDropdownRoot] })
+
+onClickOutside(statusFilterRef, () => {
+  showStatusFilter.value = false
+}, { ignore: [statusDropdownRoot] })
+
+const closeAllHeaderFilters = () => {
+  showTypeFilter.value = false
+  showCarrierFilter.value = false
+  showStatusFilter.value = false
+}
+
+const toggleTypeFilter = () => {
+  showTypeFilter.value = !showTypeFilter.value
+
+  if (showTypeFilter.value) {
+    showCarrierFilter.value = false
+    showStatusFilter.value = false
+  }
+}
+
+const toggleCarrierFilter = () => {
+  showCarrierFilter.value = !showCarrierFilter.value
+
+  if (showCarrierFilter.value) {
+    showTypeFilter.value = false
+    showStatusFilter.value = false
+  }
+}
+
+const toggleStatusFilter = () => {
+  showStatusFilter.value = !showStatusFilter.value
+
+  if (showStatusFilter.value) {
+    showTypeFilter.value = false
+    showCarrierFilter.value = false
+  }
+}
 
 const deleteRate = (id: number) => {
   Confirm.prompt(
@@ -87,7 +204,13 @@ const deleteRate = (id: number) => {
     'Yes, delete',
     'Cancel',
     () => {
-      router.delete(route('admin.rates.destroy', id), {
+      router.delete(route('admin.rates.destroy', {
+        rate: id,
+        ...currentParams.value,
+        page: props.rates.current_page,
+      }), {
+        preserveState: true,
+        preserveScroll: true,
         onSuccess: () => {
           Notify.success('Rate deleted successfully.')
         },
@@ -139,38 +262,27 @@ const toggleSort = (column: 'name') => {
   )
 }
 
-const clearFilters = () => {
-  suppressFilterWatch.value = true
+const clearTypeFilter = () => {
   typeFilter.value = ''
-  carrierFilter.value = ''
-  statusFilter.value = ''
+  showTypeFilter.value = false
+}
 
-  router.get(
-    route('admin.rates.index'),
-    {
-      search: props.filters?.search || undefined,
-      sort_by: props.filters?.sort_by || undefined,
-      sort_direction: props.filters?.sort_direction || undefined,
-      per_page: props.rates.per_page,
-      page: 1,
-    },
-    {
-      preserveState: true,
-      preserveScroll: true,
-      replace: true,
-      onFinish: () => {
-        suppressFilterWatch.value = false
-      },
-    }
-  )
+const clearCarrierFilter = () => {
+  carrierFilter.value = ''
+  showCarrierFilter.value = false
+}
+
+const clearStatusFilter = () => {
+  statusFilter.value = ''
+  showStatusFilter.value = false
 }
 
 const sortIndicator = (column: 'name'): string => {
   if (props.filters?.sort_by !== column) {
-    return 'Sort'
+    return '▾'
   }
 
-  return props.filters.sort_direction === 'desc' ? 'Descending' : 'Ascending'
+  return props.filters.sort_direction === 'desc' ? '▾' : '▴'
 }
 
 // Pagination functions
@@ -207,65 +319,6 @@ const changePerPage = (value: number) => {
         </Link>
       </div>
 
-      <div class="mb-6 rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-        <div class="flex flex-col gap-4 lg:flex-row lg:items-end">
-          <div class="grid flex-1 gap-4 sm:grid-cols-3">
-            <div>
-              <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Type
-              </label>
-              <select
-                v-model="typeFilter"
-                class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"
-              >
-                <option value="">All types</option>
-                <option value="flat">Flat</option>
-                <option value="per_mile">Per mile</option>
-              </select>
-            </div>
-
-            <div>
-              <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Carrier
-              </label>
-              <select
-                v-model="carrierFilter"
-                class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"
-              >
-                <option value="">All carriers</option>
-                <option v-for="carrier in carriers" :key="carrier.id" :value="String(carrier.id)">
-                  {{ carrier.short_code ? `${carrier.name} (${carrier.short_code})` : carrier.name }}
-                </option>
-              </select>
-            </div>
-
-            <div>
-              <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Status
-              </label>
-              <select
-                v-model="statusFilter"
-                class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"
-              >
-                <option value="">All statuses</option>
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="flex justify-end">
-            <button
-              type="button"
-              class="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
-              @click="clearFilters"
-            >
-              Clear Filters
-            </button>
-          </div>
-        </div>
-      </div>
-
       <!-- Table -->
       <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
         <div class="overflow-x-auto">
@@ -279,13 +332,20 @@ const changePerPage = (value: number) => {
                     @click="toggleSort('name')"
                   >
                     <span>Name</span>
-                    <span class="text-[10px] font-semibold normal-case">
+                    <span class="text-[10px] font-semibold leading-none" aria-hidden="true">
                       {{ sortIndicator('name') }}
                     </span>
                   </button>
                 </th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Type
+                <th
+                  ref="typeFilterRef"
+                  class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer"
+                  @click="toggleTypeFilter"
+                >
+                  <div class="flex items-center justify-between select-none gap-2">
+                    <span>{{ typeHeaderText }}</span>
+                    <span class="text-[10px]">▼</span>
+                  </div>
                 </th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Rate
@@ -293,14 +353,28 @@ const changePerPage = (value: number) => {
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Lane (Pickup → Destination)
                 </th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Carrier
+                <th
+                  ref="carrierFilterRef"
+                  class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer"
+                  @click="toggleCarrierFilter"
+                >
+                  <div class="flex items-center justify-between select-none gap-2">
+                    <span>{{ carrierHeaderText }}</span>
+                    <span class="text-[10px]">▼</span>
+                  </div>
                 </th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Valid Period
                 </th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Status
+                <th
+                  ref="statusFilterRef"
+                  class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer"
+                  @click="toggleStatusFilter"
+                >
+                  <div class="flex items-center justify-between select-none gap-2">
+                    <span>{{ statusHeaderText }}</span>
+                    <span class="text-[10px]">▼</span>
+                  </div>
                 </th>
                 <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Actions
@@ -394,6 +468,115 @@ const changePerPage = (value: number) => {
           @perPageChange="changePerPage"
         />
       </div>
+
+      <Teleport to="body">
+        <div
+          v-if="showTypeFilter"
+          ref="typeDropdownRoot"
+          class="fixed z-[9999] min-w-[220px] rounded-md border border-gray-300 bg-white shadow-2xl dark:border-gray-600 dark:bg-gray-800"
+          :style="typeDropdownStyle"
+        >
+          <div class="p-4">
+            <select
+              v-model="typeFilter"
+              class="w-full rounded border border-gray-300 bg-white p-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+            >
+              <option value="">All types</option>
+              <option value="flat">Flat</option>
+              <option value="per_mile">Per mile</option>
+            </select>
+          </div>
+          <div class="flex items-center justify-between border-t border-gray-200 p-3 dark:border-gray-700">
+            <button
+              type="button"
+              class="rounded-md bg-gray-200 px-4 py-2 text-sm transition-colors hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600"
+              @click="clearTypeFilter"
+            >
+              Clear
+            </button>
+            <button
+              type="button"
+              class="rounded-md bg-blue-600 px-4 py-2 text-sm text-white transition-colors hover:bg-blue-700"
+              @click="closeAllHeaderFilters"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+
+        <div
+          v-if="showCarrierFilter"
+          ref="carrierDropdownRoot"
+          class="fixed z-[9999] min-w-[280px] rounded-md border border-gray-300 bg-white shadow-2xl dark:border-gray-600 dark:bg-gray-800"
+          :style="carrierDropdownStyle"
+        >
+          <div class="p-4">
+            <select
+              v-model="carrierFilter"
+              class="w-full rounded border border-gray-300 bg-white p-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+            >
+              <option value="">All carriers</option>
+              <option
+                v-for="carrier in carriers"
+                :key="carrier.id"
+                :value="String(carrier.id)"
+              >
+                {{ carrier.short_code ? `${carrier.name} (${carrier.short_code})` : carrier.name }}
+              </option>
+            </select>
+          </div>
+          <div class="flex items-center justify-between border-t border-gray-200 p-3 dark:border-gray-700">
+            <button
+              type="button"
+              class="rounded-md bg-gray-200 px-4 py-2 text-sm transition-colors hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600"
+              @click="clearCarrierFilter"
+            >
+              Clear
+            </button>
+            <button
+              type="button"
+              class="rounded-md bg-blue-600 px-4 py-2 text-sm text-white transition-colors hover:bg-blue-700"
+              @click="closeAllHeaderFilters"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+
+        <div
+          v-if="showStatusFilter"
+          ref="statusDropdownRoot"
+          class="fixed z-[9999] min-w-[220px] rounded-md border border-gray-300 bg-white shadow-2xl dark:border-gray-600 dark:bg-gray-800"
+          :style="statusDropdownStyle"
+        >
+          <div class="p-4">
+            <select
+              v-model="statusFilter"
+              class="w-full rounded border border-gray-300 bg-white p-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+            >
+              <option value="">All statuses</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
+          <div class="flex items-center justify-between border-t border-gray-200 p-3 dark:border-gray-700">
+            <button
+              type="button"
+              class="rounded-md bg-gray-200 px-4 py-2 text-sm transition-colors hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600"
+              @click="clearStatusFilter"
+            >
+              Clear
+            </button>
+            <button
+              type="button"
+              class="rounded-md bg-blue-600 px-4 py-2 text-sm text-white transition-colors hover:bg-blue-700"
+              @click="closeAllHeaderFilters"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </Teleport>
     </div>
   </AdminLayout>
 </template>

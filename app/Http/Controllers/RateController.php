@@ -167,10 +167,21 @@ class RateController extends Controller
             ->with('success', 'Rate updated successfully.');
     }
 
-    public function destroy(Rate $rate)
+    public function destroy(Request $request, Rate $rate)
     {
         $rate->delete();
 
-        return redirect()->route('admin.rates.index')->with('success', 'Rate deleted successfully.');
+        return redirect()
+            ->route('admin.rates.index', $request->only([
+                'search',
+                'type',
+                'carrier_id',
+                'status',
+                'sort_by',
+                'sort_direction',
+                'per_page',
+                'page',
+            ]))
+            ->with('success', 'Rate deleted successfully.');
     }
 }

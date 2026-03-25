@@ -2,7 +2,7 @@
 import { Head, Link, router } from '@inertiajs/vue3'
 import AdminLayout from '@/layouts/AppLayout.vue'
 import { format } from 'date-fns'
-import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
 
@@ -160,7 +160,7 @@ const openEditModal = (shipment: typeof selectedShipment.value) => {
     trailer_id: shipment?.trailer_id || null,
     loaned_from_trailer_id: shipment?.loaned_from_trailer_id || null,
   }
-  trailerSearchInput.value = ''
+  trailerSearchInput.value = shipment?.trailer_number || ''
   loanedFromCarrierId.value = null
   editError.value = null
   showEditModal.value = true
@@ -194,7 +194,10 @@ const submitEdit = async () => {
           'Content-Type': 'application/json',
           'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content || '',
         },
-        body: JSON.stringify(editForm.value),
+        body: JSON.stringify({
+          ...editForm.value,
+          trailer_number: trailerSearchInput.value.trim() || null,
+        }),
       }
     )
 
@@ -214,6 +217,24 @@ const submitEdit = async () => {
     isSubmitting.value = false
   }
 }
+
+watch(
+  [trailerSearchInput, () => editForm.value.carrier_id],
+  ([nextTrailerNumber]) => {
+    const normalizedTrailerNumber = nextTrailerNumber.trim().toLowerCase()
+
+    if (!normalizedTrailerNumber) {
+      editForm.value.trailer_id = null
+      return
+    }
+
+    const matchingTrailer = carrierTrailers.value.find(
+      (trailer) => trailer.number.toLowerCase() === normalizedTrailerNumber
+    )
+
+    editForm.value.trailer_id = matchingTrailer?.id ?? null
+  }
+)
 
 onMounted(() => {
   if (!mapContainer.value || !location.latitude || !location.longitude) return
@@ -633,7 +654,7 @@ onUnmounted(() => {
               </div>
               <!-- Message when no matching trailers -->
               <div v-else-if="filteredTrailers.length === 0 && trailerSearchInput" class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                No trailers found for "{{ trailerSearchInput }}"
+                No trailers found for "{{ trailerSearchInput }}". This trailer will be created when you save.
               </div>
             </div>
           </div>

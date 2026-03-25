@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Carrier;
+use App\Models\Shipment;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
@@ -68,8 +69,36 @@ class CarrierController extends Controller
     public function show(Carrier $carrier)
     {
         $carrier->load('notes.user');
+
+        $activeTrailerAssignments = Shipment::query()
+            ->whereHas('trailer', function ($query) use ($carrier) {
+                $query->where('carrier_id', $carrier->id);
+            })
+            ->whereRaw("LOWER(status) != 'delivered'")
+            ->with([
+                'trailer:id,number',
+                'pickupLocation:id,name,short_code',
+            ])
+            ->orderBy('pickup_date', 'desc')
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(function (Shipment $shipment) {
+                $trailer = $shipment->getRelation('trailer');
+
+                return [
+                    'id' => $shipment->id,
+                    'trailer_number' => $trailer?->number,
+                    'shipment_number' => $shipment->shipment_number,
+                    'bol' => $shipment->bol,
+                    'pickup_location_name' => $shipment->pickupLocation?->name,
+                    'pickup_location_short_code' => $shipment->pickupLocation?->short_code,
+                ];
+            })
+            ->values();
+
         return Inertia::render('Admin/Carriers/Show', [
             'carrier' => $carrier,
+            'activeTrailerAssignments' => $activeTrailerAssignments,
         ]);
     }
 

@@ -7,14 +7,16 @@ use App\Models\Location;
 use App\Models\Rate;
 use App\Models\Shipment;
 use App\Models\Template;
+use App\Models\Trailer;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
-use League\Csv\Writer;
 use Log;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 
@@ -74,7 +76,7 @@ class ShipmentController extends Controller
             $query->whereNull('carrier_id');
         }
         // Normal case: exclude the selected carriers
-        elseif (!empty($excludedCarriers)) {
+        elseif (! empty($excludedCarriers)) {
             $query->whereNotIn('carrier_id', function ($sub) use ($excludedCarriers) {
                 $sub->select('id')
                     ->from('carriers')
@@ -84,7 +86,7 @@ class ShipmentController extends Controller
 
         // Drop Date filter
         $dropStart = $request->input('drop_start');
-        $dropEnd   = $request->input('drop_end');
+        $dropEnd = $request->input('drop_end');
 
         if ($dropStart && $dropEnd) {
             $query->whereDate('drop_date', '>=', $dropStart)
@@ -100,6 +102,7 @@ class ShipmentController extends Controller
         // Transform to add has_notes if you use that indicator
         $shipments->getCollection()->transform(function ($shipment) {
             $shipment->has_notes = $shipment->notes()->exists();
+
             return $shipment;
         });
 
@@ -118,7 +121,7 @@ class ShipmentController extends Controller
                 'excluded_carriers',
                 'drop_start',
                 'drop_end',
-                'per_page'
+                'per_page',
             ]),
         ]);
     }
@@ -231,7 +234,7 @@ class ShipmentController extends Controller
 
         if (count($waypoints) >= 2) {
             // Build Mapbox Directions coordinates string: lng1,lat1;lng2,lat2;...
-            $coordString = implode(';', array_map(fn($wp) => "{$wp['lng']},{$wp['lat']}", $waypoints));
+            $coordString = implode(';', array_map(fn ($wp) => "{$wp['lng']},{$wp['lat']}", $waypoints));
 
             $token = config('services.mapbox.key');
 
@@ -243,7 +246,7 @@ class ShipmentController extends Controller
                         'overview' => 'full',
                     ]);
 
-                    if (!empty($response['routes'])) {
+                    if (! empty($response['routes'])) {
                         $route = $response['routes'][0];
 
                         $totalMiles = round(($route['distance'] / 1000) * 0.621371, 1);
@@ -268,7 +271,7 @@ class ShipmentController extends Controller
                             'waypoints' => $waypoints,
                         ];
                     } else {
-                        throw new Exception();
+                        throw new Exception;
                     }
                 } catch (\Exception $e) {
                     Log::warning("Failed to fetch route for shipment {$shipment->id}");
@@ -281,25 +284,31 @@ class ShipmentController extends Controller
 
         // Base query for regular rates
         $ratesQuery = Rate::query()
-            ->where('pickup_location_id', $shipment->pickup_location_id)
+            ->where(function ($query) use ($shipment) {
+                $query->where('pickup_location_id', $shipment->pickup_location_id)
+                    ->orWhereNull('pickup_location_id');
+            })
             ->where(function ($query) use ($dcLocation) {
                 $query->where(function ($q) use ($dcLocation) {
                     // Exact destination match
                     $q->where('destination_city', $dcLocation?->city)
-                      ->where('destination_state', $dcLocation?->state)
-                      ->where('destination_country', $dcLocation?->country);
+                        ->where('destination_state', $dcLocation?->state)
+                        ->where('destination_country', $dcLocation?->country);
                 })->orWhere(function ($q) {
                     // No destination specified (fallback)
                     $q->whereNull('destination_city')
-                      ->whereNull('destination_state')
-                      ->whereNull('destination_country');
+                        ->whereNull('destination_state')
+                        ->whereNull('destination_country');
                 });
             })
             ->with('carrier:id,name,short_code');
 
-        // If carrier is assigned, show only rates for that carrier
+        // If carrier is assigned, show rates for that carrier and shared rates with no carrier.
         if ($shipment->carrier_id) {
-            $ratesQuery->where('carrier_id', $shipment->carrier_id);
+            $ratesQuery->where(function ($query) use ($shipment) {
+                $query->where('carrier_id', $shipment->carrier_id)
+                    ->orWhereNull('carrier_id');
+            });
         }
 
         // Get regular rates
@@ -308,8 +317,17 @@ class ShipmentController extends Controller
         // Get recycling rates (separate query)
         $recyclingRates = Rate::query()
             ->where('name', 'Recycling')
-            ->where('pickup_location_id', $shipment->dc_location_id)
+            ->where(function ($query) use ($shipment) {
+                $query->where('pickup_location_id', $shipment->dc_location_id)
+                    ->orWhereNull('pickup_location_id');
+            })
             ->with('carrier:id,name,short_code')
+            ->when($shipment->carrier_id, function ($query) use ($shipment) {
+                $query->where(function ($carrierQuery) use ($shipment) {
+                    $carrierQuery->where('carrier_id', $shipment->carrier_id)
+                        ->orWhereNull('carrier_id');
+                });
+            })
             ->orderBy('carrier_id')
             ->orderBy('rate')
             ->get();
@@ -318,7 +336,7 @@ class ShipmentController extends Controller
         $rates = $regularRates->merge($recyclingRates);
 
         // Transform rates to match frontend expectations
-        $transformedRates = $rates->map(function ($rate) use ($shipment) {
+        $transformedRates = $rates->map(function ($rate) {
             // Determine calculation type
             $calculationType = 'full_route'; // default
 
@@ -355,6 +373,7 @@ class ShipmentController extends Controller
     {
         $h = floor($seconds / 3600);
         $m = floor(($seconds % 3600) / 60);
+
         return $h > 0 ? "{$h} hr {$m} min" : "{$m} min";
     }
 
@@ -452,10 +471,42 @@ class ShipmentController extends Controller
         $validated = $request->validate([
             'carrier_id' => 'nullable|exists:carriers,id',
             'trailer_id' => 'nullable|exists:trailers,id',
+            'trailer_number' => 'nullable|string|max:100',
             'loaned_from_trailer_id' => 'nullable|exists:trailers,id',
         ]);
 
+        $trailerNumber = trim((string) ($validated['trailer_number'] ?? ''));
+
+        unset($validated['trailer_number']);
+
+        if ($trailerNumber !== '') {
+            if (blank($validated['carrier_id'] ?? null)) {
+                throw ValidationException::withMessages([
+                    'carrier_id' => 'Select a carrier before assigning a trailer number.',
+                ]);
+            }
+
+            $trailer = Trailer::query()
+                ->where('carrier_id', $validated['carrier_id'])
+                ->whereRaw('LOWER(number) = ?', [Str::lower($trailerNumber)])
+                ->first();
+
+            if (! $trailer) {
+                $trailer = Trailer::create([
+                    'guid' => (string) Str::uuid(),
+                    'number' => $trailerNumber,
+                    'carrier_id' => $validated['carrier_id'],
+                    'status' => 'available',
+                    'is_active' => true,
+                ]);
+            }
+
+            $validated['trailer_id'] = $trailer->id;
+        }
+
         $shipment->update($validated);
+
+        $shipment->load(['trailer:id,number', 'loanedFromTrailer:id,number']);
 
         return response()->json([
             'message' => 'Shipment updated successfully.',
@@ -463,6 +514,7 @@ class ShipmentController extends Controller
                 'id' => $shipment->id,
                 'carrier_id' => $shipment->carrier_id,
                 'trailer_id' => $shipment->trailer_id,
+                'trailer_number' => $shipment->trailer?->number,
                 'loaned_from_trailer_id' => $shipment->loaned_from_trailer_id,
             ],
         ]);
@@ -525,6 +577,7 @@ class ShipmentController extends Controller
                 if ($validator->fails()) {
                     $errorMsg = implode('; ', $validator->errors()->all());
                     $failedRows[] = array_merge($originalRow, ['ERROR' => $errorMsg]);
+
                     continue;
                 }
 
@@ -533,21 +586,25 @@ class ShipmentController extends Controller
                 // Parse dates
                 try {
                     $pickupDateRaw = Carbon::createFromFormat('m/d/Y', $validated['ship date']);
-                    if (!$pickupDateRaw)
+                    if (! $pickupDateRaw) {
                         throw new \Exception;
+                    }
                 } catch (\Exception $e) {
                     $failedRows[] = array_merge($originalRow, ['ERROR' => "Invalid 'Ship Date' format (expected m/d/Y)"]);
+
                     continue;
                 }
 
                 $deliveryDateRaw = null;
-                if (!empty($validated['deliver date'])) {
+                if (! empty($validated['deliver date'])) {
                     try {
                         $deliveryDateRaw = Carbon::createFromFormat('m/d/Y', $validated['deliver date']);
-                        if (!$deliveryDateRaw)
+                        if (! $deliveryDateRaw) {
                             throw new \Exception;
+                        }
                     } catch (\Exception $e) {
                         $failedRows[] = array_merge($originalRow, ['ERROR' => "Invalid 'Deliver Date' format (expected m/d/Y)"]);
+
                         continue;
                     }
                 }
@@ -589,8 +646,8 @@ class ShipmentController extends Controller
                     ? Carbon::parse($dc->expected_arrival_time)->format('H:i:s')
                     : '00:00:00';
 
-                $pickupDate = $pickupDateRaw->format('Y-m-d') . ' ' . $time;
-                $deliveryDate = $deliveryDateRaw ? $deliveryDateRaw->format('Y-m-d') . ' ' . $time : null;
+                $pickupDate = $pickupDateRaw->format('Y-m-d').' '.$time;
+                $deliveryDate = $deliveryDateRaw ? $deliveryDateRaw->format('Y-m-d').' '.$time : null;
 
                 // Drop date logic
                 $dropDate = Carbon::parse($pickupDate)->subDays(2);
@@ -623,7 +680,7 @@ class ShipmentController extends Controller
                 ]);
 
                 // Only save if something changed (or new)
-                if ($shipment->isDirty() || !$wasExisting) {
+                if ($shipment->isDirty() || ! $wasExisting) {
                     $shipment->save();
 
                     $shipment->calculateBol();
@@ -664,8 +721,8 @@ class ShipmentController extends Controller
                             }
                         }
 
-                        if (!empty($changes)) {
-                            $noteContent = "PBI import updated this shipment:\n" . implode("\n", $changes);
+                        if (! empty($changes)) {
+                            $noteContent = "PBI import updated this shipment:\n".implode("\n", $changes);
 
                             $shipment->notes()->create([
                                 'title' => 'PBI Import Update',
@@ -681,7 +738,7 @@ class ShipmentController extends Controller
             }
 
             // ── Handle failed rows (unchanged) ──────────────────────
-            if (!empty($failedRows)) {
+            if (! empty($failedRows)) {
                 // ... your existing TSV generation and session flash ...
             }
 
@@ -689,7 +746,7 @@ class ShipmentController extends Controller
                 ->with('success', "$imported new shipment(s) imported, $updated existing updated.");
 
         } catch (\Exception $e) {
-            return back()->withErrors(['file' => 'Failed to process file: ' . $e->getMessage()]);
+            return back()->withErrors(['file' => 'Failed to process file: '.$e->getMessage()]);
         }
     }
 
