@@ -6,9 +6,10 @@ it('keeps carrier show loading active trailer assignments for undelivered shipme
 
     expect($controller)
         ->toContain('use App\\Models\\Shipment;')
+        ->toContain("$carrier->load(['notes.user', 'trailers.currentLocation']);")
         ->toContain('Shipment::query()')
         ->toContain("->whereHas('trailer', function (\$query) use (\$carrier) {")
-        ->toContain("->whereRaw(\"LOWER(status) != 'delivered'\")")
+        ->toContain("->whereRaw(\"LOWER(status) NOT IN ('delivered', 'cancelled')\")")
         ->toContain("'trailer:id,number',")
         ->toContain("'pickupLocation:id,name,short_code',")
         ->toContain("\$trailer = \$shipment->getRelation('trailer');")
@@ -16,6 +17,10 @@ it('keeps carrier show loading active trailer assignments for undelivered shipme
         ->toContain("'shipment_number' => \$shipment->shipment_number")
         ->toContain("'bol' => \$shipment->bol")
         ->toContain("'pickup_location_name' => \$shipment->pickupLocation?->name")
+        ->toContain("'is_assigned_to_shipment' => true")
+        ->toContain("->whereNotIn('id', \$assignedTrailerIds)")
+        ->toContain("'pickup_location_name' => \$trailer->currentLocation?->name")
+        ->toContain("'is_assigned_to_shipment' => false")
         ->toContain("'activeTrailerAssignments' => \$activeTrailerAssignments");
 });
 
@@ -25,13 +30,15 @@ it('keeps carrier show rendering the trailer assignment table', function (): voi
 
     expect($page)
         ->toContain('activeTrailerAssignments: Array<{')
-        ->toContain('Trailers Assigned To Undelivered Shipments')
+        ->toContain('Trailers Assigned Or Parked At Pickup Locations')
         ->toContain('Trailer Number')
         ->toContain('Shipment Number')
+        ->toContain('Assignment')
         ->toContain('Pickup Location')
         ->toContain('v-for="assignment in activeTrailerAssignments"')
         ->toContain("{{ assignment.trailer_number ?? '—' }}")
         ->toContain("{{ assignment.shipment_number ?? '—' }}")
+        ->toContain("{{ assignment.is_assigned_to_shipment ? 'Assigned' : 'Unassigned' }}")
         ->toContain("{{ assignment.pickup_location_name ?? '—' }}")
-        ->toContain('No trailers are currently assigned to undelivered shipments.');
+        ->toContain('No trailers are currently assigned to undelivered shipments or parked at pickup locations.');
 });

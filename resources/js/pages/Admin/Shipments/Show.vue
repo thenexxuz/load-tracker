@@ -458,7 +458,7 @@ const submitOfferUpdate = () => {
       </div>
 
       <div
-        v-if="hasAdminAccess"
+        v-if="hasAdminAccess && !hasAssignedCarrier"
         class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700"
       >
         <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
@@ -475,7 +475,6 @@ const submitOfferUpdate = () => {
             </label>
             <select
               v-model="offerForm.offered_carrier_ids"
-              :disabled="hasAssignedCarrier"
               multiple
               class="w-full min-h-36 p-3 border rounded-md focus:ring-2 focus:outline-none appearance-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500 disabled:opacity-60"
             >
@@ -484,12 +483,7 @@ const submitOfferUpdate = () => {
               </option>
             </select>
             <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-              <span v-if="hasAssignedCarrier">
-                This shipment already has an assigned carrier, so offers are unavailable and will remain cleared.
-              </span>
-              <span v-else>
-                Carrier users assigned to the selected carriers will see this shipment on their Shipment Index.
-              </span>
+              Carrier users assigned to the selected carriers will see this shipment on their Shipment Index.
             </p>
             <p v-if="offerForm.errors.offered_carrier_ids" class="mt-1 text-sm text-red-600 dark:text-red-400">
               {{ offerForm.errors.offered_carrier_ids }}
@@ -523,7 +517,7 @@ const submitOfferUpdate = () => {
           <div class="flex justify-end">
             <button
               type="submit"
-              :disabled="offerForm.processing || hasAssignedCarrier"
+              :disabled="offerForm.processing"
               class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-md font-medium transition-colors disabled:opacity-60"
             >
               {{ offerForm.processing ? 'Saving...' : 'Save Offers' }}

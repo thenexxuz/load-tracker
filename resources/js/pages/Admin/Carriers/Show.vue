@@ -26,12 +26,13 @@ const props = defineProps<{
     }>
   }
   activeTrailerAssignments: Array<{
-    id: number
+    id: string
     trailer_number: string | null
     shipment_number: string | null
     bol: string | null
     pickup_location_name: string | null
     pickup_location_short_code: string | null
+    is_assigned_to_shipment: boolean
   }>
 }>()
 
@@ -171,10 +172,10 @@ onMounted(() => {
       <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg dark:shadow-gray-900/30 border border-gray-200 dark:border-gray-700 overflow-hidden mb-8">
         <div class="p-6 border-b border-gray-200 dark:border-gray-700">
           <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
-            Trailers Assigned To Undelivered Shipments
+            Trailers Assigned Or Parked At Pickup Locations
           </h2>
           <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
-            Shows each trailer assigned to a shipment that has not been delivered yet.
+            Shows trailers assigned to undelivered shipments and unassigned trailers still parked at a pickup location.
           </p>
         </div>
 
@@ -187,6 +188,9 @@ onMounted(() => {
                 </th>
                 <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
                   Shipment Number
+                </th>
+                <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                  Assignment
                 </th>
                 <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
                   BOL
@@ -205,6 +209,9 @@ onMounted(() => {
                   {{ assignment.shipment_number ?? '—' }}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
+                  {{ assignment.is_assigned_to_shipment ? 'Assigned' : 'Unassigned' }}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
                   {{ assignment.bol ?? '—' }}
                 </td>
                 <td class="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
@@ -215,8 +222,8 @@ onMounted(() => {
                 </td>
               </tr>
               <tr v-if="activeTrailerAssignments.length === 0">
-                <td colspan="4" class="px-6 py-12 text-center text-sm text-gray-500 dark:text-gray-400">
-                  No trailers are currently assigned to undelivered shipments.
+                <td colspan="5" class="px-6 py-12 text-center text-sm text-gray-500 dark:text-gray-400">
+                  No trailers are currently assigned to undelivered shipments or parked at pickup locations.
                 </td>
               </tr>
             </tbody>

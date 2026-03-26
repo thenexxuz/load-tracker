@@ -12,6 +12,7 @@ class Trailer extends Model
         'guid',
         'number',
         'carrier_id',
+        'current_location_id',
         'type',
         'capacity',
         'license_plate',
@@ -31,6 +32,11 @@ class Trailer extends Model
     public function carrier(): BelongsTo
     {
         return $this->belongsTo(Carrier::class);
+    }
+
+    public function currentLocation(): BelongsTo
+    {
+        return $this->belongsTo(Location::class, 'current_location_id');
     }
 
     /**

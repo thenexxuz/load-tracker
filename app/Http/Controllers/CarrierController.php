@@ -68,37 +68,58 @@ class CarrierController extends Controller
 
     public function show(Carrier $carrier)
     {
-        $carrier->load('notes.user');
+        $carrier->load(['notes.user', 'trailers.currentLocation']);
 
-        $activeTrailerAssignments = Shipment::query()
+        $assignedShipments = Shipment::query()
             ->whereHas('trailer', function ($query) use ($carrier) {
                 $query->where('carrier_id', $carrier->id);
             })
-            ->whereRaw("LOWER(status) != 'delivered'")
+            ->whereRaw("LOWER(status) NOT IN ('delivered', 'cancelled')")
             ->with([
                 'trailer:id,number',
                 'pickupLocation:id,name,short_code',
             ])
             ->orderBy('pickup_date', 'desc')
             ->orderBy('created_at', 'desc')
-            ->get()
+            ->get();
+
+        $activeTrailerAssignments = $assignedShipments
             ->map(function (Shipment $shipment) {
                 $trailer = $shipment->getRelation('trailer');
 
                 return [
-                    'id' => $shipment->id,
+                    'id' => 'shipment-'.$shipment->id,
                     'trailer_number' => $trailer?->number,
                     'shipment_number' => $shipment->shipment_number,
                     'bol' => $shipment->bol,
                     'pickup_location_name' => $shipment->pickupLocation?->name,
                     'pickup_location_short_code' => $shipment->pickupLocation?->short_code,
+                    'is_assigned_to_shipment' => true,
+                ];
+            })
+            ->values();
+
+        $assignedTrailerIds = $assignedShipments->pluck('trailer_id')->filter()->unique();
+
+        $parkedTrailers = $carrier->trailers
+            ->whereNotIn('id', $assignedTrailerIds)
+            ->filter(fn ($trailer) => $trailer->current_location_id)
+            ->map(function ($trailer) {
+                return [
+                    'id' => 'trailer-'.$trailer->id,
+                    'trailer_number' => $trailer->number,
+                    'shipment_number' => null,
+                    'bol' => null,
+                    'pickup_location_name' => $trailer->currentLocation?->name,
+                    'pickup_location_short_code' => $trailer->currentLocation?->short_code,
+                    'is_assigned_to_shipment' => false,
                 ];
             })
             ->values();
 
         return Inertia::render('Admin/Carriers/Show', [
             'carrier' => $carrier,
-            'activeTrailerAssignments' => $activeTrailerAssignments,
+            'activeTrailerAssignments' => $activeTrailerAssignments->concat($parkedTrailers)->values(),
         ]);
     }
 

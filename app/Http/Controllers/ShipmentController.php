@@ -453,6 +453,51 @@ class ShipmentController extends Controller
             ->all();
     }
 
+    private function syncTrailerAssignments(Shipment $shipment, array &$validated): void
+    {
+        $pickupLocationId = array_key_exists('pickup_location_id', $validated)
+            ? $validated['pickup_location_id']
+            : $shipment->pickup_location_id;
+
+        $nextCarrierId = array_key_exists('carrier_id', $validated)
+            ? $validated['carrier_id']
+            : $shipment->carrier_id;
+
+        if (blank($nextCarrierId)) {
+            $validated['trailer_id'] = null;
+            $validated['loaned_from_trailer_id'] = null;
+        }
+
+        $existingTrailerIds = collect([$shipment->trailer_id, $shipment->loaned_from_trailer_id])
+            ->filter()
+            ->unique();
+
+        $nextTrailerIds = collect([
+            array_key_exists('trailer_id', $validated) ? $validated['trailer_id'] : $shipment->trailer_id,
+            array_key_exists('loaned_from_trailer_id', $validated) ? $validated['loaned_from_trailer_id'] : $shipment->loaned_from_trailer_id,
+        ])->filter()->unique();
+
+        $removedTrailerIds = $existingTrailerIds->diff($nextTrailerIds);
+
+        if ($removedTrailerIds->isNotEmpty()) {
+            Trailer::query()
+                ->whereIn('id', $removedTrailerIds->all())
+                ->update([
+                    'current_location_id' => $pickupLocationId,
+                    'status' => 'available',
+                ]);
+        }
+
+        if ($nextTrailerIds->isNotEmpty()) {
+            Trailer::query()
+                ->whereIn('id', $nextTrailerIds->all())
+                ->update([
+                    'current_location_id' => $pickupLocationId,
+                    'status' => 'in_use',
+                ]);
+        }
+    }
+
     public function edit(Shipment $shipment)
     {
         $shipment->load(['pickupLocation', 'dcLocation', 'carrier', 'offeredCarriers:id']);
@@ -533,6 +578,8 @@ class ShipmentController extends Controller
             ->values();
 
         unset($validated['offered_carrier_ids']);
+
+        $this->syncTrailerAssignments($shipment, $validated);
 
         $shipment->update($validated);
 
@@ -626,6 +673,8 @@ class ShipmentController extends Controller
 
             $validated['trailer_id'] = $trailer->id;
         }
+
+        $this->syncTrailerAssignments($shipment, $validated);
 
         $shipment->update($validated);
 
@@ -855,7 +904,6 @@ class ShipmentController extends Controller
                             $noteContent = "PBI import updated this shipment:\n".implode("\n", $changes);
 
                             $shipment->notes()->create([
-                                'title' => 'PBI Import Update',
                                 'content' => $noteContent,
                                 'is_admin' => false,
                                 'user_id' => auth()->id() ?? null,
@@ -878,6 +926,477 @@ class ShipmentController extends Controller
         } catch (\Exception $e) {
             return back()->withErrors(['file' => 'Failed to process file: '.$e->getMessage()]);
         }
+    }
+
+    public function googleSheetsImport(Request $request)
+    {
+        abort_unless($request->user()?->hasRole(['administrator', 'supervisor']), 403);
+
+        $validated = $request->validate([
+            'google_sheet_url' => ['required', 'url', 'max:2048'],
+        ]);
+
+        try {
+            $exportUrl = $this->buildGoogleSheetsExportUrl($validated['google_sheet_url']);
+
+            $response = Http::timeout(20)->get($exportUrl);
+
+            if (! $response->successful()) {
+                throw ValidationException::withMessages([
+                    'google_sheet_url' => 'Failed to download the Google Sheet as CSV.',
+                ]);
+            }
+
+            $csvContents = $response->body();
+
+            if (
+                str_contains($csvContents, 'ServiceLogin')
+                || str_contains($csvContents, 'accounts.google.com')
+                || str_contains(Str::lower((string) $response->header('Content-Type')), 'text/html')
+            ) {
+                throw ValidationException::withMessages([
+                    'google_sheet_url' => 'The Google Sheet must be shared or published so the app can download it as CSV.',
+                ]);
+            }
+
+            [$headers, $rows] = $this->parseGoogleSheetsCsv($csvContents);
+
+            if ($headers === []) {
+                throw ValidationException::withMessages([
+                    'google_sheet_url' => 'The Google Sheet CSV did not contain a header row.',
+                ]);
+            }
+
+            $updated = 0;
+            $unchanged = 0;
+            $failed = 0;
+            $failedMessages = [];
+
+            foreach ($rows as $row) {
+                if ($this->rowIsEmpty($row)) {
+                    continue;
+                }
+
+                try {
+                    $mappedRow = $this->mapGoogleSheetsRow($headers, $row);
+                    $shipment = $this->resolveShipmentForGoogleSheetsRow($mappedRow);
+
+                    if (! $shipment) {
+                        throw ValidationException::withMessages([
+                            'google_sheet_url' => 'Each row must match an existing shipment by Shipment Number, Load, or BOL.',
+                        ]);
+                    }
+
+                    $attributes = $this->buildGoogleSheetsShipmentAttributes($mappedRow, $shipment);
+
+                    if ($attributes === []) {
+                        $unchanged++;
+
+                        continue;
+                    }
+
+                    $oldValues = $shipment->getAttributes();
+
+                    $this->syncTrailerAssignments($shipment, $attributes);
+
+                    $shipment->fill($attributes);
+
+                    if (! $shipment->isDirty()) {
+                        $unchanged++;
+
+                        continue;
+                    }
+
+                    $shipment->save();
+
+                    if ($shipment->carrier_id) {
+                        $shipment->offeredCarriers()->sync([]);
+                    }
+
+                    $this->recordImportUpdateNote(
+                        $shipment,
+                        $oldValues,
+                        'Google Sheets import updated this shipment:'
+                    );
+
+                    $updated++;
+                } catch (ValidationException $exception) {
+                    $failed++;
+                    $failedMessages[] = collect($exception->errors())->flatten()->first();
+                } catch (Exception $exception) {
+                    $failed++;
+                    $failedMessages[] = $exception->getMessage();
+                }
+            }
+
+            if ($updated === 0 && $failed > 0) {
+                $firstFailureMessage = collect($failedMessages)
+                    ->filter(fn ($message) => filled($message))
+                    ->first();
+
+                throw ValidationException::withMessages([
+                    'google_sheet_url' => $firstFailureMessage
+                        ? 'No shipment rows could be imported from the Google Sheet. '.$firstFailureMessage
+                        : 'No shipment rows could be imported from the Google Sheet. Check the sheet headers, identifiers, and sharing settings.',
+                ]);
+            }
+
+            $message = "$updated shipment(s) updated from Google Sheets.";
+
+            if ($unchanged > 0) {
+                $message .= " $unchanged row(s) had no changes.";
+            }
+
+            if ($failed > 0) {
+                $message .= " $failed row(s) were skipped.";
+            }
+
+            return redirect()->route('admin.shipments.index')
+                ->with('success', $message);
+        } catch (ValidationException $exception) {
+            throw $exception;
+        } catch (Exception $exception) {
+            return back()->withErrors([
+                'google_sheet_url' => 'Failed to process the Google Sheet: '.$exception->getMessage(),
+            ]);
+        }
+    }
+
+    private function buildGoogleSheetsExportUrl(string $url): string
+    {
+        if (! preg_match('#docs\.google\.com/spreadsheets/d/([^/]+)#', $url, $matches)) {
+            throw ValidationException::withMessages([
+                'google_sheet_url' => 'Enter a valid Google Sheets URL.',
+            ]);
+        }
+
+        $spreadsheetId = $matches[1];
+        $query = [];
+        $fragment = [];
+
+        parse_str((string) parse_url($url, PHP_URL_QUERY), $query);
+        parse_str((string) parse_url($url, PHP_URL_FRAGMENT), $fragment);
+
+        $gid = $query['gid'] ?? $fragment['gid'] ?? null;
+
+        return 'https://docs.google.com/spreadsheets/d/'.$spreadsheetId.'/export?format=csv'
+            .($gid !== null && $gid !== '' ? '&gid='.urlencode((string) $gid) : '');
+    }
+
+    /**
+     * @return array{0: array<int, string>, 1: array<int, array<int, string|null>>}
+     */
+    private function parseGoogleSheetsCsv(string $csvContents): array
+    {
+        $handle = fopen('php://temp', 'r+');
+
+        if ($handle === false) {
+            throw new Exception('Unable to open temporary CSV stream.');
+        }
+
+        fwrite($handle, $csvContents);
+        rewind($handle);
+
+        $headers = fgetcsv($handle) ?: [];
+        $rows = [];
+
+        while (($row = fgetcsv($handle)) !== false) {
+            $rows[] = $row;
+        }
+
+        fclose($handle);
+
+        return [
+            array_map(fn ($header) => (string) $header, $headers),
+            $rows,
+        ];
+    }
+
+    /**
+     * @param  array<int, string>  $headers
+     * @param  array<int, string|null>  $row
+     * @return array<string, string>
+     */
+    private function mapGoogleSheetsRow(array $headers, array $row): array
+    {
+        $mapped = [];
+
+        foreach ($headers as $index => $header) {
+            $canonicalHeader = $this->canonicalGoogleSheetsHeader($header);
+
+            if (! $canonicalHeader) {
+                continue;
+            }
+
+            $mapped[$canonicalHeader] = trim((string) ($row[$index] ?? ''));
+        }
+
+        return $mapped;
+    }
+
+    private function canonicalGoogleSheetsHeader(string $header): ?string
+    {
+        $normalizedHeader = Str::of($header)
+            ->replace("\u{FEFF}", '')
+            ->lower()
+            ->replace(['#', '/', '-', '(', ')'], ' ')
+            ->replaceMatches('/[^a-z0-9\s]/', '')
+            ->squish()
+            ->value();
+
+        return match ($normalizedHeader) {
+            'shipment number', 'shipment', 'load', 'load number', 'reference' => 'shipment_number',
+            'bol', 'bol number' => 'bol',
+            'status' => 'status',
+            'po', 'po number', 'po number msft', 'msft po', 'msft po number' => 'po_number',
+            'origin', 'pickup', 'pickup location', 'pickup code', 'pickup location code', 'shipper', 'shipper code' => 'pickup_location',
+            'destination', 'dc', 'dc location', 'dc code', 'destination code' => 'dc_location',
+            'carrier', 'carrier name', 'carrier code', 'carrier short code' => 'carrier',
+            'trailer', 'trailer number' => 'trailer',
+            'seal', 'seal number' => 'seal_number',
+            'driver', 'driver id', 'drivers id' => 'drivers_id',
+            'drop date' => 'drop_date',
+            'pickup date', 'ship date' => 'pickup_date',
+            'delivery date', 'deliver date' => 'delivery_date',
+            'sum of pallets', 'pallets', 'rack qty', 'rack quantity' => 'rack_qty',
+            'load bars', 'load bar qty', 'load bar quantity' => 'load_bar_qty',
+            'straps', 'strap qty', 'strap quantity' => 'strap_qty',
+            default => null,
+        };
+    }
+
+    private function resolveShipmentForGoogleSheetsRow(array $mappedRow): ?Shipment
+    {
+        $shipmentNumber = trim((string) ($mappedRow['shipment_number'] ?? ''));
+
+        if ($shipmentNumber !== '') {
+            return Shipment::query()
+                ->whereRaw('LOWER(shipment_number) = ?', [Str::lower($shipmentNumber)])
+                ->first();
+        }
+
+        $bol = trim((string) ($mappedRow['bol'] ?? ''));
+
+        if ($bol !== '') {
+            return Shipment::query()
+                ->whereRaw('LOWER(bol) = ?', [Str::lower($bol)])
+                ->first();
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildGoogleSheetsShipmentAttributes(array $mappedRow, Shipment $shipment): array
+    {
+        $attributes = [];
+
+        foreach (['shipment_number', 'bol', 'status', 'po_number', 'trailer', 'seal_number', 'drivers_id'] as $field) {
+            if (($mappedRow[$field] ?? '') !== '') {
+                $attributes[$field] = $mappedRow[$field];
+            }
+        }
+
+        if (($mappedRow['pickup_location'] ?? '') !== '') {
+            $attributes['pickup_location_id'] = $this->resolveLocationForGoogleSheetsImport($mappedRow['pickup_location'], 'pickup')->id;
+        }
+
+        if (($mappedRow['dc_location'] ?? '') !== '') {
+            $attributes['dc_location_id'] = $this->resolveLocationForGoogleSheetsImport($mappedRow['dc_location'], 'distribution_center')->id;
+        }
+
+        if (($mappedRow['carrier'] ?? '') !== '') {
+            $attributes['carrier_id'] = $this->resolveCarrierForGoogleSheetsImport($mappedRow['carrier'])->id;
+        }
+
+        if (($mappedRow['drop_date'] ?? '') !== '') {
+            $attributes['drop_date'] = $this->parseGoogleSheetsDate($mappedRow['drop_date'])?->toDateString();
+        }
+
+        if (($mappedRow['pickup_date'] ?? '') !== '') {
+            $attributes['pickup_date'] = $this->parseGoogleSheetsDate($mappedRow['pickup_date'])?->format('Y-m-d H:i:s');
+        }
+
+        if (($mappedRow['delivery_date'] ?? '') !== '') {
+            $attributes['delivery_date'] = $this->parseGoogleSheetsDate($mappedRow['delivery_date'])?->format('Y-m-d H:i:s');
+        }
+
+        if (($mappedRow['rack_qty'] ?? '') !== '') {
+            $rackQty = (int) $mappedRow['rack_qty'];
+            $attributes['rack_qty'] = $rackQty;
+
+            $equipmentDefaults = Shipment::defaultEquipmentCountsForRackQty($rackQty);
+            $attributes['load_bar_qty'] = ($mappedRow['load_bar_qty'] ?? '') !== ''
+                ? (int) $mappedRow['load_bar_qty']
+                : $equipmentDefaults['load_bar_qty'];
+            $attributes['strap_qty'] = ($mappedRow['strap_qty'] ?? '') !== ''
+                ? (int) $mappedRow['strap_qty']
+                : $equipmentDefaults['strap_qty'];
+        } else {
+            if (($mappedRow['load_bar_qty'] ?? '') !== '') {
+                $attributes['load_bar_qty'] = (int) $mappedRow['load_bar_qty'];
+            }
+
+            if (($mappedRow['strap_qty'] ?? '') !== '') {
+                $attributes['strap_qty'] = (int) $mappedRow['strap_qty'];
+            }
+        }
+
+        if (array_key_exists('carrier_id', $attributes) && blank($attributes['carrier_id'])) {
+            unset($attributes['carrier_id']);
+        }
+
+        return $attributes;
+    }
+
+    private function resolveLocationForGoogleSheetsImport(string $value, string $type): Location
+    {
+        $normalizedValue = trim($value);
+
+        $location = Location::query()
+            ->where(function ($query) use ($normalizedValue) {
+                $query->whereRaw('LOWER(short_code) = ?', [Str::lower($normalizedValue)])
+                    ->orWhereRaw('LOWER(name) = ?', [Str::lower($normalizedValue)]);
+            })
+            ->first();
+
+        if ($location) {
+            return $location;
+        }
+
+        return Location::query()->forceCreate([
+            'guid' => (string) Str::uuid(),
+            'short_code' => Str::upper(Str::limit($normalizedValue, 20, '')),
+            'name' => $normalizedValue,
+            'address' => 'Unknown Address',
+            'city' => 'Unknown',
+            'state' => 'NA',
+            'zip' => '00000',
+            'country' => 'XX',
+            'expected_arrival_time' => $type === 'distribution_center' ? '08:00:00' : null,
+            'is_active' => false,
+            'type' => $type,
+        ]);
+    }
+
+    private function resolveCarrierForGoogleSheetsImport(string $value): Carrier
+    {
+        $normalizedValue = trim($value);
+
+        $carrier = Carrier::query()
+            ->where(function ($query) use ($normalizedValue) {
+                $query->whereRaw('LOWER(name) = ?', [Str::lower($normalizedValue)])
+                    ->orWhereRaw('LOWER(short_code) = ?', [Str::lower($normalizedValue)]);
+            })
+            ->first();
+
+        if (! $carrier) {
+            throw ValidationException::withMessages([
+                'google_sheet_url' => "Carrier [{$normalizedValue}] could not be resolved.",
+            ]);
+        }
+
+        return $carrier;
+    }
+
+    private function parseGoogleSheetsDate(string $value): ?Carbon
+    {
+        $normalizedValue = trim($value);
+
+        if ($normalizedValue === '') {
+            return null;
+        }
+
+        foreach ([
+            'Y-m-d H:i:s',
+            'Y-m-d H:i',
+            'Y-m-d',
+            'm/d/Y H:i:s',
+            'm/d/Y H:i',
+            'm/d/Y',
+            'n/j/Y H:i',
+            'n/j/Y g:i A',
+            'n/j/Y',
+        ] as $format) {
+            try {
+                return Carbon::createFromFormat($format, $normalizedValue);
+            } catch (Exception) {
+                continue;
+            }
+        }
+
+        try {
+            return Carbon::parse($normalizedValue);
+        } catch (Exception) {
+            throw ValidationException::withMessages([
+                'google_sheet_url' => "Date value [{$normalizedValue}] could not be parsed.",
+            ]);
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $oldValues
+     */
+    private function recordImportUpdateNote(Shipment $shipment, array $oldValues, string $contentPrefix): void
+    {
+        $trackedFields = [
+            'status' => 'Status',
+            'po_number' => 'PO Number',
+            'pickup_location_id' => 'Pickup Location',
+            'dc_location_id' => 'DC Location',
+            'carrier_id' => 'Carrier',
+            'drop_date' => 'Drop Date',
+            'pickup_date' => 'Pickup Date',
+            'delivery_date' => 'Delivery Date',
+            'rack_qty' => 'Pallets/Rack Qty',
+            'load_bar_qty' => 'Load Bar Qty',
+            'strap_qty' => 'Strap Qty',
+            'trailer' => 'Trailer',
+            'seal_number' => 'Seal Number',
+            'drivers_id' => 'Drivers ID',
+        ];
+
+        $changes = [];
+
+        foreach ($trackedFields as $field => $label) {
+            $old = $oldValues[$field] ?? null;
+            $new = $shipment->{$field};
+
+            if (in_array($field, ['drop_date', 'pickup_date', 'delivery_date'], true)) {
+                $old = $old ? Carbon::parse($old)->format('Y-m-d H:i:s') : null;
+                $new = $new ? Carbon::parse($new)->format('Y-m-d H:i:s') : null;
+            } elseif (in_array($field, ['pickup_location_id', 'dc_location_id'], true)) {
+                $old = Location::find($old)?->short_code;
+                $new = Location::find($new)?->short_code;
+            } elseif ($field === 'carrier_id') {
+                $old = Carrier::find($old)?->name;
+                $new = Carrier::find($new)?->name;
+            }
+
+            if ($old !== $new) {
+                $changes[] = "$label changed from '{$old}' to '{$new}'";
+            }
+        }
+
+        if ($changes === []) {
+            return;
+        }
+
+        $shipment->notes()->create([
+            'content' => $contentPrefix."\n".implode("\n", $changes),
+            'is_admin' => false,
+            'user_id' => auth()->id() ?? null,
+        ]);
+    }
+
+    /**
+     * @param  array<int, string|null>  $row
+     */
+    private function rowIsEmpty(array $row): bool
+    {
+        return collect($row)->every(fn ($value) => trim((string) $value) === '');
     }
 
     /**

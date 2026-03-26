@@ -268,8 +268,14 @@ const toggleDropDateFilter = () => {
 const showPbiImportModal = ref(false)
 const selectedPbiFile = ref<File | null>(null)
 
+const showGoogleSheetsImportModal = ref(false)
+
 const pbiImportForm = useForm({
   file: null as File | null,
+})
+
+const googleSheetsImportForm = useForm({
+  google_sheet_url: '',
 })
 
 const handlePbiFileChange = (event: Event) => {
@@ -294,6 +300,26 @@ const importPbiFile = () => {
       selectedPbiFile.value = null
       pbiImportForm.reset()
       Notify.success('PBI import successful.')
+      router.reload({ only: ['shipments'] })
+    },
+    onError: (errors) => {
+      Notify.failure(Object.values(errors).join('<br>') || 'Import failed.')
+    }
+  })
+}
+
+const importGoogleSheet = () => {
+  if (!googleSheetsImportForm.google_sheet_url.trim()) {
+    Notify.failure('Please enter a Google Sheets URL.')
+    return
+  }
+
+  googleSheetsImportForm.post(route('admin.shipments.google-sheets-import'), {
+    preserveScroll: true,
+    onSuccess: () => {
+      showGoogleSheetsImportModal.value = false
+      googleSheetsImportForm.reset()
+      Notify.success('Google Sheets import successful.')
       router.reload({ only: ['shipments'] })
     },
     onError: (errors) => {
@@ -363,6 +389,65 @@ onMounted(() => {
           >
             Import from PBI XLSX
           </button>
+
+          <button
+            v-if="hasAdminAccess"
+            @click="showGoogleSheetsImportModal = true"
+            class="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-md font-medium transition-colors"
+          >
+            Import from Google Sheets
+          </button>
+        </div>
+      </div>
+
+      <!-- Google Sheets Import Modal -->
+      <div v-if="showGoogleSheetsImportModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-2xl max-w-lg w-full mx-4 overflow-hidden">
+          <div class="p-6">
+            <h2 class="text-xl font-bold mb-4 text-gray-900 dark:text-gray-100">
+              Import Shipment Changes from Google Sheets
+            </h2>
+
+            <p class="mb-4 text-sm text-gray-600 dark:text-gray-400">
+              Paste a Google Sheets URL. The app will download the sheet as CSV and update matching shipments by Shipment Number, Load, or BOL.
+            </p>
+
+            <p class="mb-6 text-sm text-gray-600 dark:text-gray-400">
+              The sheet must be shared or published so the server can access it. Supported headers include status, PO number, origin, destination, carrier, trailer, seal number, drivers ID, dates, and pallet or equipment counts.
+            </p>
+
+            <form @submit.prevent="importGoogleSheet">
+              <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Google Sheets URL
+                </label>
+                <input
+                  v-model="googleSheetsImportForm.google_sheet_url"
+                  type="url"
+                  placeholder="https://docs.google.com/spreadsheets/d/..."
+                  class="block w-full rounded-lg border border-gray-300 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300"
+                  required
+                />
+              </div>
+
+              <div class="flex justify-end space-x-3">
+                <button
+                  type="button"
+                  @click="showGoogleSheetsImportModal = false"
+                  class="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  :disabled="!googleSheetsImportForm.google_sheet_url || googleSheetsImportForm.processing"
+                  class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-medium disabled:opacity-50"
+                >
+                  {{ googleSheetsImportForm.processing ? 'Importing...' : 'Import' }}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       </div>
 

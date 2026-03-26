@@ -123,6 +123,9 @@ Route::middleware(['auth', 'role:administrator|supervisor|truckload|carrier'])->
         ->name('shipments.destroy');
 
     // Custom actions (from your earlier code)
+    Route::post('shipments/google-sheets-import', [ShipmentController::class, 'googleSheetsImport'])
+        ->name('shipments.google-sheets-import');
+
     Route::post('shipments/pbi-import', [ShipmentController::class, 'pbiImport'])
         ->name('shipments.pbi-import');
 
