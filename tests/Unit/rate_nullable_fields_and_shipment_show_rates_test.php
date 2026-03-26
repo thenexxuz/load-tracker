@@ -14,18 +14,29 @@ it('keeps the nullable rate lane migration for carrier pickup and destination fi
         ->toContain("\$table->foreign('pickup_location_id')->references('id')->on('locations')->nullOnDelete();");
 });
 
-it('keeps shipment show rates including shared carrier-less fallback rates', function (): void {
+it('keeps shipment show rates using viewer-specific carrier visibility rules', function (): void {
     $projectRoot = dirname(__DIR__, 2);
     $controller = file_get_contents($projectRoot.'/app/Http/Controllers/ShipmentController.php');
     $page = file_get_contents($projectRoot.'/resources/js/pages/Admin/Shipments/Show.vue');
 
     expect($controller)
+        ->toContain("\$viewerIsCarrier = (bool) \$request->user()?->hasRole('carrier');")
+        ->toContain('$viewerCarrierId = $request->user()?->carrier_id;')
         ->toContain("->where('pickup_location_id', \$shipment->pickup_location_id)")
         ->toContain("->orWhereNull('pickup_location_id');")
-        ->toContain("->where('carrier_id', \$shipment->carrier_id)")
+        ->toContain('if ($viewerIsCarrier && $viewerCarrierId) {')
+        ->toContain('->where(function ($query) use ($viewerCarrierId) {')
+        ->toContain("\$query->where('carrier_id', \$viewerCarrierId)")
         ->toContain("->orWhereNull('carrier_id');")
+        ->toContain('} elseif ($viewerIsCarrier) {')
+        ->toContain("\$ratesQuery->whereNull('carrier_id');")
+        ->toContain("->where('carrier_id', \$shipment->carrier_id)")
         ->toContain("->where('pickup_location_id', \$shipment->dc_location_id)")
-        ->toContain('->when($shipment->carrier_id, function ($query) use ($shipment) {')
+        ->toContain('->when($viewerIsCarrier && $viewerCarrierId, function ($query) use ($viewerCarrierId) {')
+        ->toContain('->where(function ($carrierQuery) use ($viewerCarrierId) {')
+        ->toContain("\$carrierQuery->where('carrier_id', \$viewerCarrierId)")
+        ->toContain('->when($viewerIsCarrier && ! $viewerCarrierId, function ($query) {')
+        ->toContain('->when(! $viewerIsCarrier && $shipment->carrier_id, function ($query) use ($shipment) {')
         ->toContain("'name' => \$rate->name");
 
     expect($page)

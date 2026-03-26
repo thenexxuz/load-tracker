@@ -17,7 +17,7 @@ class UserController extends Controller
             'search' => 'nullable|string|max:500',
         ]);
 
-        $query = User::with('roles');
+        $query = User::with(['roles', 'carrier:id,name']);
 
         if ($validated['search'] ?? false) {
             $search = $validated['search'];
@@ -28,6 +28,19 @@ class UserController extends Controller
         $users = $query
             ->orderBy('name')
             ->paginate($validated['per_page'] ?? 15)
+            ->through(fn (User $user) => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'roles' => $user->roles
+                    ->pluck('name')
+                    ->map(fn (string $roleName) => $roleName === 'carrier' && $user->carrier
+                        ? "{$roleName} ({$user->carrier->name})"
+                        : $roleName)
+                    ->all(),
+                'is_active' => $user->is_active,
+                'deleted_at' => $user->deleted_at,
+            ])
             ->withQueryString();
 
         return Inertia::render('Admin/Users/Index', [

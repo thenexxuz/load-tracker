@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, router, usePage } from '@inertiajs/vue3'
+import { Head, router, useForm, usePage } from '@inertiajs/vue3'
 import { onMounted, onUnmounted, ref, computed } from 'vue'
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
@@ -91,9 +91,23 @@ const props = defineProps<{
     calculation_type: string
   }>
   hasAssignedCarrier: boolean
+  availableCarriers: Array<{
+    id: number
+    name: string
+    short_code: string
+  }>
+  offeredCarriers: Array<{
+    id: number
+    name: string
+    short_code: string
+    offered_by_user: {
+      id: number
+      name: string | null
+    } | null
+  }>
 }>()
 
-const { shipment, route_data, rates = [], hasAssignedCarrier } = props
+const { shipment, route_data, rates = [], hasAssignedCarrier, availableCarriers, offeredCarriers } = props
 
 const mapContainer = ref<HTMLDivElement | null>(null)
 let map: mapboxgl.Map | null = null
@@ -257,6 +271,22 @@ const formatLocationAddress = (loc: any) => {
 const { auth } = usePage().props
 const userRoles = auth?.user?.roles || []
 const hasAdminAccess = userRoles.includes('administrator') || userRoles.includes('supervisor')
+
+const offerForm = useForm({
+  offered_carrier_ids: offeredCarriers.map((carrier) => carrier.id),
+})
+
+const submitOfferUpdate = () => {
+  offerForm.patch(route('admin.shipments.update-offers', shipment.id), {
+    preserveScroll: true,
+    onSuccess: () => {
+      Notify.success('Shipment offers updated successfully.')
+    },
+    onError: () => {
+      Notify.failure('Failed to update shipment offers.')
+    },
+  })
+}
 </script>
 
 <template>
@@ -426,6 +456,81 @@ const hasAdminAccess = userRoles.includes('administrator') || userRoles.includes
             </dd>
           </div>
         </dl>
+      </div>
+
+      <div
+        v-if="hasAdminAccess"
+        class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700"
+      >
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
+          Offer Shipment To Carriers
+        </h2>
+        <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+          Offer this shipment to one or more carriers without opening the edit screen.
+        </p>
+
+        <form class="mt-6 space-y-4" @submit.prevent="submitOfferUpdate">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Offered Carriers
+            </label>
+            <select
+              v-model="offerForm.offered_carrier_ids"
+              :disabled="hasAssignedCarrier"
+              multiple
+              class="w-full min-h-36 p-3 border rounded-md focus:ring-2 focus:outline-none appearance-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500 disabled:opacity-60"
+            >
+              <option v-for="carrier in availableCarriers" :key="carrier.id" :value="carrier.id">
+                {{ carrier.short_code }} - {{ carrier.name }}
+              </option>
+            </select>
+            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+              <span v-if="hasAssignedCarrier">
+                This shipment already has an assigned carrier, so offers are unavailable and will remain cleared.
+              </span>
+              <span v-else>
+                Carrier users assigned to the selected carriers will see this shipment on their Shipment Index.
+              </span>
+            </p>
+            <p v-if="offerForm.errors.offered_carrier_ids" class="mt-1 text-sm text-red-600 dark:text-red-400">
+              {{ offerForm.errors.offered_carrier_ids }}
+            </p>
+            <p v-if="offerForm.errors['offered_carrier_ids.0']" class="mt-1 text-sm text-red-600 dark:text-red-400">
+              {{ offerForm.errors['offered_carrier_ids.0'] }}
+            </p>
+          </div>
+
+          <div>
+            <div class="text-sm font-medium text-gray-700 dark:text-gray-300">Currently Offered To</div>
+            <div v-if="offeredCarriers.length" class="mt-2 flex flex-wrap gap-2">
+              <div
+                v-for="carrier in offeredCarriers"
+                :key="carrier.id"
+                class="rounded-lg bg-blue-100 px-3 py-2 text-xs text-blue-800 dark:bg-blue-900/40 dark:text-blue-200"
+              >
+                <div class="font-medium">
+                  {{ carrier.short_code }} - {{ carrier.name }}
+                </div>
+                <div v-if="carrier.offered_by_user" class="mt-1 text-[11px] text-blue-700 dark:text-blue-300">
+                  Offered by {{ carrier.offered_by_user.name ?? 'Unknown User' }}
+                </div>
+              </div>
+            </div>
+            <p v-else class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+              No carriers are currently offered this shipment.
+            </p>
+          </div>
+
+          <div class="flex justify-end">
+            <button
+              type="submit"
+              :disabled="offerForm.processing || hasAssignedCarrier"
+              class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-md font-medium transition-colors disabled:opacity-60"
+            >
+              {{ offerForm.processing ? 'Saving...' : 'Save Offers' }}
+            </button>
+          </div>
+        </form>
       </div>
 
       <!-- Route Map -->

@@ -8,6 +8,7 @@ use App\Models\Rate;
 use App\Models\Shipment;
 use App\Models\Template;
 use App\Models\Trailer;
+use App\Models\User;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -37,6 +38,17 @@ class ShipmentController extends Controller
         $query = Shipment::query()->withCount('notes')
             ->with(['pickupLocation', 'dcLocation', 'carrier'])
             ->latest();
+
+        if ($request->user()?->hasRole('carrier')) {
+            $carrierId = $request->user()?->carrier_id;
+
+            $query->where(function ($carrierQuery) use ($carrierId) {
+                $carrierQuery->where('carrier_id', $carrierId)
+                    ->orWhereHas('offeredCarriers', function ($offerQuery) use ($carrierId) {
+                        $offerQuery->where('carriers.id', $carrierId);
+                    });
+            });
+        }
 
         // Apply filters from payload
         if ($search) {
@@ -183,15 +195,24 @@ class ShipmentController extends Controller
             ->with('success', 'Shipment created successfully.');
     }
 
-    public function show(Shipment $shipment)
+    public function show(Request $request, Shipment $shipment)
     {
         $shipment->load([
             'pickupLocation:id,short_code,name,address,city,state,country,zip,latitude,longitude',
             'dcLocation:id,short_code,name,address,city,state,country,zip,latitude,longitude,recycling_location_id',
             'dcLocation.recyclingLocation:id,short_code,name,latitude,longitude',
             'carrier:id,name,short_code',
+            'offeredCarriers:id,name,short_code',
             'notes.user',
         ]);
+
+        $availableCarriers = $request->user()?->hasRole(['administrator', 'supervisor'])
+            ? Carrier::query()
+                ->select('id', 'name', 'short_code')
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->get()
+            : collect();
 
         // Build ordered waypoints: pickup → DC → (Recycling if exists)
         $waypoints = [];
@@ -279,6 +300,9 @@ class ShipmentController extends Controller
             }
         }
 
+        $viewerIsCarrier = (bool) $request->user()?->hasRole('carrier');
+        $viewerCarrierId = $request->user()?->carrier_id;
+
         // Rates for the lane (pickup → destination)
         $dcLocation = $shipment->dcLocation;
 
@@ -303,8 +327,16 @@ class ShipmentController extends Controller
             })
             ->with('carrier:id,name,short_code');
 
+        if ($viewerIsCarrier && $viewerCarrierId) {
+            $ratesQuery->where(function ($query) use ($viewerCarrierId) {
+                $query->where('carrier_id', $viewerCarrierId)
+                    ->orWhereNull('carrier_id');
+            });
+        } elseif ($viewerIsCarrier) {
+            $ratesQuery->whereNull('carrier_id');
+        }
         // If carrier is assigned, show rates for that carrier and shared rates with no carrier.
-        if ($shipment->carrier_id) {
+        elseif ($shipment->carrier_id) {
             $ratesQuery->where(function ($query) use ($shipment) {
                 $query->where('carrier_id', $shipment->carrier_id)
                     ->orWhereNull('carrier_id');
@@ -322,7 +354,16 @@ class ShipmentController extends Controller
                     ->orWhereNull('pickup_location_id');
             })
             ->with('carrier:id,name,short_code')
-            ->when($shipment->carrier_id, function ($query) use ($shipment) {
+            ->when($viewerIsCarrier && $viewerCarrierId, function ($query) use ($viewerCarrierId) {
+                $query->where(function ($carrierQuery) use ($viewerCarrierId) {
+                    $carrierQuery->where('carrier_id', $viewerCarrierId)
+                        ->orWhereNull('carrier_id');
+                });
+            })
+            ->when($viewerIsCarrier && ! $viewerCarrierId, function ($query) {
+                $query->whereNull('carrier_id');
+            })
+            ->when(! $viewerIsCarrier && $shipment->carrier_id, function ($query) use ($shipment) {
                 $query->where(function ($carrierQuery) use ($shipment) {
                     $carrierQuery->where('carrier_id', $shipment->carrier_id)
                         ->orWhereNull('carrier_id');
@@ -359,12 +400,30 @@ class ShipmentController extends Controller
             ];
         });
 
+        $offerUserNames = User::query()
+            ->whereIn('id', $shipment->offeredCarriers->pluck('pivot.offered_by_user_id')->filter()->unique())
+            ->pluck('name', 'id');
+
+        $offeredCarriers = $shipment->offeredCarriers->map(fn (Carrier $carrier) => [
+            'id' => $carrier->id,
+            'name' => $carrier->name,
+            'short_code' => $carrier->short_code,
+            'offered_by_user' => $carrier->pivot->offered_by_user_id
+                ? [
+                    'id' => $carrier->pivot->offered_by_user_id,
+                    'name' => $offerUserNames->get($carrier->pivot->offered_by_user_id),
+                ]
+                : null,
+        ])->values();
+
         return Inertia::render('Admin/Shipments/Show', [
             'shipment' => $shipment,
             'route_data' => $routeData,
             'mapbox_token' => config('services.mapbox.key'),
             'rates' => $transformedRates,
             'hasAssignedCarrier' => (bool) $shipment->carrier_id,
+            'availableCarriers' => $availableCarriers,
+            'offeredCarriers' => $offeredCarriers,
         ]);
     }
 
@@ -377,9 +436,26 @@ class ShipmentController extends Controller
         return $h > 0 ? "{$h} hr {$m} min" : "{$m} min";
     }
 
+    private function buildOfferSyncPayload(Shipment $shipment, array $offeredCarrierIds, ?int $offeredByUserId): array
+    {
+        $existingOfferUserIds = $shipment->offeredCarriers()
+            ->get()
+            ->mapWithKeys(fn (Carrier $carrier) => [
+                $carrier->id => $carrier->pivot->offered_by_user_id,
+            ]);
+
+        return collect($offeredCarrierIds)
+            ->mapWithKeys(fn (int $carrierId) => [
+                $carrierId => [
+                    'offered_by_user_id' => $existingOfferUserIds->get($carrierId, $offeredByUserId),
+                ],
+            ])
+            ->all();
+    }
+
     public function edit(Shipment $shipment)
     {
-        $shipment->load(['pickupLocation', 'dcLocation', 'carrier']);
+        $shipment->load(['pickupLocation', 'dcLocation', 'carrier', 'offeredCarriers:id']);
 
         $pickupLocations = Location::where('type', 'pickup')
             ->select('id', 'short_code', 'name')
@@ -404,6 +480,7 @@ class ShipmentController extends Controller
         $shipmentData['recycling_sent'] = $shipment->recycling_sent?->format('Y-m-d\TH:i');
         $shipmentData['paperwork_sent'] = $shipment->paperwork_sent?->format('Y-m-d\TH:i');
         $shipmentData['delivery_alert_sent'] = $shipment->delivery_alert_sent?->format('Y-m-d\TH:i');
+        $shipmentData['offered_carrier_ids'] = $shipment->offeredCarriers->pluck('id')->all();
 
         return Inertia::render('Admin/Shipments/Edit', [
             'shipment' => $shipmentData,
@@ -428,6 +505,8 @@ class ShipmentController extends Controller
             'pickup_location_id' => 'required|exists:locations,id',
             'dc_location_id' => 'nullable|exists:locations,id',
             'carrier_id' => 'nullable|exists:carriers,id',
+            'offered_carrier_ids' => 'nullable|array',
+            'offered_carrier_ids.*' => 'integer|exists:carriers,id',
             'trailer_id' => 'nullable|exists:trailers,id',
             'loaned_from_trailer_id' => 'nullable|exists:trailers,id',
             'drop_date' => ['nullable', 'date'],
@@ -448,10 +527,54 @@ class ShipmentController extends Controller
             'drivers_id' => 'nullable|string|max:255',
         ], $messages);
 
+        $offeredCarrierIds = collect($validated['offered_carrier_ids'] ?? [])
+            ->map(fn ($carrierId) => (int) $carrierId)
+            ->unique()
+            ->values();
+
+        unset($validated['offered_carrier_ids']);
+
         $shipment->update($validated);
+
+        if ($shipment->carrier_id) {
+            $shipment->offeredCarriers()->sync([]);
+        } else {
+            $shipment->offeredCarriers()->sync(
+                $this->buildOfferSyncPayload($shipment, $offeredCarrierIds->all(), $request->user()?->id)
+            );
+        }
 
         return redirect()->route('admin.shipments.show', $shipment->id)
             ->with('success', 'Shipment updated successfully.');
+    }
+
+    public function updateOffers(Request $request, Shipment $shipment)
+    {
+        abort_unless($request->user()?->hasRole(['administrator', 'supervisor']), 403);
+
+        $validated = $request->validate([
+            'offered_carrier_ids' => 'nullable|array',
+            'offered_carrier_ids.*' => 'integer|exists:carriers,id',
+        ]);
+
+        if ($shipment->carrier_id) {
+            $shipment->offeredCarriers()->sync([]);
+
+            return redirect()->route('admin.shipments.show', $shipment->id)
+                ->with('success', 'Offers were cleared because this shipment already has an assigned carrier.');
+        }
+
+        $offeredCarrierIds = collect($validated['offered_carrier_ids'] ?? [])
+            ->map(fn ($carrierId) => (int) $carrierId)
+            ->unique()
+            ->values();
+
+        $shipment->offeredCarriers()->sync(
+            $this->buildOfferSyncPayload($shipment, $offeredCarrierIds->all(), $request->user()?->id)
+        );
+
+        return redirect()->route('admin.shipments.show', $shipment->id)
+            ->with('success', 'Shipment offers updated successfully.');
     }
 
     public function destroy(Shipment $shipment)
@@ -505,6 +628,10 @@ class ShipmentController extends Controller
         }
 
         $shipment->update($validated);
+
+        if ($shipment->carrier_id) {
+            $shipment->offeredCarriers()->sync([]);
+        }
 
         $shipment->load(['trailer:id,number', 'loanedFromTrailer:id,number']);
 

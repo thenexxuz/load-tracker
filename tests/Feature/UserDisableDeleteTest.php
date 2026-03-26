@@ -83,12 +83,13 @@ it('prevents a user from deleting themselves', function () {
 });
 
 it('includes user status in index view', function () {
-    $admin = User::factory()->create();
+    $admin = User::factory()->create(['name' => 'Admin User']);
     $admin->assignRole('administrator');
 
-    $activeUser = User::factory()->create(['is_active' => true]);
-    $disabledUser = User::factory()->create(['is_active' => false]);
-    $deletedUser = User::factory()->create();
+    $activeUser = User::factory()->create(['name' => 'Bravo User', 'is_active' => true]);
+    $activeUser->assignRole('administrator');
+    $disabledUser = User::factory()->create(['name' => 'Charlie User', 'is_active' => false]);
+    $deletedUser = User::factory()->create(['name' => 'Deleted User']);
     $deletedUser->delete();
 
     $response = $this->actingAs($admin)
@@ -96,11 +97,8 @@ it('includes user status in index view', function () {
 
     $response->assertOk();
 
-    // Assert the Inertia props contain the non-deleted users with correct statuses
-    // Deleted users are excluded from the list by the model
-    $response->assertInertia(fn ($page) =>
-        $page->has('users', 3) // admin + activeUser + disabledUser
+    $response->assertInertia(fn ($page) => $page->has('users.data', 3)
+        ->where('users.data.1.name', 'Bravo User')
+        ->where('users.data.1.roles', ['administrator'])
     );
 });
-
-

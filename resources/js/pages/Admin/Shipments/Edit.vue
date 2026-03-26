@@ -18,6 +18,7 @@ const props = defineProps<{
     po_number: string | null
     rack_qty: number
     carrier_id: number | null
+    offered_carrier_ids: number[]
     trailer: string | null
     load_bar_qty: number
     strap_qty: number
@@ -50,6 +51,7 @@ const form = useForm({
   po_number: props.shipment.po_number || '',
   rack_qty: props.shipment.rack_qty || 0,
   carrier_id: props.shipment.carrier_id || null,
+  offered_carrier_ids: props.shipment.offered_carrier_ids || [],
   trailer: props.shipment.trailer || '',
   load_bar_qty: props.shipment.load_bar_qty || 0,
   strap_qty: props.shipment.strap_qty || 0,
@@ -224,6 +226,34 @@ const hasAdminAccess = userRoles.includes('administrator') || userRoles.includes
             </select>
             <p v-if="form.errors.carrier_id" class="mt-1 text-sm text-red-600 dark:text-red-400">
               {{ form.errors.carrier_id }}
+            </p>
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Offered Carriers</label>
+            <select
+              :disabled="!hasAdminAccess || form.carrier_id !== null"
+              v-model="form.offered_carrier_ids"
+              multiple
+              class="w-full min-h-36 p-3 border rounded-md focus:ring-2 focus:outline-none appearance-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500 disabled:opacity-60"
+            >
+              <option v-for="carrier in carriers" :key="carrier.id" :value="carrier.id">
+                {{ carrier.short_code }} - {{ carrier.name }}
+              </option>
+            </select>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              <span v-if="form.carrier_id !== null">
+                Offers are cleared automatically when a carrier is assigned to the shipment.
+              </span>
+              <span v-else>
+                Carrier users assigned to the selected carriers will see this unassigned shipment on their Shipment Index.
+              </span>
+            </p>
+            <p v-if="form.errors.offered_carrier_ids" class="mt-1 text-sm text-red-600 dark:text-red-400">
+              {{ form.errors.offered_carrier_ids }}
+            </p>
+            <p v-if="form.errors['offered_carrier_ids.0']" class="mt-1 text-sm text-red-600 dark:text-red-400">
+              {{ form.errors['offered_carrier_ids.0'] }}
             </p>
           </div>
 

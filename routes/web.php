@@ -113,6 +113,9 @@ Route::middleware(['auth', 'role:administrator|supervisor|truckload|carrier'])->
     Route::put('shipments/{shipment}', [ShipmentController::class, 'update'])
         ->name('shipments.update');
 
+    Route::patch('shipments/{shipment}/offers', [ShipmentController::class, 'updateOffers'])
+        ->name('shipments.update-offers');
+
     Route::patch('shipments/{shipment}/quick-update', [ShipmentController::class, 'quickUpdate'])
         ->name('shipments.quick-update');
 

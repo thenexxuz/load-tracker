@@ -2,9 +2,9 @@
 
 namespace App\Models;
 
-use App\Models\Note;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Support\Str;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
@@ -55,6 +55,13 @@ class Carrier extends Model
     public function trailers()
     {
         return $this->hasMany(Trailer::class);
+    }
+
+    public function offeredShipments(): BelongsToMany
+    {
+        return $this->belongsToMany(Shipment::class, 'carrier_shipment_offers')
+            ->withPivot('offered_by_user_id')
+            ->withTimestamps();
     }
 
     public function users()

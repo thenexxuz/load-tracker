@@ -2,10 +2,10 @@
 
 namespace App\Models;
 
-use App\Models\Note;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 use Spatie\Activitylog\LogOptions;
@@ -90,6 +90,13 @@ class Shipment extends Model
     public function loanedFromTrailer(): BelongsTo
     {
         return $this->belongsTo(Trailer::class, 'loaned_from_trailer_id');
+    }
+
+    public function offeredCarriers(): BelongsToMany
+    {
+        return $this->belongsToMany(Carrier::class, 'carrier_shipment_offers')
+            ->withPivot('offered_by_user_id')
+            ->withTimestamps();
     }
 
     // Scopes
@@ -194,25 +201,26 @@ class Shipment extends Model
             $tracking = (string) $this->shipment_number;
             if (empty($tracking)) {
                 \Log::warning("No tracking number for model {$this->id}");
+
                 return null;
             }
 
             $payload = [
-                'trackMode'  => 'Domestic',
-                'trackBy'    => 'reference',
+                'trackMode' => 'Domestic',
+                'trackBy' => 'reference',
                 'trackingNo' => $tracking,
             ];
 
             \Log::debug('Pegasus request details', [
-                'url'     => 'https://partners.pegasuslogistics.com/api/getbasictrackingdetails',
+                'url' => 'https://partners.pegasuslogistics.com/api/getbasictrackingdetails',
                 'payload' => $payload,
                 'as_json' => json_encode($payload),
             ]);
 
             $response = \Http::withHeaders(
                 [
-                    'Referer'         => 'https://partners.pegasuslogistics.com/',
-                    'accept'          => 'application/json',
+                    'Referer' => 'https://partners.pegasuslogistics.com/',
+                    'accept' => 'application/json',
                 ])
                 ->post(
                     'https://partners.pegasuslogistics.com/api/getbasictrackingdetails',
@@ -222,25 +230,29 @@ class Shipment extends Model
             \Log::debug('Pegasus response', [
                 'status' => $response->status(),
                 'headers' => $response->headers(),
-                'body'   => $response->body(),
+                'body' => $response->body(),
             ]);
 
             if ($response->successful()) {
                 $data = $response->json();
                 if (is_array($data) && count($data) > 0) {
-                    \Log::info('BOL fetched successfully: ' . $data[0]['housebill']);
+                    \Log::info('BOL fetched successfully: '.$data[0]['housebill']);
                     $this->bol = $data[0]['housebill'] ?? null;
                     $this->save();
+
                     return $data[0]['housebill'] ?? null;
                 }
-                \Log::warning('BOL response is empty or not an array: ' . $response->body());
+                \Log::warning('BOL response is empty or not an array: '.$response->body());
+
                 return null;
             } else {
-                \Log::error('Failed to fetch BOL: ' . $response->body());
+                \Log::error('Failed to fetch BOL: '.$response->body());
+
                 return null;
             }
         } catch (\Exception $e) {
-            \Log::error('Exception in calculateBol: ' . $e->getMessage());
+            \Log::error('Exception in calculateBol: '.$e->getMessage());
+
             return null;
         }
     }
