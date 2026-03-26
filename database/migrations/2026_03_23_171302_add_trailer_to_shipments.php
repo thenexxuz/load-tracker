@@ -23,11 +23,11 @@ return new class extends Migration
 
             Schema::table('shipments', function (Blueprint $table) use ($shouldAddTrailerId, $shouldAddLoanedFromTrailerId) {
                 if ($shouldAddTrailerId) {
-                    $table->unsignedBigInteger('trailer_id')->nullable()->after('carrier_id');
+                    $table->unsignedBigInteger('trailer_id')->nullable();
                 }
 
                 if ($shouldAddLoanedFromTrailerId) {
-                    $table->unsignedBigInteger('loaned_from_trailer_id')->nullable()->after('trailer_id');
+                    $table->unsignedBigInteger('loaned_from_trailer_id')->nullable();
                 }
             });
 

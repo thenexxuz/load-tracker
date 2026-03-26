@@ -20,6 +20,7 @@ use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Log;
 use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
 
 class ShipmentController extends Controller
 {
@@ -714,41 +715,34 @@ class ShipmentController extends Controller
         try {
             $spreadsheet = IOFactory::load($file->getRealPath());
             $worksheet = $spreadsheet->getActiveSheet();
-            $rows = $worksheet->toArray();
+            [$headerRow, $dataRows] = $this->extractPbiImportRows($worksheet->toArray());
 
-            // Skip first two rows
-            $dataRows = array_slice($rows, 2);
-
-            if (empty($dataRows)) {
+            if ($headerRow === [] || $dataRows === []) {
                 return back()->withErrors(['file' => 'No data found after the first two rows.']);
             }
 
             $imported = 0;
             $updated = 0;
             $failedRows = [];
-            $headerRow = $rows[2] ?? [];
 
-            foreach ($dataRows as $rowIndex => $row) {
-                // Map by header (case-insensitive, trimmed)
-                $mapped = [];
-                foreach ($row as $colIndex => $value) {
-                    $header = trim(strtolower($headerRow[$colIndex] ?? ''));
-                    if ($header) {
-                        $mapped[$header] = trim($value ?? '');
-                    }
+            foreach ($dataRows as $row) {
+                if ($this->rowIsEmpty($row)) {
+                    continue;
                 }
+
+                $mapped = $this->mapPbiImportRow($headerRow, $row);
 
                 $originalRow = $row;
 
                 $validator = Validator::make($mapped, [
-                    'load' => ['required', 'string', 'max:100'],
+                    'shipment_number' => ['required', 'string', 'max:100'],
                     'status' => ['required', 'string', 'max:50'],
-                    'msft po#' => ['nullable', 'string', 'max:100'],
-                    'origin' => ['required', 'string', 'max:50'],
-                    'destination' => ['required', 'string', 'max:50'],
-                    'ship date' => ['required', 'string'],
-                    'deliver date' => ['nullable', 'string'],
-                    'sum of pallets' => ['required', 'integer', 'min:0'],
+                    'po_number' => ['nullable', 'string', 'max:100'],
+                    'pickup_location' => ['required', 'string', 'max:50'],
+                    'dc_location' => ['required', 'string', 'max:50'],
+                    'pickup_date' => ['required'],
+                    'delivery_date' => ['nullable'],
+                    'rack_qty' => ['required', 'integer', 'min:0'],
                 ]);
 
                 if ($validator->fails()) {
@@ -760,38 +754,30 @@ class ShipmentController extends Controller
 
                 $validated = $validator->validated();
 
-                // Parse dates
                 try {
-                    $pickupDateRaw = Carbon::createFromFormat('m/d/Y', $validated['ship date']);
-                    if (! $pickupDateRaw) {
-                        throw new \Exception;
-                    }
-                } catch (\Exception $e) {
-                    $failedRows[] = array_merge($originalRow, ['ERROR' => "Invalid 'Ship Date' format (expected m/d/Y)"]);
+                    $pickupDateRaw = $this->parsePbiImportDate($validated['pickup_date'], 'Ship Date');
+                } catch (Exception $exception) {
+                    $failedRows[] = array_merge($originalRow, ['ERROR' => $exception->getMessage()]);
 
                     continue;
                 }
 
                 $deliveryDateRaw = null;
-                if (! empty($validated['deliver date'])) {
+                if (filled($validated['delivery_date'] ?? null)) {
                     try {
-                        $deliveryDateRaw = Carbon::createFromFormat('m/d/Y', $validated['deliver date']);
-                        if (! $deliveryDateRaw) {
-                            throw new \Exception;
-                        }
-                    } catch (\Exception $e) {
-                        $failedRows[] = array_merge($originalRow, ['ERROR' => "Invalid 'Deliver Date' format (expected m/d/Y)"]);
+                        $deliveryDateRaw = $this->parsePbiImportDate($validated['delivery_date'], 'Deliver Date');
+                    } catch (Exception $exception) {
+                        $failedRows[] = array_merge($originalRow, ['ERROR' => $exception->getMessage()]);
 
                         continue;
                     }
                 }
 
-                // Lookup / create locations
                 $pickup = Location::firstOrCreate(
-                    ['short_code' => strtoupper($validated['origin'])],
+                    ['short_code' => strtoupper($validated['pickup_location'])],
                     [
                         'guid' => \Str::uuid(),
-                        'name' => strtoupper($validated['origin']),
+                        'name' => strtoupper($validated['pickup_location']),
                         'address' => 'Unknown Address',
                         'city' => 'Unknown City',
                         'state' => 'Unknown State',
@@ -803,10 +789,10 @@ class ShipmentController extends Controller
                 );
 
                 $dc = Location::firstOrCreate(
-                    ['short_code' => strtoupper($validated['destination'])],
+                    ['short_code' => strtoupper($validated['dc_location'])],
                     [
                         'guid' => \Str::uuid(),
-                        'name' => strtoupper($validated['destination']),
+                        'name' => strtoupper($validated['dc_location']),
                         'address' => 'Unknown Address',
                         'city' => 'Unknown City',
                         'state' => 'Unknown State',
@@ -818,16 +804,14 @@ class ShipmentController extends Controller
                     ]
                 );
 
-                // Time from DC
                 $time = $dc->expected_arrival_time
                     ? Carbon::parse($dc->expected_arrival_time)->format('H:i:s')
                     : '00:00:00';
 
                 $pickupDate = $pickupDateRaw->format('Y-m-d').' '.$time;
                 $deliveryDate = $deliveryDateRaw ? $deliveryDateRaw->format('Y-m-d').' '.$time : null;
-                $equipmentDefaults = Shipment::defaultEquipmentCountsForRackQty((int) $validated['sum of pallets']);
+                $equipmentDefaults = Shipment::defaultEquipmentCountsForRackQty((int) $validated['rack_qty']);
 
-                // Drop date logic
                 $dropDate = Carbon::parse($pickupDate)->subDays(2);
                 if ($dropDate->isSaturday()) {
                     $dropDate->subDay();
@@ -835,97 +819,51 @@ class ShipmentController extends Controller
                     $dropDate->subDays(2);
                 }
 
-                // ────────────────────────────────────────────────
-                // Update or create shipment + log changes in note
-                // ────────────────────────────────────────────────
-                $shipment = Shipment::firstOrNew(['shipment_number' => $validated['load']]);
+                $shipment = Shipment::firstOrNew(['shipment_number' => $validated['shipment_number']]);
 
                 $wasExisting = $shipment->exists;
 
-                $oldValues = $shipment->getAttributes(); // snapshot before update
+                $oldValues = $shipment->getAttributes();
 
                 $shipment->fill([
-                    'shipment_number' => $validated['load'],
+                    'shipment_number' => $validated['shipment_number'],
                     'status' => $validated['status'],
-                    'po_number' => $validated['msft po#'] ?? null,
+                    'po_number' => $validated['po_number'] ?? null,
                     'pickup_location_id' => $pickup->id,
                     'dc_location_id' => $dc->id,
                     'carrier_id' => null,
                     'drop_date' => $dropDate,
                     'pickup_date' => $pickupDate,
                     'delivery_date' => $deliveryDate,
-                    'rack_qty' => (int) $validated['sum of pallets'],
+                    'rack_qty' => (int) $validated['rack_qty'],
                     'load_bar_qty' => $equipmentDefaults['load_bar_qty'],
                     'strap_qty' => $equipmentDefaults['strap_qty'],
                 ]);
 
-                // Only save if something changed (or new)
                 if ($shipment->isDirty() || ! $wasExisting) {
                     $shipment->save();
 
                     $shipment->calculateBol();
 
-                    // ── Add note if updated (not new) ──────────────────────
                     if ($wasExisting) {
-                        $changes = [];
-
-                        // Fields to track (add/remove as needed)
-                        $trackedFields = [
-                            'status' => 'Status',
-                            'po_number' => 'PO Number',
-                            'pickup_location_id' => 'Pickup Location',
-                            'dc_location_id' => 'DC Location',
-                            'drop_date' => 'Drop Date',
-                            'pickup_date' => 'Pickup Date',
-                            'delivery_date' => 'Delivery Date',
-                            'rack_qty' => 'Pallets/Rack Qty',
-                        ];
-
-                        foreach ($trackedFields as $field => $label) {
-                            $old = $oldValues[$field] ?? null;
-                            $new = $shipment->$field;
-
-                            // Handle dates & IDs specially
-                            if (str_ends_with($field, '_date')) {
-                                $old = $old ? Carbon::parse($old)->format('Y-m-d H:i:s') : null;
-                                $new = $new ? Carbon::parse($new)->format('Y-m-d H:i:s') : null;
-                            } elseif (str_ends_with($field, '_location_id')) {
-                                $oldLoc = Location::find($old);
-                                $newLoc = Location::find($new);
-                                $old = $oldLoc ? $oldLoc->short_code : null;
-                                $new = $newLoc ? $newLoc->short_code : null;
-                            }
-
-                            if ($old !== $new) {
-                                $changes[] = "$label changed from '$old' to '$new'";
-                            }
-                        }
-
-                        if (! empty($changes)) {
-                            $noteContent = "PBI import updated this shipment:\n".implode("\n", $changes);
-
-                            $shipment->notes()->create([
-                                'content' => $noteContent,
-                                'is_admin' => false,
-                                'user_id' => auth()->id() ?? null,
-                            ]);
-                        }
+                        $this->recordImportUpdateNote($shipment, $oldValues, 'PBI import updated this shipment:');
                     }
 
                     $wasExisting ? $updated++ : $imported++;
                 }
             }
 
-            // ── Handle failed rows (unchanged) ──────────────────────
-            if (! empty($failedRows)) {
-                // ... your existing TSV generation and session flash ...
+            $message = "$imported new shipment(s) imported, $updated existing updated.";
+
+            if ($failedRows !== []) {
+                $message .= ' '.count($failedRows).' row(s) were skipped.';
             }
 
             return redirect()->route('admin.shipments.index')
-                ->with('success', "$imported new shipment(s) imported, $updated existing updated.");
+                ->with('success', $message);
 
-        } catch (\Exception $e) {
-            return back()->withErrors(['file' => 'Failed to process file: '.$e->getMessage()]);
+        } catch (Exception $exception) {
+            return back()->withErrors(['file' => 'Failed to process file: '.$exception->getMessage()]);
         }
     }
 
@@ -1082,6 +1020,101 @@ class ShipmentController extends Controller
 
         return 'https://docs.google.com/spreadsheets/d/'.$spreadsheetId.'/export?format=csv'
             .($gid !== null && $gid !== '' ? '&gid='.urlencode((string) $gid) : '');
+    }
+
+    /**
+     * @param  array<int, array<int, mixed>>  $rows
+     * @return array{0: array<int, mixed>, 1: array<int, array<int, mixed>>}
+     */
+    private function extractPbiImportRows(array $rows): array
+    {
+        $headerRow = $rows[2] ?? [];
+
+        if ($headerRow === [] || $this->rowIsEmpty($headerRow)) {
+            return [[], []];
+        }
+
+        return [$headerRow, array_slice($rows, 3)];
+    }
+
+    /**
+     * @param  array<int, mixed>  $headerRow
+     * @param  array<int, mixed>  $row
+     * @return array<string, mixed>
+     */
+    private function mapPbiImportRow(array $headerRow, array $row): array
+    {
+        $mapped = [];
+
+        foreach ($row as $columnIndex => $value) {
+            $header = $this->canonicalPbiImportHeader((string) ($headerRow[$columnIndex] ?? ''));
+
+            if (! $header) {
+                continue;
+            }
+
+            $mapped[$header] = is_string($value) ? trim($value) : $value;
+        }
+
+        return $mapped;
+    }
+
+    private function canonicalPbiImportHeader(string $header): ?string
+    {
+        $normalizedHeader = Str::of($header)
+            ->replace("\u{FEFF}", '')
+            ->lower()
+            ->replace(['#', '/', '-', '(', ')'], ' ')
+            ->replaceMatches('/[^a-z0-9\s]/', '')
+            ->squish()
+            ->value();
+
+        return match ($normalizedHeader) {
+            'load', 'shipment number' => 'shipment_number',
+            'status' => 'status',
+            'msft po', 'msft po number', 'order', 'order number' => 'po_number',
+            'origin' => 'pickup_location',
+            'destination' => 'dc_location',
+            'ship date' => 'pickup_date',
+            'deliver date' => 'delivery_date',
+            'sum of pallets', 'rack qty', 'rack quantity' => 'rack_qty',
+            default => null,
+        };
+    }
+
+    private function parsePbiImportDate(mixed $value, string $field): Carbon
+    {
+        if ($value instanceof \DateTimeInterface) {
+            return Carbon::instance($value);
+        }
+
+        $normalizedValue = trim((string) $value);
+
+        if ($normalizedValue === '') {
+            throw new Exception("Invalid '{$field}' format.");
+        }
+
+        if (is_numeric($normalizedValue)) {
+            try {
+                return Carbon::instance(ExcelDate::excelToDateTimeObject((float) $normalizedValue));
+            } catch (Exception) {
+                // Fall through to string-based parsing.
+            }
+        }
+
+        foreach (['m/d/Y', 'n/j/Y', 'm/d/y', 'n/j/y', 'm/d/Y H:i', 'n/j/Y H:i', 'm/d/Y g:i A', 'n/j/Y g:i A', 'Y-m-d'] as $format) {
+            try {
+                return Carbon::createFromFormat($format, $normalizedValue);
+            } catch (Exception) {
+                continue;
+            }
+        }
+
+        try {
+            return Carbon::parse($normalizedValue);
+        } catch (Exception) {
+            throw new Exception("Invalid '{$field}' format.");
+        }
     }
 
     /**
