@@ -9,7 +9,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Inertia\Inertia;
-use Illuminate\Validation\Rule;
 
 class LocationController extends Controller
 {
@@ -45,6 +44,7 @@ class LocationController extends Controller
         // Add has_notes flag to each item
         $locations->getCollection()->transform(function ($location) {
             $location->has_notes = $location->notes()->exists();
+
             return $location;
         });
 
@@ -88,8 +88,8 @@ class LocationController extends Controller
         ]);
 
         // Parse comma-separated emails into array
-        $emails = $validated['emails'] 
-            ? array_filter(array_map('trim', explode(',', $validated['emails']))) 
+        $emails = $validated['emails']
+            ? array_filter(array_map('trim', explode(',', $validated['emails'])))
             : [];
 
         // Store as JSON array
@@ -133,6 +133,8 @@ class LocationController extends Controller
             ->limit(50)
             ->get()
             ->map(function ($shipment) {
+                $trailer = $shipment->getRelation('trailer');
+
                 return [
                     'id' => $shipment->id,
                     'shipment_number' => $shipment->shipment_number,
@@ -141,7 +143,7 @@ class LocationController extends Controller
                     'carrier_id' => $shipment->carrier_id,
                     'carrier_name' => $shipment->carrier?->name,
                     'trailer_id' => $shipment->trailer_id,
-                    'trailer_number' => $shipment->trailer?->number,
+                    'trailer_number' => $trailer?->number,
                     'loaned_from_trailer_id' => $shipment->loaned_from_trailer_id,
                     'drop_date' => $shipment->drop_date,
                     'pickup_date' => $shipment->pickup_date,
@@ -265,8 +267,8 @@ class LocationController extends Controller
         }
 
         // Parse comma-separated emails into array
-        $emails = $validated['emails'] 
-            ? array_filter(array_map('trim', explode(',', $validated['emails']))) 
+        $emails = $validated['emails']
+            ? array_filter(array_map('trim', explode(',', $validated['emails'])))
             : [];
         $validated['emails'] = $emails;
         $validated['expected_arrival_time'] = $this->normalizeExpectedArrivalTime(
@@ -278,7 +280,7 @@ class LocationController extends Controller
 
         // Recalculate distances if relevant fields changed
         if ($location->type === 'distribution_center') {
-            $recyclingChanged = $location->wasChanged('recycling_location_id') 
+            $recyclingChanged = $location->wasChanged('recycling_location_id')
                             || $oldRecyclingId !== $location->recycling_location_id;
 
             if ($recyclingChanged || $addressChanged) {
@@ -487,11 +489,11 @@ class LocationController extends Controller
             $seconds = $route['duration'];
 
             return [
-                'total_km'     => round($meters / 1000, 1),
-                'total_miles'  => round(($meters / 1000) * 0.621371, 1),
+                'total_km' => round($meters / 1000, 1),
+                'total_miles' => round(($meters / 1000) * 0.621371, 1),
                 'total_duration' => $this->secondsToHumanTime($seconds),
                 'route_coords' => $route['geometry']['coordinates'] ?? [],
-                'waypoints'    => $waypoints,  // exact [lng, lat] for each stop
+                'waypoints' => $waypoints,  // exact [lng, lat] for each stop
             ];
         });
 
@@ -501,9 +503,9 @@ class LocationController extends Controller
             ->get();
 
         return Inertia::render('Admin/Locations/MultiLocationRoute', [
-            'locations'           => $allLocations,
-            'route_data'          => $routeData,
-            'mapbox_token'        => config('services.mapbox.key'),
+            'locations' => $allLocations,
+            'route_data' => $routeData,
+            'mapbox_token' => config('services.mapbox.key'),
             'default_rate_per_mile' => 2.50,
         ]);
     }
@@ -634,7 +636,7 @@ class LocationController extends Controller
                 'Latitude',
                 'Longitude',
                 'Type',
-                'Created At'
+                'Created At',
             ]);
 
             foreach ($locations as $loc) {
@@ -658,7 +660,7 @@ class LocationController extends Controller
 
         return response()->stream($callback, 200, [
             'Content-Type' => 'text/csv',
-            'Content-Disposition' => 'attachment; filename="locations-' . now()->format('Y-m-d') . '.csv"',
+            'Content-Disposition' => 'attachment; filename="locations-'.now()->format('Y-m-d').'.csv"',
         ]);
     }
 
@@ -672,8 +674,9 @@ class LocationController extends Controller
         fgetcsv($handle); // skip header
 
         while (($row = fgetcsv($handle)) !== false) {
-            if (empty(trim($row[1] ?? '')))
-                continue; // skip if short_code empty
+            if (empty(trim($row[1] ?? ''))) {
+                continue;
+            } // skip if short_code empty
 
             Location::updateOrCreate(
                 ['short_code' => trim($row[1])],

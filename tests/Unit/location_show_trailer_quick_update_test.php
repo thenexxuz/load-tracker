@@ -13,7 +13,8 @@ it('keeps shipment quick update wired for typed alphanumeric trailer numbers', f
         ->toContain('$trailer = Trailer::create([')
         ->toContain("'number' => \$trailerNumber")
         ->toContain("'status' => 'available'")
-        ->toContain("'trailer_number' => \$shipment->trailer?->number");
+        ->toContain("\$trailer = \$shipment->getRelation('trailer');")
+        ->toContain("'trailer_number' => \$trailer?->number");
 });
 
 it('keeps the location show trailer editor submitting typed trailer numbers', function (): void {

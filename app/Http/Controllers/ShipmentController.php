@@ -683,6 +683,7 @@ class ShipmentController extends Controller
         }
 
         $shipment->load(['trailer:id,number', 'loanedFromTrailer:id,number']);
+        $trailer = $shipment->getRelation('trailer');
 
         return response()->json([
             'message' => 'Shipment updated successfully.',
@@ -690,7 +691,7 @@ class ShipmentController extends Controller
                 'id' => $shipment->id,
                 'carrier_id' => $shipment->carrier_id,
                 'trailer_id' => $shipment->trailer_id,
-                'trailer_number' => $shipment->trailer?->number,
+                'trailer_number' => $trailer?->number,
                 'loaned_from_trailer_id' => $shipment->loaned_from_trailer_id,
             ],
         ]);
