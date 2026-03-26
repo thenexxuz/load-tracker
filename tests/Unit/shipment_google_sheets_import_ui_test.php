@@ -11,7 +11,8 @@ it('adds a google sheets import action to the shipments index', function (): voi
         ->toContain("googleSheetsImportForm.post(route('admin.shipments.google-sheets-import')")
         ->toContain('Import from Google Sheets')
         ->toContain('Import Shipment Changes from Google Sheets')
-        ->toContain('The sheet must be shared or published so the server can access it.');
+        ->toContain('The sheet must be shared or published so the server can access it.')
+        ->toContain('trailer number');
 
     expect($routes)
         ->toContain("Route::post('shipments/google-sheets-import', [ShipmentController::class, 'googleSheetsImport'])")

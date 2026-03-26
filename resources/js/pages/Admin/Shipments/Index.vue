@@ -413,7 +413,7 @@ onMounted(() => {
             </p>
 
             <p class="mb-6 text-sm text-gray-600 dark:text-gray-400">
-              The sheet must be shared or published so the server can access it. Supported headers include status, PO number, origin, destination, carrier, trailer, seal number, drivers ID, dates, and pallet or equipment counts.
+              The sheet must be shared or published so the server can access it. Supported headers include status, PO number, origin, destination, carrier, trailer number, seal number, drivers ID, dates, and pallet or equipment counts.
             </p>
 
             <form @submit.prevent="importGoogleSheet">

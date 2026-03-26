@@ -14,7 +14,7 @@ beforeEach(function (): void {
 it('imports shipment changes from google sheets', function (): void {
     Http::fake([
         'docs.google.com/spreadsheets/*' => Http::response(implode("\n", [
-            'Shipment Number,Status,PO Number,Origin,Destination,Pickup Date,Delivery Date,Sum of Pallets,Carrier,Trailer,Seal Number,Drivers ID',
+            'Shipment Number,Status,PO Number,Origin,Destination,Pickup Date,Delivery Date,Sum of Pallets,Carrier,Trailer Number,Seal Number,Drivers ID',
             'LOAD-100,In Transit,PO-999,ING,AMS,2026-03-26 08:30,2026-03-27 10:00,5,Carrier Beta,TRL-900,SEAL-123,DRV-9',
         ]), 200, ['Content-Type' => 'text/csv; charset=utf-8']),
     ]);
