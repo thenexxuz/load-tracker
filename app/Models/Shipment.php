@@ -15,6 +15,29 @@ class Shipment extends Model
 {
     use HasFactory, LogsActivity, SoftDeletes;
 
+    private const DEFAULT_STRAP_QTY_BY_RACK_QTY = [
+        1 => 3,
+        2 => 5,
+        3 => 8,
+        4 => 10,
+        5 => 13,
+        6 => 15,
+        7 => 18,
+        8 => 20,
+        9 => 23,
+        10 => 25,
+        11 => 28,
+        12 => 33,
+        13 => 36,
+        14 => 38,
+        15 => 41,
+        16 => 43,
+        17 => 43,
+        18 => 45,
+        19 => 48,
+        20 => 50,
+    ];
+
     protected $fillable = [
         'guid',
         'shipment_number',
@@ -56,6 +79,26 @@ class Shipment extends Model
         'paperwork_sent' => 'datetime',
         'delivery_alert_sent' => 'datetime',
     ];
+
+    /**
+     * @return array{load_bar_qty:int, strap_qty:int}
+     */
+    public static function defaultEquipmentCountsForRackQty(int $rackQty): array
+    {
+        $normalizedRackQty = max(0, min($rackQty, max(array_keys(self::DEFAULT_STRAP_QTY_BY_RACK_QTY))));
+
+        if ($normalizedRackQty === 0) {
+            return [
+                'load_bar_qty' => 0,
+                'strap_qty' => 0,
+            ];
+        }
+
+        return [
+            'load_bar_qty' => 2,
+            'strap_qty' => self::DEFAULT_STRAP_QTY_BY_RACK_QTY[$normalizedRackQty],
+        ];
+    }
 
     protected static function booted()
     {

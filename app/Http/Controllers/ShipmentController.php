@@ -775,6 +775,7 @@ class ShipmentController extends Controller
 
                 $pickupDate = $pickupDateRaw->format('Y-m-d').' '.$time;
                 $deliveryDate = $deliveryDateRaw ? $deliveryDateRaw->format('Y-m-d').' '.$time : null;
+                $equipmentDefaults = Shipment::defaultEquipmentCountsForRackQty((int) $validated['sum of pallets']);
 
                 // Drop date logic
                 $dropDate = Carbon::parse($pickupDate)->subDays(2);
@@ -804,6 +805,8 @@ class ShipmentController extends Controller
                     'pickup_date' => $pickupDate,
                     'delivery_date' => $deliveryDate,
                     'rack_qty' => (int) $validated['sum of pallets'],
+                    'load_bar_qty' => $equipmentDefaults['load_bar_qty'],
+                    'strap_qty' => $equipmentDefaults['strap_qty'],
                 ]);
 
                 // Only save if something changed (or new)

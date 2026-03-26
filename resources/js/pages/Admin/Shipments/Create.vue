@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Head, useForm } from '@inertiajs/vue3'
-import { ref } from 'vue'
 import AdminLayout from '@/layouts/AppLayout.vue'
+import { useShipmentEquipmentDefaults } from '@/composables/useShipmentEquipmentDefaults'
 import { Notify } from 'notiflix';
 
 const props = defineProps<{
@@ -37,6 +37,8 @@ const form = useForm({
   consolidation_number: '',
   other: '',
 })
+
+useShipmentEquipmentDefaults(form)
 
 // Helper to set current timestamp when user "checks" a flag
 const setCurrentDate = (field: keyof typeof form) => {

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Head, useForm, usePage } from '@inertiajs/vue3'
-import { ref } from 'vue'
 import AdminLayout from '@/layouts/AppLayout.vue'
+import { useShipmentEquipmentDefaults } from '@/composables/useShipmentEquipmentDefaults'
 import { Notify } from 'notiflix';
 
 const props = defineProps<{
@@ -67,6 +67,8 @@ const form = useForm({
   consolidation_number: props.shipment.consolidation_number || '',
   other: props.shipment.other ? JSON.stringify(props.shipment.other, null, 2) : '',
 })
+
+useShipmentEquipmentDefaults(form)
 
 // Helper to toggle datetime fields (sets current time when checked, null when unchecked)
 const toggleDate = (field: string, checked: boolean) => {
