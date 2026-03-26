@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, Link, router, usePage } from '@inertiajs/vue3'
 import AdminLayout from '@/layouts/AppLayout.vue'
+import ActionIconButton from '@/components/ActionIconButton.vue'
 import Pagination from '@/components/Pagination.vue'
 import { Confirm, Notify } from 'notiflix'
 import { onMounted, ref, watch } from 'vue'
@@ -279,22 +280,16 @@ onMounted(() => {
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-center">
                   <div class="flex justify-center space-x-4">
-                    <Link
+                    <ActionIconButton
+                      action="edit"
                       :href="route('admin.locations.edit', location.id)"
-                      class="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300"
-                    >
-                      <svg class="w-5 h-5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                      </svg>
-                    </Link>
-                    <button
+                      title="Edit Location"
+                    />
+                    <ActionIconButton
+                      action="delete"
+                      title="Delete Location"
                       @click="destroy(location.id)"
-                      class="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300"
-                    >
-                      <svg class="w-5 h-5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                      </svg>
-                    </button>
+                    />
                   </div>
                 </td>
               </tr>

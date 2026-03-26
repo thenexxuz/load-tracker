@@ -2,8 +2,10 @@
 <script setup lang="ts">
 import { useForm, router } from '@inertiajs/vue3'
 import { ref } from 'vue'
+import ActionIconButton from '@/components/ActionIconButton.vue'
 import { Notify, Confirm } from 'notiflix'
 import { usePage } from '@inertiajs/vue3'
+import { route } from 'ziggy-js'
 
 const props = defineProps<{
   entity: {
@@ -15,7 +17,7 @@ const props = defineProps<{
 }>()
 
 const { auth } = usePage().props
-const userRoles = auth?.user?.roles || []
+const userRoles = (auth?.user?.roles ?? []) as string[]
 const hasAdminAccess = userRoles.includes('administrator') || userRoles.includes('supervisor')
 
 const showAddNoteModal = ref(false)
@@ -33,7 +35,7 @@ const addNote = () => {
     onSuccess: () => {
       showAddNoteModal.value = false
       noteForm.reset()
-      router.reload({ only: [props.entityPropKey], preserveScroll: true })
+      router.reload({ only: [props.entityPropKey] })
     },
     onError: (errors) => {
       console.error('Note errors:', errors)
@@ -52,10 +54,7 @@ const deleteNote = async (noteId: number) => {
             preserveState: false,
             preserveScroll: true,
             onSuccess: () => {
-            router.reload({
-                only: [props.entityPropKey],
-                preserveScroll: true,
-            })
+          router.reload({ only: [props.entityPropKey] })
             },
             onError: (errors) => {
                 console.error('Note errors:', errors)
@@ -120,12 +119,11 @@ const showNote = (isAdminNote: boolean) => {
             </div>
 
             <div v-if="hasAdminAccess" class="mt-2 text-right">
-              <button
+              <ActionIconButton
+                action="delete"
+                title="Delete Note"
                 @click="deleteNote(note.id)"
-                class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 text-sm transition-colors"
-              >
-                Delete
-              </button>
+              />
             </div>
           </div>
         </div>

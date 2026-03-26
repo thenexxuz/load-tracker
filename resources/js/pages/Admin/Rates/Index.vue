@@ -2,10 +2,12 @@
 import { Head, Link, router } from '@inertiajs/vue3'
 import { onClickOutside } from '@vueuse/core'
 import AdminLayout from '@/layouts/AppLayout.vue'
+import ActionIconButton from '@/components/ActionIconButton.vue'
 import Pagination from '@/components/Pagination.vue'
 import { Confirm, Notify } from 'notiflix'
 import { format } from 'date-fns' // optional: better date formatting (npm install date-fns)
 import { computed, nextTick, ref, watch } from 'vue'
+import { route } from 'ziggy-js'
 
 const props = defineProps<{
   rates: {
@@ -436,19 +438,17 @@ const changePerPage = (value: number) => {
                     Inactive
                   </span>
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                  <Link
+                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-4">
+                  <ActionIconButton
+                    action="edit"
                     :href="route('admin.rates.edit', rate.id)"
-                    class="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 mr-3"
-                  >
-                    Edit
-                  </Link>
-                  <button
+                    title="Edit Rate"
+                  />
+                  <ActionIconButton
+                    action="delete"
+                    title="Delete Rate"
                     @click="deleteRate(rate.id)"
-                    class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
-                  >
-                    Delete
-                  </button>
+                  />
                 </td>
               </tr>
 

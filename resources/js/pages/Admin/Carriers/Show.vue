@@ -2,6 +2,7 @@
 import { Head, router, usePage, useForm } from '@inertiajs/vue3'
 import { ref, computed, onMounted } from 'vue'
 import AdminLayout from '@/layouts/AppLayout.vue'
+import ActionIconButton from '@/components/ActionIconButton.vue'
 import NotesSection from '@/components/NotesSection.vue'
 import { Notify, Confirm } from 'notiflix'
 
@@ -86,11 +87,12 @@ onMounted(() => {
         <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">
           Carrier: {{ carrier.name }}
         </h1>
-        <div class="space-x-4">
-          <a :href="route('admin.carriers.edit', carrier.id)"
-             class="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 font-medium transition-colors">
-            Edit
-          </a>
+        <div class="flex items-center gap-4">
+          <ActionIconButton
+            action="edit"
+            :href="route('admin.carriers.edit', carrier.id)"
+            title="Edit Carrier"
+          />
           <a href="javascript:history.back()"
              class="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 transition-colors">
             ← Back

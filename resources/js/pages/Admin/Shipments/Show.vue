@@ -4,6 +4,7 @@ import { onMounted, onUnmounted, ref, computed } from 'vue'
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import AdminLayout from '@/layouts/AppLayout.vue'
+import ActionIconButton from '@/components/ActionIconButton.vue'
 import NotesSection from '@/components/NotesSection.vue'
 import { Notify } from 'notiflix'
 
@@ -298,20 +299,18 @@ const submitOfferUpdate = () => {
         <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">
           Shipment: {{ shipment.shipment_number }}
         </h1>
-        <div class="space-x-6">
-          <a
+        <div class="flex items-center gap-6">
+          <ActionIconButton
+            action="edit"
             :href="route('admin.shipments.edit', shipment.id)"
-            class="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 transition-colors"
-          >
-            Edit
-          </a>
-          <button
+            title="Edit Shipment"
+          />
+          <ActionIconButton
             v-if="hasAdminAccess"
+            action="delete"
+            title="Delete Shipment"
             @click="deleteShipment"
-            class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 transition-colors"
-          >
-            Delete
-          </button>
+          />
         </div>
       </div>
 

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, Link, router, usePage } from '@inertiajs/vue3'
 import AdminLayout from '@/layouts/AppLayout.vue'
+import ActionIconButton from '@/components/ActionIconButton.vue'
 import Pagination from '@/components/Pagination.vue'
 import { Confirm, Notify } from 'notiflix'
 import { onMounted } from 'vue'
@@ -180,19 +181,17 @@ onMounted(() => {
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
                   {{ item.template?.name || '—' }}
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">
-                  <Link
+                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-4">
+                  <ActionIconButton
+                    action="edit"
                     :href="route('admin.scheduled-items.edit', item.id)"
-                    class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-                  >
-                    Edit
-                  </Link>
-                  <button
+                    title="Edit Scheduled Item"
+                  />
+                  <ActionIconButton
+                    action="delete"
+                    title="Delete Scheduled Item"
                     @click="destroy(item.id)"
-                    class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
-                  >
-                    Delete
-                  </button>
+                  />
                 </td>
               </tr>
             </tbody>

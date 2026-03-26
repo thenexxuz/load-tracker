@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3'
 import AdminLayout from '@/layouts/AppLayout.vue'
+import ActionIconButton from '@/components/ActionIconButton.vue'
 import { format } from 'date-fns'
 import { computed } from 'vue'
 
@@ -66,13 +67,12 @@ const rateDisplay = computed(() => {
         <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">
           Rate: {{ rate.name || 'Unnamed Rate' }}
         </h1>
-        <div class="space-x-4">
-          <Link
+        <div class="flex items-center gap-4">
+          <ActionIconButton
+            action="edit"
             :href="route('admin.rates.edit', rate.id)"
-            class="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 font-medium"
-          >
-            Edit Rate
-          </Link>
+            title="Edit Rate"
+          />
           <Link
             :href="route('admin.rates.index')"
             class="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"

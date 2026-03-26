@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { Head, usePage } from '@inertiajs/vue3'
+import { Head, Link, usePage } from '@inertiajs/vue3'
 import { computed, onMounted } from 'vue'
 import AdminLayout from '@/layouts/AppLayout.vue'
+import ActionIconButton from '@/components/ActionIconButton.vue'
 import { Notify } from 'notiflix'
+import { route } from 'ziggy-js'
 
 const props = defineProps<{
   template: {
@@ -29,19 +31,20 @@ const modelTypeDisplay = computed(() => {
 })
 
 const page = usePage()
+const flash = page.props.flash as Record<string, string | undefined> | undefined
 
 onMounted(() => {
-  if (page.props.flash?.success) {
-    Notify.success(page.props.flash.success)
+  if (flash?.success) {
+    Notify.success(flash.success)
   }
-  if (page.props.flash?.error) {
-    Notify.failure(page.props.flash.error)
+  if (flash?.error) {
+    Notify.failure(flash.error)
   }
-  if (page.props.flash?.info) {
-    Notify.info(page.props.flash.info)
+  if (flash?.info) {
+    Notify.info(flash.info)
   }
-  if (page.props.flash?.warning) {
-    Notify.warning(page.props.flash.warning)
+  if (flash?.warning) {
+    Notify.warning(flash.warning)
   }
 })
 </script>
@@ -55,19 +58,18 @@ onMounted(() => {
         <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">
           Template: {{ template.name }}
         </h1>
-        <div class="space-x-4">
-          <a
+        <div class="flex items-center gap-4">
+          <ActionIconButton
+            action="edit"
             :href="route('admin.templates.edit', template.id)"
-            class="bg-green-600 hover:bg-green-700 text-white px-5 py-2.5 rounded-md font-medium transition-colors"
-          >
-            Edit Template
-          </a>
-          <a
+            title="Edit Template"
+          />
+          <Link
             :href="route('admin.templates.index')"
             class="px-5 py-2.5 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
           >
             Back to List
-          </a>
+          </Link>
         </div>
       </div>
 

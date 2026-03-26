@@ -4,6 +4,7 @@ import { onClickOutside } from '@vueuse/core'
 import { ref, watch, onMounted, computed, nextTick } from 'vue'
 import { debounce } from 'lodash'
 import { route } from 'ziggy-js'
+import ActionIconButton from '@/components/ActionIconButton.vue'
 import Pagination from '@/components/Pagination.vue'
 
 import AdminLayout from '@/layouts/AppLayout.vue'
@@ -560,21 +561,19 @@ onMounted(() => {
                 {{ shipment.trailer || '—' }}
               </td>
               <td class="px-6 py-4 text-center space-x-4" @click.stop>
-                <a
+                <ActionIconButton
+                  action="edit"
                   :href="route('admin.shipments.edit', shipment.id)"
-                  class="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300"
-                  title="Edit"
-                >
-                  ✏️
-                </a>
-                <button
+                  title="Edit Shipment"
+                  stop
+                />
+                <ActionIconButton
                   v-if="hasAdminAccess"
-                  @click.stop="destroy(shipment.id)"
-                  class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
-                  title="Delete"
-                >
-                  🗑️
-                </button>
+                  action="delete"
+                  title="Delete Shipment"
+                  stop
+                  @click="destroy(shipment.id)"
+                />
               </td>
             </tr>
 

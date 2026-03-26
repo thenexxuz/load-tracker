@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3'
 import AdminLayout from '@/layouts/AppLayout.vue'
+import ActionIconButton from '@/components/ActionIconButton.vue'
 import { route } from 'ziggy-js'
 
 const props = defineProps<{
@@ -94,12 +95,11 @@ const formatDate = (date: string): string => {
           </p>
         </div>
         <div class="flex gap-3">
-          <Link
+          <ActionIconButton
+            action="edit"
             :href="route('admin.scheduled-items.edit', scheduledItem.id)"
-            class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            Edit
-          </Link>
+            title="Edit Scheduled Item"
+          />
           <Link
             :href="route('admin.scheduled-items.index')"
             class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
