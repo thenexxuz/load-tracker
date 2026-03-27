@@ -4,12 +4,15 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Inertia\Inertia;
+use Inertia\Response;
 use Spatie\Activitylog\Models\Activity;
 
 class AuditController extends Controller
 {
-    public function index(Request $request)
+    public function index(Request $request): Response
     {
+        abort_unless($request->user()?->hasRole('administrator'), 403);
+
         $logs = Activity::query()
             ->with(['causer:id,name'])
             ->when($request->search, function ($q, $search) {

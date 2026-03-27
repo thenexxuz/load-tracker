@@ -35,10 +35,10 @@ import { type NavItem } from '@/types'
 import AppLogo from './AppLogo.vue'
 
 const { auth } = usePage().props
-const userRoles = auth?.user?.roles || []
+const userRoles = (auth?.user?.roles ?? []) as string[]
 
 const hasUserAccess = userRoles.includes('administrator')
-const hasAuditAccess = userRoles.includes('administrator') || userRoles.includes('supervisor')
+const hasAuditAccess = userRoles.includes('administrator')
 const hasRatesAccess = userRoles.includes('administrator') || userRoles.includes('supervisor')
 const hasCarrierAccess = userRoles.includes('administrator') || userRoles.includes('supervisor') || userRoles.includes('carrier')
 const hasTemplateAccess = userRoles.includes('administrator') || userRoles.includes('supervisor')

@@ -53,7 +53,7 @@ Route::middleware(['auth', 'role:administrator'])->prefix('admin')->name('admin.
     Route::resource('users', UserController::class)->only(['index', 'edit', 'update']);
 });
 
-Route::middleware(['auth', 'role:administrator|carrier'])->prefix('admin')->name('admin.')->group(function () {
+Route::middleware(['auth', 'role:administrator|supervisor|truckload|carrier'])->prefix('admin')->name('admin.')->group(function () {
     Route::middleware('role:administrator|supervisor')->group(function () {
         Route::post('carriers/import', [CarrierController::class, 'import'])->name('carriers.import');
         Route::get('carriers/export', [CarrierController::class, 'export'])->name('carriers.export');
