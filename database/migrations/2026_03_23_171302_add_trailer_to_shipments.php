@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -21,15 +22,13 @@ return new class extends Migration
                 return;
             }
 
-            Schema::table('shipments', function (Blueprint $table) use ($shouldAddTrailerId, $shouldAddLoanedFromTrailerId) {
-                if ($shouldAddTrailerId) {
-                    $table->unsignedBigInteger('trailer_id')->nullable();
-                }
+            if ($shouldAddTrailerId) {
+                DB::statement('ALTER TABLE shipments ADD COLUMN trailer_id INTEGER');
+            }
 
-                if ($shouldAddLoanedFromTrailerId) {
-                    $table->unsignedBigInteger('loaned_from_trailer_id')->nullable();
-                }
-            });
+            if ($shouldAddLoanedFromTrailerId) {
+                DB::statement('ALTER TABLE shipments ADD COLUMN loaned_from_trailer_id INTEGER');
+            }
 
             return;
         }
@@ -55,18 +54,13 @@ return new class extends Migration
         $driver = Schema::getConnection()->getDriverName();
 
         if ($driver === 'sqlite') {
-            $columnsToDrop = array_values(array_filter([
-                Schema::hasColumn('shipments', 'loaned_from_trailer_id') ? 'loaned_from_trailer_id' : null,
-                Schema::hasColumn('shipments', 'trailer_id') ? 'trailer_id' : null,
-            ]));
-
-            if ($columnsToDrop === []) {
-                return;
+            if (Schema::hasColumn('shipments', 'loaned_from_trailer_id')) {
+                DB::statement('ALTER TABLE shipments DROP COLUMN loaned_from_trailer_id');
             }
 
-            Schema::table('shipments', function (Blueprint $table) use ($columnsToDrop) {
-                $table->dropColumn($columnsToDrop);
-            });
+            if (Schema::hasColumn('shipments', 'trailer_id')) {
+                DB::statement('ALTER TABLE shipments DROP COLUMN trailer_id');
+            }
 
             return;
         }

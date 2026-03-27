@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AppSetting;
 use App\Models\Carrier;
 use App\Models\Location;
 use App\Models\Rate;
@@ -125,6 +126,7 @@ class ShipmentController extends Controller
             'all_shipper_codes' => Location::where('type', 'pickup')->pluck('short_code')->sort()->values(),
             'all_dc_codes' => Location::whereIn('type', ['distribution_center', 'pickup'])->pluck('short_code')->sort()->values(),
             'all_carrier_names' => Carrier::pluck('name')->sort()->values(),
+            'googleSheetsUrl' => AppSetting::getValue(AppSetting::GOOGLE_SHEET_URL_KEY),
             // Pass current filters back for frontend state restoration
             'filters' => $request->only([
                 'search',
@@ -423,6 +425,7 @@ class ShipmentController extends Controller
             'mapbox_token' => config('services.mapbox.key'),
             'rates' => $transformedRates,
             'hasAssignedCarrier' => (bool) $shipment->carrier_id,
+            'googleSheetsUrl' => AppSetting::getValue(AppSetting::GOOGLE_SHEET_URL_KEY),
             'availableCarriers' => $availableCarriers,
             'offeredCarriers' => $offeredCarriers,
         ]);
@@ -872,11 +875,23 @@ class ShipmentController extends Controller
         abort_unless($request->user()?->hasRole(['administrator', 'supervisor']), 403);
 
         $validated = $request->validate([
-            'google_sheet_url' => ['required', 'url', 'max:2048'],
+            'google_sheet_url' => ['nullable', 'url', 'max:2048'],
         ]);
 
+        $googleSheetUrl = trim((string) ($validated['google_sheet_url'] ?? ''));
+
+        if ($googleSheetUrl === '') {
+            $googleSheetUrl = trim((string) AppSetting::getValue(AppSetting::GOOGLE_SHEET_URL_KEY));
+        }
+
+        if ($googleSheetUrl === '') {
+            throw ValidationException::withMessages([
+                'google_sheet_url' => 'Set a Google Sheets URL in App Settings or provide one for this import.',
+            ]);
+        }
+
         try {
-            $exportUrl = $this->buildGoogleSheetsExportUrl($validated['google_sheet_url']);
+            $exportUrl = $this->buildGoogleSheetsExportUrl($googleSheetUrl);
 
             $response = Http::timeout(20)->get($exportUrl);
 

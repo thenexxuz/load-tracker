@@ -38,6 +38,7 @@ const props = defineProps<{
   all_shipper_codes: string[]
   all_dc_codes: string[]
   all_carrier_names: string[]
+  googleSheetsUrl: string | null
   filters?: {
     search?: string
     excluded_statuses?: string[]
@@ -275,7 +276,7 @@ const pbiImportForm = useForm({
 })
 
 const googleSheetsImportForm = useForm({
-  google_sheet_url: '',
+  google_sheet_url: props.googleSheetsUrl ?? '',
 })
 
 const handlePbiFileChange = (event: Event) => {
@@ -318,6 +319,7 @@ const importGoogleSheet = () => {
     preserveScroll: true,
     onSuccess: () => {
       showGoogleSheetsImportModal.value = false
+      googleSheetsImportForm.defaults('google_sheet_url', props.googleSheetsUrl ?? '')
       googleSheetsImportForm.reset()
       Notify.success('Google Sheets import successful.')
       router.reload({ only: ['shipments'] })
@@ -409,7 +411,7 @@ onMounted(() => {
             </h2>
 
             <p class="mb-4 text-sm text-gray-600 dark:text-gray-400">
-              Paste a Google Sheets URL. The app will download the sheet as CSV and update matching shipments by Shipment Number, Load, or BOL.
+              Paste a Google Sheets URL. This field is pre-populated from App Settings when configured. The app will download the sheet as CSV and update matching shipments by Shipment Number, Load, or BOL.
             </p>
 
             <p class="mb-6 text-sm text-gray-600 dark:text-gray-400">
