@@ -125,6 +125,7 @@ test('administrators see pickup location and offer activity summaries', function
                     'name' => 'Austin Yard',
                     'short_code' => 'AUS',
                     'shipment_count' => 0,
+                    'shipment_index_url' => '/admin/shipments?excluded_pickup_locations%5B0%5D=DAL&excluded_pickup_locations%5B1%5D=ELP&excluded_statuses%5B0%5D=Delivered',
                     'status_breakdown' => [],
                 ],
                 [
@@ -132,9 +133,18 @@ test('administrators see pickup location and offer activity summaries', function
                     'name' => 'Dallas Yard',
                     'short_code' => 'DAL',
                     'shipment_count' => 2,
+                    'shipment_index_url' => '/admin/shipments?excluded_pickup_locations%5B0%5D=AUS&excluded_pickup_locations%5B1%5D=ELP&excluded_statuses%5B0%5D=Delivered',
                     'status_breakdown' => [
-                        ['status' => 'Booked', 'count' => 1],
-                        ['status' => 'Pending', 'count' => 1],
+                        [
+                            'status' => 'Booked',
+                            'count' => 1,
+                            'shipment_index_url' => '/admin/shipments?excluded_pickup_locations%5B0%5D=AUS&excluded_pickup_locations%5B1%5D=ELP&excluded_statuses%5B0%5D=Delivered&excluded_statuses%5B1%5D=In%20Transit&excluded_statuses%5B2%5D=Pending',
+                        ],
+                        [
+                            'status' => 'Pending',
+                            'count' => 1,
+                            'shipment_index_url' => '/admin/shipments?excluded_pickup_locations%5B0%5D=AUS&excluded_pickup_locations%5B1%5D=ELP&excluded_statuses%5B0%5D=Booked&excluded_statuses%5B1%5D=Delivered&excluded_statuses%5B2%5D=In%20Transit',
+                        ],
                     ],
                 ],
                 [
@@ -142,9 +152,18 @@ test('administrators see pickup location and offer activity summaries', function
                     'name' => 'El Paso Yard',
                     'short_code' => 'ELP',
                     'shipment_count' => 2,
+                    'shipment_index_url' => '/admin/shipments?excluded_pickup_locations%5B0%5D=AUS&excluded_pickup_locations%5B1%5D=DAL&excluded_statuses%5B0%5D=Delivered',
                     'status_breakdown' => [
-                        ['status' => 'In Transit', 'count' => 1],
-                        ['status' => 'Pending', 'count' => 1],
+                        [
+                            'status' => 'In Transit',
+                            'count' => 1,
+                            'shipment_index_url' => '/admin/shipments?excluded_pickup_locations%5B0%5D=AUS&excluded_pickup_locations%5B1%5D=DAL&excluded_statuses%5B0%5D=Booked&excluded_statuses%5B1%5D=Delivered&excluded_statuses%5B2%5D=Pending',
+                        ],
+                        [
+                            'status' => 'Pending',
+                            'count' => 1,
+                            'shipment_index_url' => '/admin/shipments?excluded_pickup_locations%5B0%5D=AUS&excluded_pickup_locations%5B1%5D=DAL&excluded_statuses%5B0%5D=Booked&excluded_statuses%5B1%5D=Delivered&excluded_statuses%5B2%5D=In%20Transit',
+                        ],
                     ],
                 ],
             ])

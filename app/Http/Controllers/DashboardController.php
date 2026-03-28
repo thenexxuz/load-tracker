@@ -78,6 +78,20 @@ class DashboardController extends Controller
      */
     private function pickupLocationShipmentSummary(): array
     {
+        $allPickupCodes = Location::query()
+            ->where('type', 'pickup')
+            ->pluck('short_code')
+            ->filter()
+            ->sort()
+            ->values();
+
+        $allStatuses = Shipment::query()
+            ->distinct('status')
+            ->pluck('status')
+            ->filter()
+            ->sort()
+            ->values();
+
         $locations = Location::query()
             ->where('type', 'pickup')
             ->orderBy('name')
@@ -94,12 +108,26 @@ class DashboardController extends Controller
             ->groupBy('pickup_location_id');
 
         return $locations
-            ->map(function (Location $location) use ($shipmentsByLocation): array {
+            ->map(function (Location $location) use ($shipmentsByLocation, $allPickupCodes, $allStatuses): array {
+                $locationIncludedCodes = collect([$location->short_code])
+                    ->filter()
+                    ->values();
+
                 $statusBreakdown = collect($shipmentsByLocation->get($location->id, collect()))
-                    ->map(fn ($shipmentGroup): array => [
-                        'status' => $shipmentGroup->status,
-                        'count' => (int) $shipmentGroup->shipment_count,
-                    ])
+                    ->map(function ($shipmentGroup) use ($allPickupCodes, $allStatuses, $locationIncludedCodes): array {
+                        $status = $shipmentGroup->status;
+
+                        return [
+                            'status' => $status,
+                            'count' => (int) $shipmentGroup->shipment_count,
+                            'shipment_index_url' => $this->shipmentIndexUrl(
+                                $locationIncludedCodes,
+                                collect([$status]),
+                                $allPickupCodes,
+                                $allStatuses,
+                            ),
+                        ];
+                    })
                     ->sortBy('status', SORT_NATURAL | SORT_FLAG_CASE)
                     ->values();
 
@@ -108,10 +136,36 @@ class DashboardController extends Controller
                     'name' => $location->name,
                     'short_code' => $location->short_code,
                     'shipment_count' => $statusBreakdown->sum('count'),
+                    'shipment_index_url' => $this->shipmentIndexUrl(
+                        $locationIncludedCodes,
+                        $allStatuses->reject(fn (string $status): bool => strtolower($status) === 'delivered')->values(),
+                        $allPickupCodes,
+                        $allStatuses,
+                    ),
                     'status_breakdown' => $statusBreakdown->all(),
                 ];
             })
             ->all();
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int, string>  $includedPickupCodes
+     * @param  \Illuminate\Support\Collection<int, string>  $includedStatuses
+     * @param  \Illuminate\Support\Collection<int, string>  $allPickupCodes
+     * @param  \Illuminate\Support\Collection<int, string>  $allStatuses
+     */
+    private function shipmentIndexUrl($includedPickupCodes, $includedStatuses, $allPickupCodes, $allStatuses): string
+    {
+        return route('admin.shipments.index', [
+            'excluded_pickup_locations' => $allPickupCodes
+                ->reject(fn (string $shortCode): bool => $includedPickupCodes->contains($shortCode))
+                ->values()
+                ->all(),
+            'excluded_statuses' => $allStatuses
+                ->reject(fn (string $status): bool => $includedStatuses->contains($status))
+                ->values()
+                ->all(),
+        ], false);
     }
 
     /**

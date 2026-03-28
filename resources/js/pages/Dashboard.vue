@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head } from '@inertiajs/vue3'
+import { Head, Link } from '@inertiajs/vue3'
 import {
   Chart as ChartJS,
   Filler,
@@ -39,9 +39,11 @@ const props = defineProps<{
     name: string
     short_code: string | null
     shipment_count: number
+    shipment_index_url: string
     status_breakdown: Array<{
       status: string
       count: number
+      shipment_index_url: string
     }>
   }>
   offerActivitySummary?: {
@@ -140,34 +142,38 @@ const chartDataComputed = computed(() => ({
               :key="location.id"
               class="rounded-xl border border-gray-200 bg-gray-50 p-5 dark:border-gray-700 dark:bg-gray-900/40"
             >
-              <div class="flex items-start justify-between gap-4">
-                <div>
-                  <p class="text-sm font-medium text-gray-500 dark:text-gray-400">
-                    {{ location.short_code || 'Pickup Location' }}
-                  </p>
-                  <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">
-                    {{ location.name }}
-                  </h3>
-                </div>
+              <Link :href="location.shipment_index_url" class="block transition hover:opacity-90">
+                <div class="flex items-start justify-between gap-4">
+                  <div>
+                    <p class="text-sm font-medium text-gray-500 dark:text-gray-400">
+                      {{ location.short_code || 'Pickup Location' }}
+                    </p>
+                    <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">
+                      {{ location.name }}
+                    </h3>
+                  </div>
 
-                <div class="text-right">
-                  <p class="text-3xl font-bold text-blue-600 dark:text-blue-400">
-                    {{ location.shipment_count }}
-                  </p>
-                  <p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                    Non-delivered
-                  </p>
+                  <div class="text-right">
+                    <p class="text-3xl font-bold text-blue-600 dark:text-blue-400">
+                      {{ location.shipment_count }}
+                    </p>
+                    <p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                      Non-delivered
+                    </p>
+                  </div>
                 </div>
-              </div>
+              </Link>
 
               <div v-if="location.status_breakdown.length" class="mt-4 flex flex-wrap gap-2">
-                <div
+                <Link
                   v-for="status in location.status_breakdown"
                   :key="`${location.id}-${status.status}`"
-                  class="rounded-full bg-white px-3 py-1 text-sm font-medium text-gray-700 ring-1 ring-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:ring-gray-700"
+                  :href="status.shipment_index_url"
+                  class="rounded-full bg-white px-3 py-1 text-sm font-medium text-gray-700 ring-1 ring-gray-200 transition hover:bg-blue-50 hover:text-blue-700 hover:ring-blue-200 dark:bg-gray-800 dark:text-gray-200 dark:ring-gray-700 dark:hover:bg-blue-500/10 dark:hover:text-blue-300 dark:hover:ring-blue-400/30"
+                  @click.stop
                 >
                   {{ formatStatus(status.status) }}: {{ status.count }}
-                </div>
+                </Link>
               </div>
 
               <p v-else class="mt-4 text-sm text-gray-500 dark:text-gray-400">
