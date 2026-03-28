@@ -22,6 +22,62 @@ test('guests are redirected to the login page', function () {
     $response->assertRedirect(route('login'));
 });
 
+test('administrators see active carrier shipment summary only for carriers with active shipments', function (): void {
+    $admin = User::factory()->create();
+    $admin->assignRole('administrator');
+
+    $pickup = Location::factory()->pickup()->create();
+    $dc = Location::factory()->distribution_center()->create();
+
+    $carrierAlpha = Carrier::factory()->create(['name' => 'Alpha Freight', 'short_code' => 'ALPHA']);
+    $carrierBeta = Carrier::factory()->create(['name' => 'Beta Carriers', 'short_code' => 'BETA']);
+    $carrierGamma = Carrier::factory()->create(['name' => 'Gamma Logistics', 'short_code' => 'GAMMA']);
+
+    $makeShipment = fn (string $number, string $status, Carrier $carrier) => Shipment::query()->create([
+        'guid' => (string) str()->uuid(),
+        'shipment_number' => $number,
+        'status' => $status,
+        'pickup_location_id' => $pickup->id,
+        'dc_location_id' => $dc->id,
+        'carrier_id' => $carrier->id,
+    ]);
+
+    // Alpha: 2 active (Booked + Pending)
+    $makeShipment('ALPHA-001', 'Booked', $carrierAlpha);
+    $makeShipment('ALPHA-002', 'Pending', $carrierAlpha);
+
+    // Beta: 1 active (In Transit), 1 delivered (excluded from count)
+    $makeShipment('BETA-001', 'In Transit', $carrierBeta);
+    $makeShipment('BETA-002', 'Delivered', $carrierBeta);
+
+    // Gamma: only Delivered + Cancelled → zero active, must not appear
+    $makeShipment('GAMMA-001', 'Delivered', $carrierGamma);
+    $makeShipment('GAMMA-002', 'Cancelled', $carrierGamma);
+
+    $response = $this->actingAs($admin)->get(route('dashboard'));
+
+    $response->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('carrierActiveShipmentSummary', 2)
+            ->where('carrierActiveShipmentSummary.0.id', $carrierAlpha->id)
+            ->where('carrierActiveShipmentSummary.0.name', 'Alpha Freight')
+            ->where('carrierActiveShipmentSummary.0.short_code', 'ALPHA')
+            ->where('carrierActiveShipmentSummary.0.active_shipment_count', 2)
+            ->has('carrierActiveShipmentSummary.0.status_breakdown', 2)
+            ->where('carrierActiveShipmentSummary.0.status_breakdown.0.status', 'Booked')
+            ->where('carrierActiveShipmentSummary.0.status_breakdown.0.count', 1)
+            ->where('carrierActiveShipmentSummary.0.status_breakdown.1.status', 'Pending')
+            ->where('carrierActiveShipmentSummary.0.status_breakdown.1.count', 1)
+            ->where('carrierActiveShipmentSummary.1.id', $carrierBeta->id)
+            ->where('carrierActiveShipmentSummary.1.name', 'Beta Carriers')
+            ->where('carrierActiveShipmentSummary.1.short_code', 'BETA')
+            ->where('carrierActiveShipmentSummary.1.active_shipment_count', 1)
+            ->has('carrierActiveShipmentSummary.1.status_breakdown', 1)
+            ->where('carrierActiveShipmentSummary.1.status_breakdown.0.status', 'In Transit')
+            ->where('carrierActiveShipmentSummary.1.status_breakdown.0.count', 1)
+        );
+});
+
 test('authenticated users can visit the dashboard', function () {
     $user = User::factory()->create();
     $this->actingAs($user);

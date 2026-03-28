@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Carrier;
 use App\Models\Location;
 use App\Models\Shipment;
 use App\Models\User;
@@ -60,6 +61,7 @@ class DashboardController extends Controller
             [$lastWeekStart, $lastWeekEnd] = $this->lastCalendarWeekRange();
 
             $data['pickupLocationShipmentSummary'] = $this->pickupLocationShipmentSummary();
+            $data['carrierActiveShipmentSummary'] = $this->carrierActiveShipmentSummary();
             $data['offerActivitySummary'] = [
                 'week' => [
                     'start' => $lastWeekStart->toDateString(),
@@ -146,6 +148,104 @@ class DashboardController extends Controller
                 ];
             })
             ->all();
+    }
+
+    /**
+     * @return array<int, array{id:int, name:string, short_code:?string, active_shipment_count:int, shipment_index_url:string, status_breakdown:array<int, array{status:string, count:int, shipment_index_url:string}>}>
+     */
+    private function carrierActiveShipmentSummary(): array
+    {
+        $allStatuses = Shipment::query()
+            ->distinct('status')
+            ->pluck('status')
+            ->filter()
+            ->sort()
+            ->values();
+
+        $allCarrierNames = Carrier::query()
+            ->pluck('name')
+            ->filter()
+            ->sort()
+            ->values();
+
+        $shipmentsByCarrier = Shipment::query()
+            ->selectRaw('carrier_id, status, COUNT(*) as shipment_count')
+            ->whereNotNull('carrier_id')
+            ->whereRaw('LOWER(status) NOT IN (?, ?)', ['delivered', 'cancelled'])
+            ->groupBy('carrier_id', 'status')
+            ->orderBy('carrier_id')
+            ->orderBy('status')
+            ->get()
+            ->groupBy('carrier_id');
+
+        $carrierIds = $shipmentsByCarrier->keys();
+
+        return Carrier::query()
+            ->whereIn('id', $carrierIds)
+            ->orderBy('name')
+            ->get(['id', 'name', 'short_code'])
+            ->map(function (Carrier $carrier) use ($shipmentsByCarrier, $allCarrierNames, $allStatuses): array {
+                $statusBreakdown = collect($shipmentsByCarrier->get($carrier->id, collect()))
+                    ->map(fn ($group): array => [
+                        'status' => $group->status,
+                        'count' => (int) $group->shipment_count,
+                        'shipment_index_url' => $this->carrierShipmentIndexUrl(
+                            $carrier->name,
+                            $allCarrierNames,
+                            $allStatuses,
+                            $group->status,
+                        ),
+                    ])
+                    ->sortBy('status', SORT_NATURAL | SORT_FLAG_CASE)
+                    ->values();
+
+                return [
+                    'id' => $carrier->id,
+                    'name' => $carrier->name,
+                    'short_code' => $carrier->short_code,
+                    'active_shipment_count' => $statusBreakdown->sum('count'),
+                    'shipment_index_url' => $this->carrierShipmentIndexUrl(
+                        $carrier->name,
+                        $allCarrierNames,
+                        $allStatuses,
+                    ),
+                    'status_breakdown' => $statusBreakdown->all(),
+                ];
+            })
+            ->all();
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int, string>  $allCarrierNames
+     * @param  \Illuminate\Support\Collection<int, string>  $allStatuses
+     */
+    private function carrierShipmentIndexUrl(
+        string $carrierName,
+        $allCarrierNames,
+        $allStatuses,
+        ?string $singleStatus = null,
+    ): string {
+        $excludedCarriers = $allCarrierNames
+            ->reject(fn (string $name): bool => $name === $carrierName)
+            ->values()
+            ->all();
+
+        if ($singleStatus !== null) {
+            $excludedStatuses = $allStatuses
+                ->reject(fn (string $status): bool => $status === $singleStatus)
+                ->values()
+                ->all();
+        } else {
+            $excludedStatuses = $allStatuses
+                ->filter(fn (string $status): bool => in_array(strtolower($status), ['delivered', 'cancelled'], true))
+                ->values()
+                ->all();
+        }
+
+        return route('admin.shipments.index', [
+            'excluded_carriers' => $excludedCarriers,
+            'excluded_statuses' => $excludedStatuses,
+        ], false);
     }
 
     /**
