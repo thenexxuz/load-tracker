@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { Head, useForm } from '@inertiajs/vue3'
-import AdminLayout from '@/layouts/AppLayout.vue'
-import { useShipmentEquipmentDefaults } from '@/composables/useShipmentEquipmentDefaults'
 import { Notify } from 'notiflix';
+
+import { useShipmentEquipmentDefaults } from '@/composables/useShipmentEquipmentDefaults'
+import AdminLayout from '@/layouts/AppLayout.vue'
 
 const props = defineProps<{
   pickupLocations: Array<{ id: number; short_code: string; name: string | null }>

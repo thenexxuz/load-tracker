@@ -1,10 +1,11 @@
 <script setup lang="ts">
+import { usePage } from '@inertiajs/vue3'
+import { Notify } from 'notiflix'
+import { onMounted, onUnmounted } from 'vue'
+
 import NotificationToast from '@/components/NotificationToast.vue';
 import AppLayout from '@/layouts/app/AppSidebarLayout.vue';
 import type { BreadcrumbItemType } from '@/types';
-import { onMounted, onUnmounted } from 'vue'
-import { usePage } from '@inertiajs/vue3'
-import { Notify } from 'notiflix'
 
 interface Props {
     breadcrumbs?: BreadcrumbItemType[];

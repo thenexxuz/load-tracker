@@ -1,14 +1,15 @@
 <script setup lang="ts">
 import { Head, router, usePage, useForm } from '@inertiajs/vue3'
 import { onClickOutside } from '@vueuse/core'
-import { ref, watch, onMounted, computed, nextTick } from 'vue'
 import { debounce } from 'lodash'
+import { Notify } from 'notiflix'
+import { ref, watch, onMounted, computed, nextTick } from 'vue'
 import { route } from 'ziggy-js'
+
 import ActionIconButton from '@/components/ActionIconButton.vue'
 import Pagination from '@/components/Pagination.vue'
-
 import AdminLayout from '@/layouts/AppLayout.vue'
-import { Notify } from 'notiflix'
+
 
 const props = defineProps<{
   shipments: {

@@ -2,12 +2,12 @@
 import { Link } from '@inertiajs/vue3';
 import { usePage } from '@inertiajs/vue3';
 
+import { edit as editAppSettings } from '@/actions/App/Http/Controllers/Settings/AppSettingsController';
 import Heading from '@/components/Heading.vue';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { useActiveUrl } from '@/composables/useActiveUrl';
 import { toUrl } from '@/lib/utils';
-import { edit as editAppSettings } from '@/actions/App/Http/Controllers/Settings/AppSettingsController';
 import { edit as editAppearance } from '@/routes/appearance';
 import { edit as editProfile } from '@/routes/profile';
 import { show } from '@/routes/two-factor';

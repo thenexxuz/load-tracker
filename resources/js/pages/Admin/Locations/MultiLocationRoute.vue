@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { Head, router } from '@inertiajs/vue3'
+
 import AdminLayout from '@/layouts/AppLayout.vue'
-import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue'
+
 import mapboxgl from 'mapbox-gl'
+import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import MultiSelect from 'vue-multiselect'
 import 'vue-multiselect/dist/vue-multiselect.css'

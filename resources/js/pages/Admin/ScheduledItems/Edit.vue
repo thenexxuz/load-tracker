@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { Head, useForm } from '@inertiajs/vue3'
-import AdminLayout from '@/layouts/AppLayout.vue'
-import InputError from '@/components/InputError.vue'
 import { computed } from 'vue'
 import { route } from 'ziggy-js'
+
+import InputError from '@/components/InputError.vue'
+import AdminLayout from '@/layouts/AppLayout.vue'
 
 const props = defineProps<{
   scheduledItem: {

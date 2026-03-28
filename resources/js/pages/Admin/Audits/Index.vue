@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { Head, router, usePage } from '@inertiajs/vue3'
+import { Notify } from 'notiflix';
 import { ref, watch, onMounted } from 'vue'
 import { route } from 'ziggy-js'
 
-import AdminLayout from '@/layouts/AppLayout.vue'
 import Pagination from '@/components/Pagination.vue'
-import { Notify } from 'notiflix';
+import AdminLayout from '@/layouts/AppLayout.vue'
 
 const props = defineProps<{
     logs: {

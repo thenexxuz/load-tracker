@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { Head, router, useForm, usePage } from '@inertiajs/vue3'
-import { onMounted, onUnmounted, ref, computed } from 'vue'
 import mapboxgl from 'mapbox-gl'
+import { onMounted, onUnmounted, ref, computed } from 'vue'
+
 import 'mapbox-gl/dist/mapbox-gl.css'
-import AdminLayout from '@/layouts/AppLayout.vue'
 import ActionIconButton from '@/components/ActionIconButton.vue'
 import NotesSection from '@/components/NotesSection.vue'
+import AdminLayout from '@/layouts/AppLayout.vue'
+
 import { Notify } from 'notiflix'
 
 const props = defineProps<{
@@ -16,6 +18,7 @@ const props = defineProps<{
     po_number: string | null
     status: string
     pickup_location: { 
+      id: number;
       short_code: string; 
       name: string | null; 
       address: string | null;
@@ -27,6 +30,7 @@ const props = defineProps<{
       longitude?: number | null;
     } | null
     dc_location: { 
+      id: number;
       short_code: string; 
       name: string | null; 
       address: string | null;
@@ -324,7 +328,17 @@ const submitOfferUpdate = () => {
           <div>
             <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Pickup Location</dt>
             <dd class="mt-2 space-y-1 text-gray-900 dark:text-gray-100">
-              <div class="font-medium">
+              <a
+                v-if="shipment.pickup_location?.id"
+                :href="route('admin.locations.show', shipment.pickup_location.id)"
+                class="inline-block font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
+              >
+                {{ shipment.pickup_location.short_code }}
+                <span v-if="shipment.pickup_location.name" class="ml-2 text-gray-600 dark:text-gray-400">
+                  ({{ shipment.pickup_location.name }})
+                </span>
+              </a>
+              <div v-else class="font-medium">
                 {{ shipment.pickup_location?.short_code || '—' }}
                 <span v-if="shipment.pickup_location?.name" class="ml-2 text-gray-600 dark:text-gray-400">
                   ({{ shipment.pickup_location.name }})
@@ -340,7 +354,17 @@ const submitOfferUpdate = () => {
           <div>
             <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Distribution Center (DC)</dt>
             <dd class="mt-2 space-y-1 text-gray-900 dark:text-gray-100">
-              <div class="font-medium">
+              <a
+                v-if="shipment.dc_location?.id"
+                :href="route('admin.locations.show', shipment.dc_location.id)"
+                class="inline-block font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
+              >
+                {{ shipment.dc_location.short_code }}
+                <span v-if="shipment.dc_location.name" class="ml-2 text-gray-600 dark:text-gray-400">
+                  ({{ shipment.dc_location.name }})
+                </span>
+              </a>
+              <div v-else class="font-medium">
                 {{ shipment.dc_location?.short_code || '—' }}
                 <span v-if="shipment.dc_location?.name" class="ml-2 text-gray-600 dark:text-gray-400">
                   ({{ shipment.dc_location.name }})

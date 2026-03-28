@@ -1,5 +1,5 @@
-import { App, watch } from 'vue'
 import { Notify } from 'notiflix/build/notiflix-notify-aio';
+import { App, watch } from 'vue'
 
 const N = Notify.init({
     width: '280px',

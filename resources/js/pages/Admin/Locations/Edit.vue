@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { Head, useForm, router } from '@inertiajs/vue3'
-import { watch } from 'vue'
-import AdminLayout from '@/layouts/AppLayout.vue'
 import { Notify } from 'notiflix'
+import { watch } from 'vue'
+
+import AdminLayout from '@/layouts/AppLayout.vue'
 
 const props = defineProps<{
   location: {

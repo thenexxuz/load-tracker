@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { Head, useForm, usePage } from '@inertiajs/vue3'
-import AdminLayout from '@/layouts/AppLayout.vue'
-import { useShipmentEquipmentDefaults } from '@/composables/useShipmentEquipmentDefaults'
 import { Notify } from 'notiflix';
+
+import { useShipmentEquipmentDefaults } from '@/composables/useShipmentEquipmentDefaults'
+import AdminLayout from '@/layouts/AppLayout.vue'
 
 const props = defineProps<{
   shipment: {

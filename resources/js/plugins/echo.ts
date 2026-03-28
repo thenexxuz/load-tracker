@@ -1,6 +1,6 @@
 // resources/js/plugins/echo.ts
-import type { App } from 'vue'
 import { configureEcho, echo } from '@laravel/echo-vue'
+import type { App } from 'vue'
 
 export default {
     install: (app: App) => {

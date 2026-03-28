@@ -1,4 +1,5 @@
 import { ref, watch } from 'vue'
+
 import { getShipmentEquipmentDefaults } from '@/lib/shipmentEquipmentDefaults'
 
 type ShipmentEquipmentForm = {

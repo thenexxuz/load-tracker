@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
 import { Head, useForm } from '@inertiajs/vue3'
-import AdminLayout from '@/layouts/AppLayout.vue'
 import Editor from '@tinymce/tinymce-vue'
 import { Notify } from 'notiflix';
+import { ref, watch } from 'vue'
+
+import AdminLayout from '@/layouts/AppLayout.vue'
 
 const props = defineProps<{
   carriers: Array<{ id: number; name: string; short_code: string }>

@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { Head, useForm, router, usePage } from '@inertiajs/vue3'
-import { onMounted, ref, inject } from 'vue'
-import AdminLayout from '@/layouts/AppLayout.vue'
-import ActionIconButton from '@/components/ActionIconButton.vue'
 import { Notify, Confirm } from 'notiflix'
+import { onMounted, ref, inject } from 'vue'
+
+import ActionIconButton from '@/components/ActionIconButton.vue'
+import AdminLayout from '@/layouts/AppLayout.vue'
 
 const route = inject('route')!
 

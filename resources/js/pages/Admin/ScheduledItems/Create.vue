@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { Head, useForm } from '@inertiajs/vue3'
-import AdminLayout from '@/layouts/AppLayout.vue'
-import InputError from '@/components/InputError.vue'
 import { computed } from 'vue'
 import { route } from 'ziggy-js'
+
+import InputError from '@/components/InputError.vue'
+import AdminLayout from '@/layouts/AppLayout.vue'
 
 const props = defineProps<{
   carriers: Array<{
@@ -28,7 +29,7 @@ const form = useForm({
   schedule_day_of_month: null as number | null,
   template_id: null as number | null,
   apply_to_all: false,
-  schedulable_type: 'carrier' as 'carrier',
+  schedulable_type: 'carrier' as const,
   schedulable_id: null as number | null,
 })
 

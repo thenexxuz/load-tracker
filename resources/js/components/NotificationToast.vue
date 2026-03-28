@@ -1,7 +1,7 @@
 <script setup>
-import { ref, onMounted } from 'vue'
-import { Notify } from 'notiflix/build/notiflix-notify-aio'
 import { usePage, router } from '@inertiajs/vue3'
+import { Notify } from 'notiflix/build/notiflix-notify-aio'
+import { ref, onMounted } from 'vue'
 
 const notifications = ref([])
 

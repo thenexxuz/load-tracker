@@ -1,8 +1,5 @@
 <script setup lang="ts">
 import { Head } from '@inertiajs/vue3'
-import { computed } from 'vue'
-import AdminLayout from '@/layouts/AppLayout.vue'
-import { Line } from 'vue-chartjs'
 import {
   Chart as ChartJS,
   Filler,
@@ -14,6 +11,10 @@ import {
   PointElement,
   CategoryScale,
 } from 'chart.js'
+import { computed } from 'vue'
+import { Line } from 'vue-chartjs'
+
+import AdminLayout from '@/layouts/AppLayout.vue'
 
 ChartJS.register(
   Filler,
@@ -33,7 +34,38 @@ const props = defineProps<{
     values: number[]
   }
   bookedCount?: number
+  pickupLocationShipmentSummary?: Array<{
+    id: number
+    name: string
+    short_code: string | null
+    shipment_count: number
+    status_breakdown: Array<{
+      status: string
+      count: number
+    }>
+  }>
+  offerActivitySummary?: {
+    week: {
+      start: string
+      end: string
+      label: string
+    }
+    users: Array<{
+      id: number
+      name: string
+      offered_shipments_count: number
+      assigned_shipments_count: number
+    }>
+  }
 }>()
+
+const formatStatus = (status: string) => status
+  .replace(/_/g, ' ')
+  .toLowerCase()
+  .replace(/\b\w/g, (character) => character.toUpperCase())
+
+const pluralize = (count: number, singular: string, plural = `${singular}s`) =>
+  `${count} ${count === 1 ? singular : plural}`
 
 const chartOptions = {
   responsive: true,
@@ -91,6 +123,99 @@ const chartDataComputed = computed(() => ({
             />
           </div>
         </div>
+
+        <section class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow border border-gray-200 dark:border-gray-700 space-y-6">
+          <div class="flex flex-col gap-1">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              Pickup Locations
+            </h2>
+            <p class="text-sm text-gray-500 dark:text-gray-400">
+              Active shipment counts by pickup location, excluding delivered shipments.
+            </p>
+          </div>
+
+          <div class="grid gap-4 lg:grid-cols-2">
+            <div
+              v-for="location in pickupLocationShipmentSummary ?? []"
+              :key="location.id"
+              class="rounded-xl border border-gray-200 bg-gray-50 p-5 dark:border-gray-700 dark:bg-gray-900/40"
+            >
+              <div class="flex items-start justify-between gap-4">
+                <div>
+                  <p class="text-sm font-medium text-gray-500 dark:text-gray-400">
+                    {{ location.short_code || 'Pickup Location' }}
+                  </p>
+                  <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">
+                    {{ location.name }}
+                  </h3>
+                </div>
+
+                <div class="text-right">
+                  <p class="text-3xl font-bold text-blue-600 dark:text-blue-400">
+                    {{ location.shipment_count }}
+                  </p>
+                  <p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                    Non-delivered
+                  </p>
+                </div>
+              </div>
+
+              <div v-if="location.status_breakdown.length" class="mt-4 flex flex-wrap gap-2">
+                <div
+                  v-for="status in location.status_breakdown"
+                  :key="`${location.id}-${status.status}`"
+                  class="rounded-full bg-white px-3 py-1 text-sm font-medium text-gray-700 ring-1 ring-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:ring-gray-700"
+                >
+                  {{ formatStatus(status.status) }}: {{ status.count }}
+                </div>
+              </div>
+
+              <p v-else class="mt-4 text-sm text-gray-500 dark:text-gray-400">
+                No active shipments at this pickup location.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow border border-gray-200 dark:border-gray-700 space-y-6">
+          <div class="flex flex-col gap-1">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              Shipment Offers by User
+            </h2>
+            <p class="text-sm text-gray-500 dark:text-gray-400">
+              Previous calendar week: {{ offerActivitySummary?.week.label ?? 'No range available' }}.
+            </p>
+          </div>
+
+          <div v-if="offerActivitySummary?.users.length" class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200 text-sm dark:divide-gray-700">
+              <thead>
+                <tr class="text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  <th class="pb-3 pr-4">User</th>
+                  <th class="pb-3 pr-4">Shipments Offered</th>
+                  <th class="pb-3">Offered and Assigned</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
+                <tr v-for="offerUser in offerActivitySummary.users" :key="offerUser.id">
+                  <td class="py-3 pr-4 font-medium text-gray-900 dark:text-gray-100">
+                    {{ offerUser.name }}
+                  </td>
+                  <td class="py-3 pr-4 text-gray-600 dark:text-gray-300">
+                    {{ pluralize(offerUser.offered_shipments_count, 'shipment') }}
+                  </td>
+                  <td class="py-3 text-gray-600 dark:text-gray-300">
+                    {{ pluralize(offerUser.assigned_shipments_count, 'shipment') }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p v-else class="text-sm text-gray-500 dark:text-gray-400">
+            No shipment offers were recorded in the previous calendar week.
+          </p>
+        </section>
       </div>
 
       <!-- Regular dashboard content for non-admin/supervisor users -->

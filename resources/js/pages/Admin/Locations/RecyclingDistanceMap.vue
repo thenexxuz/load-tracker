@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3'
+
 import AdminLayout from '@/layouts/AppLayout.vue'
-import { onMounted, ref, onUnmounted } from 'vue'
+
 import mapboxgl from 'mapbox-gl'
+import { onMounted, ref, onUnmounted } from 'vue'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import { route } from 'ziggy-js'
 

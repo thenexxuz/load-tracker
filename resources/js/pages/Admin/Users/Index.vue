@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import AdminLayout from '@/layouts/AppLayout.vue'
-import Pagination from '@/components/Pagination.vue'
-import ActionIconButton from '@/components/ActionIconButton.vue'
 import { Head, router, usePage } from '@inertiajs/vue3'
-import { onMounted, ref, watch } from 'vue'
 import { Confirm, Notify } from 'notiflix'
+import { onMounted, ref, watch } from 'vue'
 import { route } from 'ziggy-js'
+
+import ActionIconButton from '@/components/ActionIconButton.vue'
+import Pagination from '@/components/Pagination.vue'
+import AdminLayout from '@/layouts/AppLayout.vue'
 
 const props = defineProps<{
   users: {

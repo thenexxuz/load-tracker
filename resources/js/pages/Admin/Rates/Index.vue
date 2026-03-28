@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { Head, Link, router } from '@inertiajs/vue3'
 import { onClickOutside } from '@vueuse/core'
-import AdminLayout from '@/layouts/AppLayout.vue'
-import ActionIconButton from '@/components/ActionIconButton.vue'
-import Pagination from '@/components/Pagination.vue'
-import { Confirm, Notify } from 'notiflix'
 import { format } from 'date-fns' // optional: better date formatting (npm install date-fns)
+import { Confirm, Notify } from 'notiflix'
 import { computed, nextTick, ref, watch } from 'vue'
 import { route } from 'ziggy-js'
+
+import ActionIconButton from '@/components/ActionIconButton.vue'
+import Pagination from '@/components/Pagination.vue'
+import AdminLayout from '@/layouts/AppLayout.vue'
 
 const props = defineProps<{
   rates: {

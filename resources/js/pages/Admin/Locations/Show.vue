@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { Head, Link, router } from '@inertiajs/vue3'
-import AdminLayout from '@/layouts/AppLayout.vue'
-import ActionIconButton from '@/components/ActionIconButton.vue'
 import { format } from 'date-fns'
-import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
 import mapboxgl from 'mapbox-gl'
+import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
+
+import ActionIconButton from '@/components/ActionIconButton.vue'
+import AdminLayout from '@/layouts/AppLayout.vue'
 import 'mapbox-gl/dist/mapbox-gl.css'
 
 const props = defineProps<{

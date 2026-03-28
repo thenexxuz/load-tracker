@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { Head, Link, router } from '@inertiajs/vue3'
-import AdminLayout from '@/layouts/AppLayout.vue'
 import { ref, watch } from 'vue'
+
+import AdminLayout from '@/layouts/AppLayout.vue'
 
 const props = defineProps<{
   distances: {

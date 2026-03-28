@@ -5,10 +5,11 @@ import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import type { DefineComponent } from 'vue';
 import { createApp, h, onMounted, onUnmounted } from 'vue';
 import { ZiggyVue } from 'ziggy-js';
-import FlashPlugin from './plugins/flash';
-import EchoPlugin from './plugins/echo';
 
 import { initializeTheme } from './composables/useAppearance';
+import EchoPlugin from './plugins/echo';
+import FlashPlugin from './plugins/flash';
+
 
 // ──────────────────────────────────────────────────────────────
 // Inertia App Creation

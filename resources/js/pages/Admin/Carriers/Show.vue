@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { Head, router, usePage, useForm } from '@inertiajs/vue3'
+import { Notify, Confirm } from 'notiflix'
 import { ref, computed, onMounted } from 'vue'
-import AdminLayout from '@/layouts/AppLayout.vue'
+
 import ActionIconButton from '@/components/ActionIconButton.vue'
 import NotesSection from '@/components/NotesSection.vue'
-import { Notify, Confirm } from 'notiflix'
+import AdminLayout from '@/layouts/AppLayout.vue'
 
 const props = defineProps<{
   carrier: {

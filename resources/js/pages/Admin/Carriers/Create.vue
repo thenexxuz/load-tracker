@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { Head, useForm, router } from '@inertiajs/vue3'
-import AdminLayout from '@/layouts/AppLayout.vue'
 import { Notify } from 'notiflix'
+
+import AdminLayout from '@/layouts/AppLayout.vue'
 
 const form = useForm({
     short_code: '',

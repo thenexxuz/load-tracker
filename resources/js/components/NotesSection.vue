@@ -1,11 +1,12 @@
 <!-- resources/js/components/NotesSection.vue -->
 <script setup lang="ts">
 import { useForm, router } from '@inertiajs/vue3'
-import { ref } from 'vue'
-import ActionIconButton from '@/components/ActionIconButton.vue'
-import { Notify, Confirm } from 'notiflix'
 import { usePage } from '@inertiajs/vue3'
+import { Notify, Confirm } from 'notiflix'
+import { ref } from 'vue'
 import { route } from 'ziggy-js'
+
+import ActionIconButton from '@/components/ActionIconButton.vue'
 
 const props = defineProps<{
   entity: {
