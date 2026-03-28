@@ -4,6 +4,7 @@ use App\Models\AppSetting;
 use App\Models\Carrier;
 use App\Models\Location;
 use App\Models\Shipment;
+use App\Models\Trailer;
 use App\Models\User;
 use Illuminate\Support\Facades\Http;
 use Spatie\Permission\Models\Role;
@@ -48,12 +49,17 @@ it('imports shipment changes from google sheets', function (): void {
     $response->assertRedirect(route('admin.shipments.index'));
     $response->assertSessionHas('success', fn (string $message) => str_contains($message, '1 shipment(s) updated from Google Sheets.'));
 
+    $createdTrailer = Trailer::query()->where('number', 'TRL-900')->where('carrier_id', $newCarrier->id)->first();
+
+    expect($createdTrailer)->not->toBeNull();
+
     expect($shipment->fresh())
         ->status->toBe('In Transit')
         ->po_number->toBe('PO-999')
         ->pickup_location_id->toBe($newPickup->id)
         ->dc_location_id->toBe($newDc->id)
         ->carrier_id->toBe($newCarrier->id)
+        ->trailer_id->toBe($createdTrailer->id)
         ->trailer->toBe('TRL-900')
         ->seal_number->toBe('SEAL-123')
         ->drivers_id->toBe('DRV-9')
@@ -119,12 +125,17 @@ it('uses the app settings google sheets url when request input is not provided',
     $response->assertRedirect(route('admin.shipments.index'));
     $response->assertSessionHas('success', fn (string $message) => str_contains($message, '1 shipment(s) updated from Google Sheets.'));
 
+    $createdTrailer = Trailer::query()->where('number', 'TRL-901')->where('carrier_id', $newCarrier->id)->first();
+
+    expect($createdTrailer)->not->toBeNull();
+
     expect($shipment->fresh())
         ->status->toBe('In Transit')
         ->po_number->toBe('PO-888')
         ->pickup_location_id->toBe($newPickup->id)
         ->dc_location_id->toBe($newDc->id)
         ->carrier_id->toBe($newCarrier->id)
+        ->trailer_id->toBe($createdTrailer->id)
         ->trailer->toBe('TRL-901')
         ->seal_number->toBe('SEAL-124')
         ->drivers_id->toBe('DRV-10')

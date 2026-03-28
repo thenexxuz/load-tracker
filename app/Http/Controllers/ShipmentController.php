@@ -1260,6 +1260,31 @@ class ShipmentController extends Controller
             $attributes['carrier_id'] = $this->resolveCarrierForGoogleSheetsImport($mappedRow['carrier'])->id;
         }
 
+        if (($mappedRow['trailer'] ?? '') !== '') {
+            $carrierId = $attributes['carrier_id'] ?? $shipment->carrier_id;
+
+            if (! blank($carrierId)) {
+                $trailerNumber = trim((string) $mappedRow['trailer']);
+
+                $trailer = Trailer::query()
+                    ->where('carrier_id', $carrierId)
+                    ->whereRaw('LOWER(number) = ?', [Str::lower($trailerNumber)])
+                    ->first();
+
+                if (! $trailer) {
+                    $trailer = Trailer::create([
+                        'guid' => (string) Str::uuid(),
+                        'number' => $trailerNumber,
+                        'carrier_id' => $carrierId,
+                        'status' => 'available',
+                        'is_active' => true,
+                    ]);
+                }
+
+                $attributes['trailer_id'] = $trailer->id;
+            }
+        }
+
         if (($mappedRow['drop_date'] ?? '') !== '') {
             $attributes['drop_date'] = $this->parseGoogleSheetsDate($mappedRow['drop_date'])?->toDateString();
         }
