@@ -100,6 +100,36 @@ class Shipment extends Model
         ];
     }
 
+    public static function normalizeStatusLabel(?string $status): ?string
+    {
+        if ($status === null) {
+            return null;
+        }
+
+        $normalizedStatus = trim($status);
+
+        if ($normalizedStatus === '') {
+            return $normalizedStatus;
+        }
+
+        $normalizedComparableStatus = Str::of($normalizedStatus)
+            ->lower()
+            ->replace('-', ' ')
+            ->squish()
+            ->value();
+
+        if ($normalizedComparableStatus === 'checked in') {
+            return 'Checked In';
+        }
+
+        return $normalizedStatus;
+    }
+
+    public function setStatusAttribute(?string $value): void
+    {
+        $this->attributes['status'] = self::normalizeStatusLabel($value);
+    }
+
     protected static function booted()
     {
         static::creating(function ($shipment) {

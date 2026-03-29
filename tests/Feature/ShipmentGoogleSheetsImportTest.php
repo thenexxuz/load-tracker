@@ -262,6 +262,43 @@ it('imports rows from all workbook tabs, not just one sheet gid', function (): v
         ->carrier_id->toBe($carrier->id);
 });
 
+it('normalizes checked-in status from google sheets import', function (): void {
+    $workbookContents = buildGoogleSheetsWorkbook([
+        'Sheet 1' => [
+            ['Shipment Number', 'Status'],
+            ['LOAD-500', 'Checked-In'],
+        ],
+    ]);
+
+    Http::fake([
+        'docs.google.com/spreadsheets/*' => Http::response($workbookContents, 200, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]),
+    ]);
+
+    $admin = User::factory()->create();
+    $admin->assignRole('administrator');
+
+    $pickup = Location::factory()->pickup()->create(['short_code' => 'ING', 'name' => 'Ingrasys']);
+    $dc = Location::factory()->distribution_center()->create(['short_code' => 'AMS', 'name' => 'AMS DC']);
+
+    $shipment = Shipment::query()->create([
+        'shipment_number' => 'LOAD-500',
+        'status' => 'Pending',
+        'pickup_location_id' => $pickup->id,
+        'dc_location_id' => $dc->id,
+    ]);
+
+    $response = $this->actingAs($admin)->post(route('admin.shipments.google-sheets-import'), [
+        'google_sheet_url' => 'https://docs.google.com/spreadsheets/d/test-sheet-id/edit#gid=0',
+    ]);
+
+    $response->assertRedirect(route('admin.shipments.index'));
+
+    expect($shipment->fresh())
+        ->status->toBe('Checked In');
+});
+
 /**
  * @param  array<string, array<int, array<int, string>>>  $sheets
  */

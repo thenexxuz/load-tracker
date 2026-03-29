@@ -1,0 +1,27 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Support\Facades\DB;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        DB::table('shipments')
+            ->whereRaw("LOWER(REPLACE(status, '-', ' ')) = ?", ['checked in'])
+            ->update(['status' => 'Checked In']);
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        DB::table('shipments')
+            ->where('status', 'Checked In')
+            ->update(['status' => 'Checked-In']);
+    }
+};
