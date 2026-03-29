@@ -39,6 +39,8 @@ const props = defineProps<{
     name: string
     short_code: string | null
     shipment_count: number
+    unassigned_shipment_count: number
+    unassigned_shipment_index_url: string
     shipment_index_url: string
     status_breakdown: Array<{
       status: string
@@ -175,6 +177,15 @@ const chartDataComputed = computed(() => ({
                   </div>
                 </div>
               </Link>
+
+              <div class="mt-2">
+                <Link
+                  :href="location.unassigned_shipment_index_url"
+                  class="text-xs font-medium text-gray-600 underline-offset-2 transition hover:text-blue-600 hover:underline dark:text-gray-300 dark:hover:text-blue-300"
+                >
+                  Unassigned: {{ location.unassigned_shipment_count }}
+                </Link>
+              </div>
 
               <div v-if="location.status_breakdown.length" class="mt-4 flex flex-wrap gap-2">
                 <Link

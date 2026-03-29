@@ -42,6 +42,7 @@ const props = defineProps<{
   googleSheetsUrl: string | null
   filters?: {
     search?: string
+    only_unassigned?: boolean | string | number
     excluded_statuses?: string[]
     excluded_pickup_locations?: string[]
     excluded_dc_locations?: string[]
@@ -82,6 +83,7 @@ const selectedCarriers = ref<string[]>(
 const dropStart = ref<string>(props.filters?.drop_start || '')
 const dropEnd = ref<string>(props.filters?.drop_end || '')
 const search = ref<string>(props.filters?.search || '')
+const onlyUnassigned = ref<boolean>(Boolean(props.filters?.only_unassigned))
 
 // ── Computed excluded values & payload ──────────────────────────────────
 const excludedStatuses = computed(() => props.statuses.filter(s => !selectedStatuses.value.includes(s)))
@@ -91,6 +93,7 @@ const excludedCarriers = computed(() => props.all_carrier_names.filter(c => !sel
 
 const currentFilters = computed(() => ({
   search: search.value.trim() || undefined,
+  only_unassigned: onlyUnassigned.value || undefined,
   excluded_statuses: excludedStatuses.value,           // always send array (even empty)
   excluded_pickup_locations: excludedPickupLocations.value,
   excluded_dc_locations: excludedDcLocations.value,
@@ -527,7 +530,7 @@ onMounted(() => {
         <div class="flex items-center space-x-3">
           <label class="text-sm text-gray-700 dark:text-gray-300">Per page:</label>
           <select
-            @change="changePerPage"
+            @change="(e: Event) => changePerPage(Number((e.target as HTMLSelectElement).value))"
             :value="shipments.per_page"
             class="border border-gray-300 dark:border-gray-600 rounded px-3 py-1 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500"
           >

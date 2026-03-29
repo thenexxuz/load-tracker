@@ -52,6 +52,10 @@ class ShipmentController extends Controller
             });
         }
 
+        if ($request->boolean('only_unassigned')) {
+            $query->whereNull('carrier_id');
+        }
+
         // Apply filters from payload
         if ($search) {
             $query->where(function ($q) use ($search) {
@@ -130,6 +134,7 @@ class ShipmentController extends Controller
             // Pass current filters back for frontend state restoration
             'filters' => $request->only([
                 'search',
+                'only_unassigned',
                 'excluded_statuses',
                 'excluded_pickup_locations',
                 'excluded_dc_locations',

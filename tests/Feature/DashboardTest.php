@@ -181,6 +181,8 @@ test('administrators see pickup location and offer activity summaries', function
                     'name' => 'Austin Yard',
                     'short_code' => 'AUS',
                     'shipment_count' => 0,
+                    'unassigned_shipment_count' => 0,
+                    'unassigned_shipment_index_url' => '/admin/shipments?excluded_pickup_locations%5B0%5D=DAL&excluded_pickup_locations%5B1%5D=ELP&excluded_statuses%5B0%5D=Delivered&only_unassigned=1',
                     'shipment_index_url' => '/admin/shipments?excluded_pickup_locations%5B0%5D=DAL&excluded_pickup_locations%5B1%5D=ELP&excluded_statuses%5B0%5D=Delivered',
                     'status_breakdown' => [],
                 ],
@@ -189,6 +191,8 @@ test('administrators see pickup location and offer activity summaries', function
                     'name' => 'Dallas Yard',
                     'short_code' => 'DAL',
                     'shipment_count' => 2,
+                    'unassigned_shipment_count' => 1,
+                    'unassigned_shipment_index_url' => '/admin/shipments?excluded_pickup_locations%5B0%5D=AUS&excluded_pickup_locations%5B1%5D=ELP&excluded_statuses%5B0%5D=Delivered&only_unassigned=1',
                     'shipment_index_url' => '/admin/shipments?excluded_pickup_locations%5B0%5D=AUS&excluded_pickup_locations%5B1%5D=ELP&excluded_statuses%5B0%5D=Delivered',
                     'status_breakdown' => [
                         [
@@ -208,6 +212,8 @@ test('administrators see pickup location and offer activity summaries', function
                     'name' => 'El Paso Yard',
                     'short_code' => 'ELP',
                     'shipment_count' => 2,
+                    'unassigned_shipment_count' => 1,
+                    'unassigned_shipment_index_url' => '/admin/shipments?excluded_pickup_locations%5B0%5D=AUS&excluded_pickup_locations%5B1%5D=DAL&excluded_statuses%5B0%5D=Delivered&only_unassigned=1',
                     'shipment_index_url' => '/admin/shipments?excluded_pickup_locations%5B0%5D=AUS&excluded_pickup_locations%5B1%5D=DAL&excluded_statuses%5B0%5D=Delivered',
                     'status_breakdown' => [
                         [
