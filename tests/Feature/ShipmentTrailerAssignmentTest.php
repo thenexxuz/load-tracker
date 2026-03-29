@@ -106,3 +106,38 @@ it('shows unassigned parked trailers on the carrier page', function (): void {
         ->where('activeTrailerAssignments.0.is_assigned_to_shipment', false)
     );
 });
+
+it('provides existing statuses on the shipment edit page', function (): void {
+    $admin = User::factory()->create();
+    $admin->assignRole('administrator');
+
+    $pickupLocation = Location::factory()->pickup()->create();
+    $dcLocation = Location::factory()->distribution_center()->create();
+
+    $shipment = Shipment::query()->create([
+        'guid' => (string) str()->uuid(),
+        'shipment_number' => 'SHIP-300',
+        'status' => 'Pending',
+        'pickup_location_id' => $pickupLocation->id,
+        'dc_location_id' => $dcLocation->id,
+    ]);
+
+    Shipment::query()->create([
+        'guid' => (string) str()->uuid(),
+        'shipment_number' => 'SHIP-301',
+        'status' => 'Custom Hold',
+        'pickup_location_id' => $pickupLocation->id,
+        'dc_location_id' => $dcLocation->id,
+    ]);
+
+    $response = $this->actingAs($admin)->get(route('admin.shipments.edit', $shipment));
+
+    $response->assertOk();
+    $response->assertInertia(fn (Assert $page) => $page
+        ->component('Admin/Shipments/Edit')
+        ->where('shipment.id', $shipment->id)
+        ->has('statuses', 2)
+        ->where('statuses.0', 'Custom Hold')
+        ->where('statuses.1', 'Pending')
+    );
+});

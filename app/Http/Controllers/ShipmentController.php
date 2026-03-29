@@ -160,10 +160,22 @@ class ShipmentController extends Controller
             ->where('is_active', true)
             ->get();
 
+        $statuses = Shipment::query()
+            ->whereNotNull('status')
+            ->where('status', '!=', '')
+            ->distinct()
+            ->pluck('status')
+            ->map(fn (string $status): string => trim($status))
+            ->filter(fn (string $status): bool => $status !== '')
+            ->unique()
+            ->sort()
+            ->values();
+
         return Inertia::render('Admin/Shipments/Create', [
             'pickupLocations' => $pickupLocations,
             'dcLocations' => $dcLocations,
             'carriers' => $carriers,
+            'statuses' => $statuses,
         ]);
     }
 
@@ -541,6 +553,7 @@ class ShipmentController extends Controller
             'pickupLocations' => $pickupLocations,
             'dcLocations' => $dcLocations,
             'carriers' => $carriers,
+            'statuses' => $statuses,
         ]);
     }
 

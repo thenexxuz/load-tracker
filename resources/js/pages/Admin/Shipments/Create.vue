@@ -9,6 +9,7 @@ const props = defineProps<{
   pickupLocations: Array<{ id: number; short_code: string; name: string | null }>
   dcLocations: Array<{ id: number; short_code: string; name: string | null }>
   carriers: Array<{ id: number; name: string; short_code: string }>
+  statuses: string[]
 }>()
 
 const form = useForm({
@@ -80,19 +81,17 @@ const submit = () => {
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Status <span class="text-red-600 dark:text-red-400">*</span>
             </label>
-            <select
+            <input
               v-model="form.status"
+              list="shipment-status-options"
+              type="text"
               required
-              class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none appearance-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
-            >
-              <option value="Pending">Pending</option>
-              <option value="Picked Up">Picked Up</option>
-              <option value="In Transit">In Transit</option>
-              <option value="Crossed Border">Crossed Border</option>
-              <option value="Checked In">Checked In</option>
-              <option value="Delivered">Delivered</option>
-              <option value="Cancelled">Cancelled</option>
-            </select>
+              placeholder="Select or enter a status"
+              class="w-full p-3 border rounded-md focus:ring-2 focus:outline-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
+            />
+            <datalist id="shipment-status-options">
+              <option v-for="status in props.statuses" :key="status" :value="status" />
+            </datalist>
             <p v-if="form.errors.status" class="mt-1 text-sm text-red-600 dark:text-red-400">
               {{ form.errors.status }}
             </p>
