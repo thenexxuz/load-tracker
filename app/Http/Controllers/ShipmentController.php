@@ -535,6 +535,17 @@ class ShipmentController extends Controller
             ->where('is_active', true)
             ->get();
 
+        $statuses = Shipment::query()
+            ->whereNotNull('status')
+            ->where('status', '!=', '')
+            ->distinct()
+            ->pluck('status')
+            ->map(fn (string $status): string => trim($status))
+            ->filter(fn (string $status): bool => $status !== '')
+            ->unique()
+            ->sort()
+            ->values();
+
         // Convert to array and format dates for proper display in HTML date/datetime-local inputs
         $shipmentData = $shipment->toArray();
         $shipmentData['drop_date'] = $shipment->drop_date?->format('Y-m-d');
