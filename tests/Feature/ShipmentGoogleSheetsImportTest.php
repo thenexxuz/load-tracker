@@ -7,6 +7,9 @@ use App\Models\Shipment;
 use App\Models\Trailer;
 use App\Models\User;
 use Illuminate\Support\Facades\Http;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Spatie\Permission\Models\Role;
 
 beforeEach(function (): void {
@@ -14,11 +17,17 @@ beforeEach(function (): void {
 });
 
 it('imports shipment changes from google sheets', function (): void {
+    $workbookContents = buildGoogleSheetsWorkbook([
+        'Sheet 1' => [
+            ['Shipment Number', 'Status', 'PO Number', 'Origin', 'Destination', 'Pickup Date', 'Delivery Date', 'Sum of Pallets', 'Carrier', 'Trailer Number', 'Seal Number', 'Drivers ID'],
+            ['LOAD-100', 'In Transit', 'PO-999', 'ING', 'AMS', '2026-03-26 08:30', '2026-03-27 10:00', '5', 'Carrier Beta', 'TRL-900', 'SEAL-123', 'DRV-9'],
+        ],
+    ]);
+
     Http::fake([
-        'docs.google.com/spreadsheets/*' => Http::response(implode("\n", [
-            'Shipment Number,Status,PO Number,Origin,Destination,Pickup Date,Delivery Date,Sum of Pallets,Carrier,Trailer Number,Seal Number,Drivers ID',
-            'LOAD-100,In Transit,PO-999,ING,AMS,2026-03-26 08:30,2026-03-27 10:00,5,Carrier Beta,TRL-900,SEAL-123,DRV-9',
-        ]), 200, ['Content-Type' => 'text/csv; charset=utf-8']),
+        'docs.google.com/spreadsheets/*' => Http::response($workbookContents, 200, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]),
     ]);
 
     $admin = User::factory()->create();
@@ -92,11 +101,17 @@ it('uses the app settings google sheets url when request input is not provided',
         'https://docs.google.com/spreadsheets/d/test-sheet-id/edit#gid=0'
     );
 
+    $workbookContents = buildGoogleSheetsWorkbook([
+        'Sheet 1' => [
+            ['Shipment Number', 'Status', 'PO Number', 'Origin', 'Destination', 'Pickup Date', 'Delivery Date', 'Sum of Pallets', 'Carrier', 'Trailer Number', 'Seal Number', 'Drivers ID'],
+            ['LOAD-200', 'In Transit', 'PO-888', 'ING', 'AMS', '2026-03-26 08:30', '2026-03-27 10:00', '5', 'Carrier Beta', 'TRL-901', 'SEAL-124', 'DRV-10'],
+        ],
+    ]);
+
     Http::fake([
-        'docs.google.com/spreadsheets/*' => Http::response(implode("\n", [
-            'Shipment Number,Status,PO Number,Origin,Destination,Pickup Date,Delivery Date,Sum of Pallets,Carrier,Trailer Number,Seal Number,Drivers ID',
-            'LOAD-200,In Transit,PO-888,ING,AMS,2026-03-26 08:30,2026-03-27 10:00,5,Carrier Beta,TRL-901,SEAL-124,DRV-10',
-        ]), 200, ['Content-Type' => 'text/csv; charset=utf-8']),
+        'docs.google.com/spreadsheets/*' => Http::response($workbookContents, 200, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]),
     ]);
 
     $admin = User::factory()->create();
@@ -143,3 +158,139 @@ it('uses the app settings google sheets url when request input is not provided',
         ->load_bar_qty->toBe(2)
         ->strap_qty->toBe(13);
 });
+
+it('resolves a carrier by short_code when the import value is in mixed or lower case', function (): void {
+    $workbookContents = buildGoogleSheetsWorkbook([
+        'Sheet 1' => [
+            ['Shipment Number', 'Status', 'PO Number', 'Origin', 'Destination', 'Pickup Date', 'Delivery Date', 'Sum of Pallets', 'Carrier', 'Trailer Number', 'Seal Number', 'Drivers ID'],
+            ['LOAD-300', 'In Transit', 'PO-300', 'ING', 'AMS', '2026-03-26 08:30', '2026-03-27 10:00', '2', 'xpo', 'TRL-300', '', '', ''],
+        ],
+    ]);
+
+    Http::fake([
+        'docs.google.com/spreadsheets/*' => Http::response($workbookContents, 200, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]),
+    ]);
+
+    $admin = User::factory()->create();
+    $admin->assignRole('administrator');
+
+    $pickup = Location::factory()->pickup()->create(['short_code' => 'ING', 'name' => 'Ingrasys']);
+    $dc = Location::factory()->distribution_center()->create(['short_code' => 'AMS', 'name' => 'AMS DC']);
+    $carrier = Carrier::factory()->create(['name' => 'XPO Logistics', 'short_code' => 'XPO']);
+
+    $shipment = Shipment::query()->create([
+        'shipment_number' => 'LOAD-300',
+        'status' => 'Pending',
+        'pickup_location_id' => $pickup->id,
+        'dc_location_id' => $dc->id,
+        'rack_qty' => 0,
+        'load_bar_qty' => 0,
+        'strap_qty' => 0,
+    ]);
+
+    $response = $this->actingAs($admin)->post(route('admin.shipments.google-sheets-import'), [
+        'google_sheet_url' => 'https://docs.google.com/spreadsheets/d/test-sheet-id/edit#gid=0',
+    ]);
+
+    $response->assertRedirect(route('admin.shipments.index'));
+    $response->assertSessionHas('success', fn (string $message) => str_contains($message, '1 shipment(s) updated from Google Sheets.'));
+
+    expect($shipment->fresh())
+        ->carrier_id->toBe($carrier->id);
+});
+
+it('imports rows from all workbook tabs, not just one sheet gid', function (): void {
+    $workbookContents = buildGoogleSheetsWorkbook([
+        'Tab One' => [
+            ['Shipment Number', 'Status', 'PO Number', 'Origin', 'Destination', 'Carrier'],
+            ['LOAD-401', 'In Transit', 'PO-401', 'ING', 'AMS', 'Carrier Beta'],
+        ],
+        'Tab Two' => [
+            ['Shipment Number', 'Status', 'PO Number', 'Origin', 'Destination', 'Carrier'],
+            ['LOAD-402', 'Booked', 'PO-402', 'ING', 'AMS', 'Carrier Beta'],
+        ],
+    ]);
+
+    Http::fake([
+        'docs.google.com/spreadsheets/*' => Http::response($workbookContents, 200, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]),
+    ]);
+
+    $admin = User::factory()->create();
+    $admin->assignRole('administrator');
+
+    $oldPickup = Location::factory()->pickup()->create(['short_code' => 'OLDP', 'name' => 'Old Pickup']);
+    $oldDc = Location::factory()->distribution_center()->create(['short_code' => 'OLDD', 'name' => 'Old DC']);
+    Location::factory()->pickup()->create(['short_code' => 'ING', 'name' => 'Ingrasys']);
+    Location::factory()->distribution_center()->create(['short_code' => 'AMS', 'name' => 'AMS DC']);
+    $carrier = Carrier::factory()->create(['name' => 'Carrier Beta', 'short_code' => 'BETA']);
+
+    $shipmentOne = Shipment::query()->create([
+        'shipment_number' => 'LOAD-401',
+        'status' => 'Pending',
+        'po_number' => 'PO-OLD-401',
+        'pickup_location_id' => $oldPickup->id,
+        'dc_location_id' => $oldDc->id,
+    ]);
+
+    $shipmentTwo = Shipment::query()->create([
+        'shipment_number' => 'LOAD-402',
+        'status' => 'Pending',
+        'po_number' => 'PO-OLD-402',
+        'pickup_location_id' => $oldPickup->id,
+        'dc_location_id' => $oldDc->id,
+    ]);
+
+    $response = $this->actingAs($admin)->post(route('admin.shipments.google-sheets-import'), [
+        'google_sheet_url' => 'https://docs.google.com/spreadsheets/d/test-sheet-id/edit#gid=123456',
+    ]);
+
+    $response->assertRedirect(route('admin.shipments.index'));
+    $response->assertSessionHas('success', fn (string $message) => str_contains($message, '2 shipment(s) updated from Google Sheets.'));
+
+    expect($shipmentOne->fresh())
+        ->status->toBe('In Transit')
+        ->po_number->toBe('PO-401')
+        ->carrier_id->toBe($carrier->id);
+
+    expect($shipmentTwo->fresh())
+        ->status->toBe('Booked')
+        ->po_number->toBe('PO-402')
+        ->carrier_id->toBe($carrier->id);
+});
+
+/**
+ * @param  array<string, array<int, array<int, string>>>  $sheets
+ */
+function buildGoogleSheetsWorkbook(array $sheets): string
+{
+    $spreadsheet = new Spreadsheet;
+    $sheetIndex = 0;
+
+    foreach ($sheets as $title => $rows) {
+        $worksheet = $sheetIndex === 0
+            ? $spreadsheet->getActiveSheet()
+            : $spreadsheet->createSheet();
+
+        $worksheet->setTitle(substr($title, 0, 31));
+
+        foreach ($rows as $rowIndex => $columns) {
+            foreach ($columns as $columnIndex => $value) {
+                $cell = Coordinate::stringFromColumnIndex($columnIndex + 1).($rowIndex + 1);
+                $worksheet->setCellValue($cell, $value);
+            }
+        }
+
+        $sheetIndex++;
+    }
+
+    $writer = new Xlsx($spreadsheet);
+
+    ob_start();
+    $writer->save('php://output');
+
+    return (string) ob_get_clean();
+}

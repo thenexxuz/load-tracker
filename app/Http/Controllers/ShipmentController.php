@@ -897,27 +897,27 @@ class ShipmentController extends Controller
 
             if (! $response->successful()) {
                 throw ValidationException::withMessages([
-                    'google_sheet_url' => 'Failed to download the Google Sheet as CSV.',
+                    'google_sheet_url' => 'Failed to download the Google Sheet workbook.',
                 ]);
             }
 
-            $csvContents = $response->body();
+            $workbookContents = $response->body();
 
             if (
-                str_contains($csvContents, 'ServiceLogin')
-                || str_contains($csvContents, 'accounts.google.com')
+                str_contains($workbookContents, 'ServiceLogin')
+                || str_contains($workbookContents, 'accounts.google.com')
                 || str_contains(Str::lower((string) $response->header('Content-Type')), 'text/html')
             ) {
                 throw ValidationException::withMessages([
-                    'google_sheet_url' => 'The Google Sheet must be shared or published so the app can download it as CSV.',
+                    'google_sheet_url' => 'The Google Sheet must be shared or published so the app can download it.',
                 ]);
             }
 
-            [$headers, $rows] = $this->parseGoogleSheetsCsv($csvContents);
+            $sheetRows = $this->parseGoogleSheetsWorkbook($workbookContents);
 
-            if ($headers === []) {
+            if ($sheetRows === []) {
                 throw ValidationException::withMessages([
-                    'google_sheet_url' => 'The Google Sheet CSV did not contain a header row.',
+                    'google_sheet_url' => 'The Google Sheet workbook did not contain any readable sheet rows.',
                 ]);
             }
 
@@ -926,60 +926,62 @@ class ShipmentController extends Controller
             $failed = 0;
             $failedMessages = [];
 
-            foreach ($rows as $row) {
-                if ($this->rowIsEmpty($row)) {
-                    continue;
-                }
-
-                try {
-                    $mappedRow = $this->mapGoogleSheetsRow($headers, $row);
-                    $shipment = $this->resolveShipmentForGoogleSheetsRow($mappedRow);
-
-                    if (! $shipment) {
-                        throw ValidationException::withMessages([
-                            'google_sheet_url' => 'Each row must match an existing shipment by Shipment Number, Load, or BOL.',
-                        ]);
-                    }
-
-                    $attributes = $this->buildGoogleSheetsShipmentAttributes($mappedRow, $shipment);
-
-                    if ($attributes === []) {
-                        $unchanged++;
-
+            foreach ($sheetRows as [$headers, $rows]) {
+                foreach ($rows as $row) {
+                    if ($this->rowIsEmpty($row)) {
                         continue;
                     }
 
-                    $oldValues = $shipment->getAttributes();
+                    try {
+                        $mappedRow = $this->mapGoogleSheetsRow($headers, $row);
+                        $shipment = $this->resolveShipmentForGoogleSheetsRow($mappedRow);
 
-                    $this->syncTrailerAssignments($shipment, $attributes);
+                        if (! $shipment) {
+                            throw ValidationException::withMessages([
+                                'google_sheet_url' => 'Each row must match an existing shipment by Shipment Number, Load, or BOL.',
+                            ]);
+                        }
 
-                    $shipment->fill($attributes);
+                        $attributes = $this->buildGoogleSheetsShipmentAttributes($mappedRow, $shipment);
 
-                    if (! $shipment->isDirty()) {
-                        $unchanged++;
+                        if ($attributes === []) {
+                            $unchanged++;
 
-                        continue;
+                            continue;
+                        }
+
+                        $oldValues = $shipment->getAttributes();
+
+                        $this->syncTrailerAssignments($shipment, $attributes);
+
+                        $shipment->fill($attributes);
+
+                        if (! $shipment->isDirty()) {
+                            $unchanged++;
+
+                            continue;
+                        }
+
+                        $shipment->save();
+
+                        if ($shipment->carrier_id) {
+                            $shipment->offeredCarriers()->sync([]);
+                        }
+
+                        $this->recordImportUpdateNote(
+                            $shipment,
+                            $oldValues,
+                            'Google Sheets import updated this shipment:'
+                        );
+
+                        $updated++;
+                    } catch (ValidationException $exception) {
+                        $failed++;
+                        $failedMessages[] = collect($exception->errors())->flatten()->first();
+                    } catch (Exception $exception) {
+                        $failed++;
+                        $failedMessages[] = $exception->getMessage();
                     }
-
-                    $shipment->save();
-
-                    if ($shipment->carrier_id) {
-                        $shipment->offeredCarriers()->sync([]);
-                    }
-
-                    $this->recordImportUpdateNote(
-                        $shipment,
-                        $oldValues,
-                        'Google Sheets import updated this shipment:'
-                    );
-
-                    $updated++;
-                } catch (ValidationException $exception) {
-                    $failed++;
-                    $failedMessages[] = collect($exception->errors())->flatten()->first();
-                } catch (Exception $exception) {
-                    $failed++;
-                    $failedMessages[] = $exception->getMessage();
                 }
             }
 
@@ -1025,16 +1027,8 @@ class ShipmentController extends Controller
         }
 
         $spreadsheetId = $matches[1];
-        $query = [];
-        $fragment = [];
 
-        parse_str((string) parse_url($url, PHP_URL_QUERY), $query);
-        parse_str((string) parse_url($url, PHP_URL_FRAGMENT), $fragment);
-
-        $gid = $query['gid'] ?? $fragment['gid'] ?? null;
-
-        return 'https://docs.google.com/spreadsheets/d/'.$spreadsheetId.'/export?format=csv'
-            .($gid !== null && $gid !== '' ? '&gid='.urlencode((string) $gid) : '');
+        return 'https://docs.google.com/spreadsheets/d/'.$spreadsheetId.'/export?format=xlsx';
     }
 
     /**
@@ -1133,32 +1127,50 @@ class ShipmentController extends Controller
     }
 
     /**
-     * @return array{0: array<int, string>, 1: array<int, array<int, string|null>>}
+     * @return array<int, array{0: array<int, string>, 1: array<int, array<int, string|null>>}>
      */
-    private function parseGoogleSheetsCsv(string $csvContents): array
+    private function parseGoogleSheetsWorkbook(string $workbookContents): array
     {
-        $handle = fopen('php://temp', 'r+');
+        $tempPath = tempnam(sys_get_temp_dir(), 'google-sheets-import-');
 
-        if ($handle === false) {
-            throw new Exception('Unable to open temporary CSV stream.');
+        if ($tempPath === false) {
+            throw new Exception('Unable to create temporary workbook file.');
         }
 
-        fwrite($handle, $csvContents);
-        rewind($handle);
+        file_put_contents($tempPath, $workbookContents);
 
-        $headers = fgetcsv($handle) ?: [];
-        $rows = [];
+        try {
+            $spreadsheet = IOFactory::load($tempPath);
+        } catch (Exception $exception) {
+            @unlink($tempPath);
 
-        while (($row = fgetcsv($handle)) !== false) {
-            $rows[] = $row;
+            throw new Exception('Unable to read the Google Sheet workbook.');
         }
 
-        fclose($handle);
+        @unlink($tempPath);
 
-        return [
-            array_map(fn ($header) => (string) $header, $headers),
-            $rows,
-        ];
+        $sheetRows = [];
+
+        foreach ($spreadsheet->getWorksheetIterator() as $worksheet) {
+            $rows = $worksheet->toArray(null, true, true, false);
+
+            if ($rows === []) {
+                continue;
+            }
+
+            $headerRow = array_shift($rows);
+
+            if (! is_array($headerRow) || $this->rowIsEmpty($headerRow)) {
+                continue;
+            }
+
+            $sheetRows[] = [
+                array_map(fn ($header) => trim((string) $header), $headerRow),
+                array_map(fn ($row) => is_array($row) ? array_map(fn ($value) => $value === null ? null : (string) $value, $row) : [], $rows),
+            ];
+        }
+
+        return $sheetRows;
     }
 
     /**
@@ -1358,11 +1370,12 @@ class ShipmentController extends Controller
     private function resolveCarrierForGoogleSheetsImport(string $value): Carrier
     {
         $normalizedValue = trim($value);
+        $uppercasedValue = strtoupper($normalizedValue);
 
         $carrier = Carrier::query()
-            ->where(function ($query) use ($normalizedValue) {
+            ->where(function ($query) use ($normalizedValue, $uppercasedValue) {
                 $query->whereRaw('LOWER(name) = ?', [Str::lower($normalizedValue)])
-                    ->orWhereRaw('LOWER(short_code) = ?', [Str::lower($normalizedValue)]);
+                    ->orWhereRaw('UPPER(short_code) = ?', [$uppercasedValue]);
             })
             ->first();
 
