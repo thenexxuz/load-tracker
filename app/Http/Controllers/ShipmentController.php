@@ -382,23 +382,10 @@ class ShipmentController extends Controller
 
         // Base query for regular rates
         $ratesQuery = Rate::query()
-            ->where(function ($query) use ($shipment) {
-                $query->where('pickup_location_id', $shipment->pickup_location_id)
-                    ->orWhereNull('pickup_location_id');
-            })
-            ->where(function ($query) use ($dcLocation) {
-                $query->where(function ($q) use ($dcLocation) {
-                    // Exact destination match
-                    $q->where('destination_city', $dcLocation?->city)
-                        ->where('destination_state', $dcLocation?->state)
-                        ->where('destination_country', $dcLocation?->country);
-                })->orWhere(function ($q) {
-                    // No destination specified (fallback)
-                    $q->whereNull('destination_city')
-                        ->whereNull('destination_state')
-                        ->whereNull('destination_country');
-                });
-            })
+            ->where('pickup_location_id', $shipment->pickup_location_id)
+            ->whereNotNull('destination_city')
+            ->whereNotNull('destination_state')
+            ->whereNotNull('destination_country')
             ->with('carrier:id,name,short_code');
 
         if ($viewerIsCarrier && $viewerCarrierId) {
@@ -417,8 +404,13 @@ class ShipmentController extends Controller
             });
         }
 
-        // Get regular rates
-        $regularRates = $ratesQuery->orderBy('carrier_id')->orderBy('rate')->get();
+        // Get regular rates and keep only rates whose destination is within 60 miles of the shipment DC.
+        $regularRates = $ratesQuery
+            ->orderBy('carrier_id')
+            ->orderBy('rate')
+            ->get()
+            ->filter(fn (Rate $rate): bool => $this->isRateDestinationWithinMilesOfDc($dcLocation, $rate, 60.0))
+            ->values();
 
         // Get recycling rates (separate query)
         $recyclingRates = Rate::query()
@@ -615,6 +607,50 @@ class ShipmentController extends Controller
                 ],
             ])
             ->all();
+    }
+
+    private function isRateDestinationWithinMilesOfDc(?Location $dcLocation, Rate $rate, float $maxMiles): bool
+    {
+        if (! $dcLocation || ! $dcLocation->latitude || ! $dcLocation->longitude) {
+            return false;
+        }
+
+        $destinationLocations = Location::query()
+            ->whereRaw('LOWER(city) = ?', [Str::lower((string) $rate->destination_city)])
+            ->whereRaw('LOWER(state) = ?', [Str::lower((string) $rate->destination_state)])
+            ->whereRaw('LOWER(country) = ?', [Str::lower((string) $rate->destination_country)])
+            ->whereNotNull('latitude')
+            ->whereNotNull('longitude')
+            ->get(['latitude', 'longitude']);
+
+        if ($destinationLocations->isEmpty()) {
+            return false;
+        }
+
+        $closestMiles = $destinationLocations
+            ->map(fn (Location $destinationLocation): float => $this->haversineDistanceMiles(
+                (float) $dcLocation->latitude,
+                (float) $dcLocation->longitude,
+                (float) $destinationLocation->latitude,
+                (float) $destinationLocation->longitude,
+            ))
+            ->min();
+
+        return $closestMiles !== null && $closestMiles <= $maxMiles;
+    }
+
+    private function haversineDistanceMiles(float $lat1, float $lng1, float $lat2, float $lng2): float
+    {
+        $earthRadiusMiles = 3958.8;
+        $latDelta = deg2rad($lat2 - $lat1);
+        $lngDelta = deg2rad($lng2 - $lng1);
+
+        $a = sin($latDelta / 2) ** 2
+            + cos(deg2rad($lat1)) * cos(deg2rad($lat2)) * sin($lngDelta / 2) ** 2;
+
+        $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
+
+        return $earthRadiusMiles * $c;
     }
 
     private function syncTrailerAssignments(Shipment $shipment, array &$validated): void

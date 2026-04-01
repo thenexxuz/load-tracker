@@ -2,6 +2,7 @@
 
 use App\Models\Carrier;
 use App\Models\Location;
+use App\Models\Rate;
 use App\Models\Shipment;
 use App\Models\Trailer;
 use App\Models\User;
@@ -127,6 +128,79 @@ test('shipment show and edit pages resolve shipments by guid', function (): void
             ->where('shipment.id', $shipment->guid)
             ->where('shipment.pickup_location_id', $pickup->guid)
             ->where('shipment.dc_location_id', $dc->guid)
+        );
+});
+
+test('shipment show displays rates for same pickup when destination is within 60 miles of shipment dc', function (): void {
+    $admin = User::factory()->create();
+    $admin->assignRole('administrator');
+
+    $pickup = Location::factory()->pickup()->create();
+    $dc = Location::factory()->distribution_center()->create([
+        'city' => 'Austin',
+        'state' => 'TX',
+        'country' => 'US',
+        'latitude' => 30.2672,
+        'longitude' => -97.7431,
+    ]);
+
+    $shipment = Shipment::query()->create([
+        'guid' => (string) str()->uuid(),
+        'shipment_number' => 'SHIP-RATE-001',
+        'status' => 'Booked',
+        'pickup_location_id' => $pickup->id,
+        'dc_location_id' => $dc->id,
+    ]);
+
+    Location::factory()->distribution_center()->create([
+        'city' => 'Far City',
+        'state' => 'TX',
+        'country' => 'US',
+        'latitude' => 35.4676,
+        'longitude' => -97.5164,
+    ]);
+
+    $matchingRate = Rate::query()->create([
+        'name' => 'Linehaul',
+        'type' => 'per_mile',
+        'pickup_location_id' => $pickup->id,
+        'destination_city' => 'Austin',
+        'destination_state' => 'TX',
+        'destination_country' => 'US',
+        'carrier_id' => null,
+        'rate' => 2.25,
+    ]);
+
+    Rate::query()->create([
+        'name' => 'Linehaul Far',
+        'type' => 'per_mile',
+        'pickup_location_id' => $pickup->id,
+        'destination_city' => 'Far City',
+        'destination_state' => 'TX',
+        'destination_country' => 'US',
+        'carrier_id' => null,
+        'rate' => 2.5,
+    ]);
+
+    $otherPickup = Location::factory()->pickup()->create();
+    Rate::query()->create([
+        'name' => 'Wrong Pickup',
+        'type' => 'per_mile',
+        'pickup_location_id' => $otherPickup->id,
+        'destination_city' => 'Austin',
+        'destination_state' => 'TX',
+        'destination_country' => 'US',
+        'carrier_id' => null,
+        'rate' => 2.0,
+    ]);
+
+    $this->actingAs($admin)
+        ->get(route('admin.shipments.show', $shipment->guid))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Admin/Shipments/Show')
+            ->has('rates', 1)
+            ->where('rates.0.id', $matchingRate->id)
         );
 });
 
