@@ -7,9 +7,9 @@ import AdminLayout from '@/layouts/AppLayout.vue'
 const props = defineProps<{
   distances: {
     data: Array<{
-      dc_id: number
+      dc_id: string
       dc_short_code: string
-      rec_id: number | null
+      rec_id: string | null
       rec_short_code: string | null
       distance_km: number | null
       distance_miles: number | null
@@ -24,11 +24,11 @@ const props = defineProps<{
     to: number | null
     links: Array<{ url: string | null; label: string; active: boolean }>
   }
-  recycling_locations: Array<{ id: number; short_code: string }> // ← added from backend
+  recycling_locations: Array<{ id: string; short_code: string }> // ← added from backend
 }>()
 
 // Selected recycling filter (null = All, -1 = No Recycling Assigned)
-const selectedRecycling = ref<string | number>('all')
+const selectedRecycling = ref<string>('all')
 
 // Change page
 const changePage = (url: string | null) => {
@@ -53,7 +53,7 @@ const changePerPage = (e: Event) => {
 // Watch filter change → reload with filter param
 watch(selectedRecycling, (value) => {
   let recyclingId = null
-  if (value === -1) {
+  if (value === '-1') {
     recyclingId = 'none' // special value for no recycling
   } else if (value !== 'all') {
     recyclingId = value
@@ -86,7 +86,7 @@ watch(selectedRecycling, (value) => {
             class="border border-gray-300 dark:border-gray-600 rounded-md px-3 py-1 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option :value="'all'">All Recycling Locations</option>
-            <option :value="-1">No Recycling Assigned</option>
+            <option value="-1">No Recycling Assigned</option>
             <option
               v-for="rec in recycling_locations"
               :key="rec.id"

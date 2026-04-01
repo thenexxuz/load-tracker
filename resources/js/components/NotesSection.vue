@@ -10,7 +10,8 @@ import ActionIconButton from '@/components/ActionIconButton.vue'
 
 const props = defineProps<{
   entity: {
-    id: number
+    id: string | number
+    notable_id?: number
     [key: string]: any // e.g. shipment_number, name, etc.
   }
   entityType: string // 'App\\Models\\Shipment', 'App\\Models\\Carrier', etc.
@@ -25,7 +26,7 @@ const showAddNoteModal = ref(false)
 const noteForm = useForm({
   content: '',
   is_admin: false,
-  notable_id: props.entity.id,
+  notable_id: props.entity.notable_id ?? props.entity.id,
   notable_type: props.entityType,
 })
 

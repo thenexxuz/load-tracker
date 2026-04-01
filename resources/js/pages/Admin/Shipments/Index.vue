@@ -14,7 +14,7 @@ import AdminLayout from '@/layouts/AppLayout.vue'
 const props = defineProps<{
   shipments: {
     data: Array<{
-      id: number
+      id: string
       status: string
       bol: string | null
       shipment_number: string
@@ -335,7 +335,7 @@ const importGoogleSheet = () => {
 }
 
 // ── Delete ──────────────────────────────────────────────────────────────
-const destroy = async (id: number) => {
+const destroy = async (id: string) => {
   if (!confirm('Are you sure you want to delete this shipment?')) return
 
   router.delete(route('admin.shipments.destroy', id), {
@@ -354,7 +354,7 @@ const getFullDateTime = (dateString: string | null) => {
   return dateString || 'No date/time recorded'
 }
 
-const goToShow = (id: number) => {
+const goToShow = (id: string) => {
   router.visit(route('admin.shipments.show', id))
 }
 

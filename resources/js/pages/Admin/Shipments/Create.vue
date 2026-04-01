@@ -6,9 +6,9 @@ import { useShipmentEquipmentDefaults } from '@/composables/useShipmentEquipment
 import AdminLayout from '@/layouts/AppLayout.vue'
 
 const props = defineProps<{
-  pickupLocations: Array<{ id: number; short_code: string; name: string | null }>
-  dcLocations: Array<{ id: number; short_code: string; name: string | null }>
-  carriers: Array<{ id: number; name: string; short_code: string }>
+  pickupLocations: Array<{ id: string; short_code: string; name: string | null }>
+  dcLocations: Array<{ id: string; short_code: string; name: string | null }>
+  carriers: Array<{ id: string; name: string; short_code: string }>
   statuses: string[]
 }>()
 
@@ -16,14 +16,14 @@ const form = useForm({
   status: 'Pending',
   bol: '',
   shipment_number: null as number | null,
-  pickup_location_id: null as number | null,
-  dc_location_id: null as number | null,
+  pickup_location_id: null as string | null,
+  dc_location_id: null as string | null,
   drop_date: null as string | null,
   pickup_date: null as string | null,
   delivery_date: null as string | null,
   po_number: '',
   rack_qty: 0,
-  carrier_id: null as number | null,
+  carrier_id: null as string | null,
   trailer: '',
   load_bar_qty: 0,
   strap_qty: 0,

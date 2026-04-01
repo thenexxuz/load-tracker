@@ -8,10 +8,20 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class Location extends Model
 {
     use HasFactory;
+
+    public $incrementing = false;
+
+    protected $keyType = 'string';
+
+    public function getRouteKeyName(): string
+    {
+        return 'guid';
+    }
 
     /**
      * The attributes that are mass assignable.
@@ -19,6 +29,7 @@ class Location extends Model
      * @var array<string>
      */
     protected $fillable = [
+        'guid',
         'short_code',
         'name',
         'type',
@@ -43,9 +54,21 @@ class Location extends Model
         'emails' => 'array',
         'latitude' => 'float',
         'longitude' => 'float',
-        'recycling_location_id' => 'integer',
         'expected_arrival_time' => 'datetime',
     ];
+
+    protected static function booted(): void
+    {
+        static::creating(function ($location) {
+            if (empty($location->id)) {
+                $location->id = $location->guid ?: (string) Str::uuid();
+            }
+
+            if (empty($location->guid)) {
+                $location->guid = $location->id;
+            }
+        });
+    }
 
     /**
      * Get the associated recycling location (for distribution centers).
@@ -287,8 +310,10 @@ class Location extends Model
 
     public function getExpectedArrivalTimeAttribute($value)
     {
-        if (!$value)
+        if (! $value) {
             return null;
+        }
+
         return Carbon::parse($value)->format('H:i'); // 24-hour format: 08:00, 14:30
     }
 

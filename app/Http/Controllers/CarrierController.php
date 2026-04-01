@@ -142,7 +142,7 @@ class CarrierController extends Controller
 
         $carrier->update($validated);
 
-        return redirect()->route('admin.carriers.show', $carrier->id)
+        return redirect()->route('admin.carriers.show', $carrier)
             ->with('success', 'Carrier updated successfully.');
     }
 

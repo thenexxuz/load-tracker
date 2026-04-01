@@ -12,7 +12,7 @@ const page = usePage()
 const props = defineProps<{
   locations: {
     data: Array<{
-      id: number
+      id: string
       short_code: string
       name: string | null
       type: string
@@ -117,7 +117,7 @@ const handleImport = (event: Event) => {
 }
 
 // Delete with confirmation
-const destroy = (id: number) => {
+const destroy = (id: string) => {
   Confirm.show(
     'Delete Location',
     'Are you sure you want to delete this location? This action cannot be undone.',

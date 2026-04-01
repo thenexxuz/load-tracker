@@ -117,7 +117,7 @@ test('administrators see pickup location and offer activity summaries', function
     $offeredCarrierA = Carrier::factory()->create();
     $offeredCarrierB = Carrier::factory()->create();
 
-    $createShipment = function (string $shipmentNumber, string $status, Location $pickupLocation, ?int $carrierId = null) use ($dcLocation): Shipment {
+    $createShipment = function (string $shipmentNumber, string $status, Location $pickupLocation, ?string $carrierId = null) use ($dcLocation): Shipment {
         return Shipment::query()->create([
             'guid' => (string) str()->uuid(),
             'shipment_number' => $shipmentNumber,

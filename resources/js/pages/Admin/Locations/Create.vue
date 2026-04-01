@@ -7,7 +7,7 @@ import AdminLayout from '@/layouts/AppLayout.vue'
 
 defineProps<{
   availableRecyclingLocations: Array<{
-    id: number
+    id: string
     short_code: string
     name: string | null
   }>
@@ -25,7 +25,7 @@ const form = useForm({
   latitude: null as number | null,
   longitude: null as number | null,
   is_active: true,
-  recycling_location_id: null as number | null,
+  recycling_location_id: null as string | null,
   emails: '', // ← changed: comma-separated string
   expected_arrival_time: null,
 })

@@ -9,8 +9,8 @@ import 'mapbox-gl/dist/mapbox-gl.css'
 import { route } from 'ziggy-js'
 
 const props = defineProps<{
-  dc: { id: number; short_code: string; address: string }
-  rec: { id: number; short_code: string; address: string }
+  dc: { id: string; short_code: string; address: string }
+  rec: { id: string; short_code: string; address: string }
   dc_sc: string
   rec_sc: string
   distance_km: number | null

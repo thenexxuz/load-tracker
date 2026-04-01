@@ -118,10 +118,34 @@ class ShipmentController extends Controller
         $shipments = $query->paginate($perPage);
 
         // Transform to add has_notes if you use that indicator
-        $shipments->getCollection()->transform(function ($shipment) {
-            $shipment->has_notes = $shipment->notes()->exists();
-
-            return $shipment;
+        $shipments->getCollection()->transform(function (Shipment $shipment): array {
+            return [
+                'id' => $shipment->guid,
+                'status' => $shipment->status,
+                'bol' => $shipment->bol,
+                'shipment_number' => $shipment->shipment_number,
+                'pickup_location' => $shipment->pickupLocation ? [
+                    'id' => $shipment->pickupLocation->guid,
+                    'short_code' => $shipment->pickupLocation->short_code,
+                    'name' => $shipment->pickupLocation->name,
+                ] : null,
+                'dc_location' => $shipment->dcLocation ? [
+                    'id' => $shipment->dcLocation->guid,
+                    'short_code' => $shipment->dcLocation->short_code,
+                    'name' => $shipment->dcLocation->name,
+                ] : null,
+                'drop_date' => $shipment->drop_date,
+                'pickup_date' => $shipment->pickup_date,
+                'delivery_date' => $shipment->delivery_date,
+                'carrier' => $shipment->carrier ? [
+                    'id' => $shipment->carrier->id,
+                    'name' => $shipment->carrier->name,
+                    'short_code' => $shipment->carrier->short_code,
+                ] : null,
+                'trailer' => $shipment->trailer,
+                'notes_count' => $shipment->notes_count,
+                'has_notes' => $shipment->notes()->exists(),
+            ];
         });
 
         return Inertia::render('Admin/Shipments/Index', [
@@ -149,12 +173,24 @@ class ShipmentController extends Controller
     public function create()
     {
         $pickupLocations = Location::where('type', 'pickup')
-            ->select('id', 'short_code', 'name')
-            ->get();
+            ->orderBy('short_code')
+            ->get(['id', 'guid', 'short_code', 'name'])
+            ->map(fn (Location $location) => [
+                'id' => $location->guid,
+                'short_code' => $location->short_code,
+                'name' => $location->name,
+            ])
+            ->values();
 
         $dcLocations = Location::whereIn('type', ['distribution_center', 'pickup'])
-            ->select('id', 'short_code', 'name')
-            ->get();
+            ->orderBy('short_code')
+            ->get(['id', 'guid', 'short_code', 'name'])
+            ->map(fn (Location $location) => [
+                'id' => $location->guid,
+                'short_code' => $location->short_code,
+                'name' => $location->name,
+            ])
+            ->values();
 
         $carriers = Carrier::select('id', 'name', 'short_code')
             ->where('is_active', true)
@@ -191,9 +227,9 @@ class ShipmentController extends Controller
             'bol' => ['nullable', 'string', 'max:100'],
             'po_number' => ['nullable', 'string', 'max:100'],
             'status' => ['required', 'string'],
-            'shipper_location_id' => ['required', 'exists:locations,id'],
-            'dc_location_id' => ['nullable', 'exists:locations,id'],
-            'carrier_id' => ['nullable', 'exists:carriers,id'],
+            'pickup_location_id' => ['required', 'uuid', 'exists:locations,guid'],
+            'dc_location_id' => ['nullable', 'uuid', 'exists:locations,guid'],
+            'carrier_id' => ['nullable', 'uuid', 'exists:carriers,id'],
             'drop_date' => ['nullable', 'date'],
             'pickup_date' => ['nullable', 'date', 'after_or_equal:drop_date'],
             'delivery_date' => ['nullable', 'date', 'after_or_equal:pickup_date'],
@@ -208,6 +244,9 @@ class ShipmentController extends Controller
             'paperwork_sent' => ['nullable', 'boolean'],
             'delivery_alert_sent' => ['nullable', 'boolean'],
         ], $messages);
+
+        $validated['pickup_location_id'] = $this->resolveLocationIdByGuid($validated['pickup_location_id'] ?? null);
+        $validated['dc_location_id'] = $this->resolveLocationIdByGuid($validated['dc_location_id'] ?? null);
 
         Shipment::create($validated);
 
@@ -239,7 +278,7 @@ class ShipmentController extends Controller
 
         if ($shipment->pickupLocation && $shipment->pickupLocation->latitude && $shipment->pickupLocation->longitude) {
             $waypoints[] = [
-                'id' => $shipment->pickupLocation->id,
+                'id' => $shipment->pickupLocation->guid,
                 'short_code' => $shipment->pickupLocation->short_code,
                 'name' => $shipment->pickupLocation->name,
                 'type' => 'pickup',
@@ -250,7 +289,7 @@ class ShipmentController extends Controller
 
         if ($shipment->dcLocation && $shipment->dcLocation->latitude && $shipment->dcLocation->longitude) {
             $waypoints[] = [
-                'id' => $shipment->dcLocation->id,
+                'id' => $shipment->dcLocation->guid,
                 'short_code' => $shipment->dcLocation->short_code,
                 'name' => $shipment->dcLocation->name,
                 'type' => 'dc',
@@ -262,7 +301,7 @@ class ShipmentController extends Controller
         // Add recycling if assigned to the DC
         if ($shipment->dcLocation?->recyclingLocation && $shipment->dcLocation->recyclingLocation->latitude && $shipment->dcLocation->recyclingLocation->longitude) {
             $waypoints[] = [
-                'id' => $shipment->dcLocation->recyclingLocation->id,
+                'id' => $shipment->dcLocation->recyclingLocation->guid,
                 'short_code' => $shipment->dcLocation->recyclingLocation->short_code,
                 'name' => $shipment->dcLocation->recyclingLocation->name,
                 'type' => 'recycling',
@@ -420,6 +459,10 @@ class ShipmentController extends Controller
             ];
         });
 
+        $shipmentData = $shipment->toArray();
+        $shipmentData['id'] = $shipment->guid;
+        $shipmentData['notable_id'] = $shipment->getKey();
+
         $offerUserNames = User::query()
             ->whereIn('id', $shipment->offeredCarriers->pluck('pivot.offered_by_user_id')->filter()->unique())
             ->pluck('name', 'id');
@@ -436,8 +479,34 @@ class ShipmentController extends Controller
                 : null,
         ])->values();
 
+        $shipmentData['pickup_location'] = $shipment->pickupLocation ? [
+            'id' => $shipment->pickupLocation->guid,
+            'short_code' => $shipment->pickupLocation->short_code,
+            'name' => $shipment->pickupLocation->name,
+            'address' => $shipment->pickupLocation->address,
+            'city' => $shipment->pickupLocation->city,
+            'state' => $shipment->pickupLocation->state,
+            'zip' => $shipment->pickupLocation->zip,
+            'country' => $shipment->pickupLocation->country,
+            'latitude' => $shipment->pickupLocation->latitude,
+            'longitude' => $shipment->pickupLocation->longitude,
+        ] : null;
+        $shipmentData['dc_location'] = $shipment->dcLocation ? [
+            'id' => $shipment->dcLocation->guid,
+            'short_code' => $shipment->dcLocation->short_code,
+            'name' => $shipment->dcLocation->name,
+            'address' => $shipment->dcLocation->address,
+            'city' => $shipment->dcLocation->city,
+            'state' => $shipment->dcLocation->state,
+            'zip' => $shipment->dcLocation->zip,
+            'country' => $shipment->dcLocation->country,
+            'latitude' => $shipment->dcLocation->latitude,
+            'longitude' => $shipment->dcLocation->longitude,
+            'recycling_location_id' => $shipment->dcLocation->recyclingLocation?->guid,
+        ] : null;
+
         return Inertia::render('Admin/Shipments/Show', [
-            'shipment' => $shipment,
+            'shipment' => $shipmentData,
             'route_data' => $routeData,
             'mapbox_token' => config('services.mapbox.key'),
             'rates' => $transformedRates,
@@ -524,12 +593,24 @@ class ShipmentController extends Controller
         $shipment->load(['pickupLocation', 'dcLocation', 'carrier', 'offeredCarriers:id']);
 
         $pickupLocations = Location::where('type', 'pickup')
-            ->select('id', 'short_code', 'name')
-            ->get();
+            ->orderBy('name')
+            ->get(['guid', 'short_code', 'name'])
+            ->map(fn (Location $location): array => [
+                'id' => $location->guid,
+                'short_code' => $location->short_code,
+                'name' => $location->name,
+            ])
+            ->values();
 
         $dcLocations = Location::whereIn('type', ['distribution_center', 'pickup'])
-            ->select('id', 'short_code', 'name')
-            ->get();
+            ->orderBy('name')
+            ->get(['guid', 'short_code', 'name'])
+            ->map(fn (Location $location): array => [
+                'id' => $location->guid,
+                'short_code' => $location->short_code,
+                'name' => $location->name,
+            ])
+            ->values();
 
         $carriers = Carrier::select('id', 'name', 'short_code')
             ->where('is_active', true)
@@ -548,16 +629,19 @@ class ShipmentController extends Controller
 
         // Convert to array and format dates for proper display in HTML date/datetime-local inputs
         $shipmentData = $shipment->toArray();
-        $shipmentData['drop_date'] = $shipment->drop_date?->format('Y-m-d');
-        $shipmentData['pickup_date'] = $shipment->pickup_date?->format('Y-m-d\TH:i');
-        $shipmentData['delivery_date'] = $shipment->delivery_date?->format('Y-m-d\TH:i');
-        $shipmentData['on_site'] = $shipment->on_site?->format('Y-m-d\TH:i');
-        $shipmentData['shipped'] = $shipment->shipped?->format('Y-m-d\TH:i');
-        $shipmentData['crossed'] = $shipment->crossed?->format('Y-m-d\TH:i');
-        $shipmentData['recycling_sent'] = $shipment->recycling_sent?->format('Y-m-d\TH:i');
-        $shipmentData['paperwork_sent'] = $shipment->paperwork_sent?->format('Y-m-d\TH:i');
-        $shipmentData['delivery_alert_sent'] = $shipment->delivery_alert_sent?->format('Y-m-d\TH:i');
+        $shipmentData['id'] = $shipment->guid;
+        $shipmentData['drop_date'] = $this->formatDateValue($shipment->drop_date, 'Y-m-d');
+        $shipmentData['pickup_date'] = $this->formatDateValue($shipment->pickup_date, 'Y-m-d\TH:i');
+        $shipmentData['delivery_date'] = $this->formatDateValue($shipment->delivery_date, 'Y-m-d\TH:i');
+        $shipmentData['on_site'] = $this->formatDateValue($shipment->on_site, 'Y-m-d\TH:i');
+        $shipmentData['shipped'] = $this->formatDateValue($shipment->shipped, 'Y-m-d\TH:i');
+        $shipmentData['crossed'] = $this->formatDateValue($shipment->crossed, 'Y-m-d\TH:i');
+        $shipmentData['recycling_sent'] = $this->formatDateValue($shipment->recycling_sent, 'Y-m-d\TH:i');
+        $shipmentData['paperwork_sent'] = $this->formatDateValue($shipment->paperwork_sent, 'Y-m-d\TH:i');
+        $shipmentData['delivery_alert_sent'] = $this->formatDateValue($shipment->delivery_alert_sent, 'Y-m-d\TH:i');
         $shipmentData['offered_carrier_ids'] = $shipment->offeredCarriers->pluck('id')->all();
+        $shipmentData['pickup_location_id'] = $shipment->pickupLocation?->guid;
+        $shipmentData['dc_location_id'] = $shipment->dcLocation?->guid;
 
         return Inertia::render('Admin/Shipments/Edit', [
             'shipment' => $shipmentData,
@@ -580,11 +664,11 @@ class ShipmentController extends Controller
             'bol' => 'nullable|string|max:100',
             'po_number' => 'nullable|string|max:100',
             'status' => 'required|string',
-            'pickup_location_id' => 'required|exists:locations,id',
-            'dc_location_id' => 'nullable|exists:locations,id',
-            'carrier_id' => 'nullable|exists:carriers,id',
+            'pickup_location_id' => 'required|uuid|exists:locations,guid',
+            'dc_location_id' => 'nullable|uuid|exists:locations,guid',
+            'carrier_id' => 'nullable|uuid|exists:carriers,id',
             'offered_carrier_ids' => 'nullable|array',
-            'offered_carrier_ids.*' => 'integer|exists:carriers,id',
+            'offered_carrier_ids.*' => 'uuid|exists:carriers,id',
             'trailer_id' => 'nullable|exists:trailers,id',
             'loaned_from_trailer_id' => 'nullable|exists:trailers,id',
             'drop_date' => ['nullable', 'date'],
@@ -605,8 +689,11 @@ class ShipmentController extends Controller
             'drivers_id' => 'nullable|string|max:255',
         ], $messages);
 
+        $validated['pickup_location_id'] = $this->resolveLocationIdByGuid($validated['pickup_location_id'] ?? null);
+        $validated['dc_location_id'] = $this->resolveLocationIdByGuid($validated['dc_location_id'] ?? null);
+
         $offeredCarrierIds = collect($validated['offered_carrier_ids'] ?? [])
-            ->map(fn ($carrierId) => (int) $carrierId)
+            ->map(fn ($carrierId) => (string) $carrierId)
             ->unique()
             ->values();
 
@@ -624,7 +711,7 @@ class ShipmentController extends Controller
             );
         }
 
-        return redirect()->route('admin.shipments.show', $shipment->id)
+        return redirect()->route('admin.shipments.show', $shipment)
             ->with('success', 'Shipment updated successfully.');
     }
 
@@ -634,18 +721,18 @@ class ShipmentController extends Controller
 
         $validated = $request->validate([
             'offered_carrier_ids' => 'nullable|array',
-            'offered_carrier_ids.*' => 'integer|exists:carriers,id',
+            'offered_carrier_ids.*' => 'uuid|exists:carriers,id',
         ]);
 
         if ($shipment->carrier_id) {
             $shipment->offeredCarriers()->sync([]);
 
-            return redirect()->route('admin.shipments.show', $shipment->id)
+            return redirect()->route('admin.shipments.show', $shipment)
                 ->with('success', 'Offers were cleared because this shipment already has an assigned carrier.');
         }
 
         $offeredCarrierIds = collect($validated['offered_carrier_ids'] ?? [])
-            ->map(fn ($carrierId) => (int) $carrierId)
+            ->map(fn ($carrierId) => (string) $carrierId)
             ->unique()
             ->values();
 
@@ -653,7 +740,7 @@ class ShipmentController extends Controller
             $this->buildOfferSyncPayload($shipment, $offeredCarrierIds->all(), $request->user()?->id)
         );
 
-        return redirect()->route('admin.shipments.show', $shipment->id)
+        return redirect()->route('admin.shipments.show', $shipment)
             ->with('success', 'Shipment offers updated successfully.');
     }
 
@@ -672,7 +759,7 @@ class ShipmentController extends Controller
     public function quickUpdate(Request $request, Shipment $shipment)
     {
         $validated = $request->validate([
-            'carrier_id' => 'nullable|exists:carriers,id',
+            'carrier_id' => 'nullable|uuid|exists:carriers,id',
             'trailer_id' => 'nullable|exists:trailers,id',
             'trailer_number' => 'nullable|string|max:100',
             'loaned_from_trailer_id' => 'nullable|exists:trailers,id',
@@ -721,7 +808,7 @@ class ShipmentController extends Controller
         return response()->json([
             'message' => 'Shipment updated successfully.',
             'shipment' => [
-                'id' => $shipment->id,
+                'id' => $shipment->guid,
                 'carrier_id' => $shipment->carrier_id,
                 'trailer_id' => $shipment->trailer_id,
                 'trailer_number' => $trailer?->number,
@@ -857,7 +944,11 @@ class ShipmentController extends Controller
 
                 $oldValues = $shipment->getAttributes();
 
-                $shipment->fill([
+                $googleSheetsProtectedFields = $wasExisting
+                    ? $this->googleSheetsProtectedShipmentFields($shipment)
+                    : [];
+
+                $attributes = [
                     'shipment_number' => $validated['shipment_number'],
                     'status' => $validated['status'],
                     'po_number' => $validated['po_number'] ?? null,
@@ -870,7 +961,15 @@ class ShipmentController extends Controller
                     'rack_qty' => (int) $validated['rack_qty'],
                     'load_bar_qty' => $equipmentDefaults['load_bar_qty'],
                     'strap_qty' => $equipmentDefaults['strap_qty'],
-                ]);
+                ];
+
+                if ($googleSheetsProtectedFields !== []) {
+                    foreach ($googleSheetsProtectedFields as $field) {
+                        unset($attributes[$field]);
+                    }
+                }
+
+                $shipment->fill($attributes);
 
                 if ($shipment->isDirty() || ! $wasExisting) {
                     $shipment->save();
@@ -1457,22 +1556,7 @@ class ShipmentController extends Controller
      */
     private function recordImportUpdateNote(Shipment $shipment, array $oldValues, string $contentPrefix): void
     {
-        $trackedFields = [
-            'status' => 'Status',
-            'po_number' => 'PO Number',
-            'pickup_location_id' => 'Pickup Location',
-            'dc_location_id' => 'DC Location',
-            'carrier_id' => 'Carrier',
-            'drop_date' => 'Drop Date',
-            'pickup_date' => 'Pickup Date',
-            'delivery_date' => 'Delivery Date',
-            'rack_qty' => 'Pallets/Rack Qty',
-            'load_bar_qty' => 'Load Bar Qty',
-            'strap_qty' => 'Strap Qty',
-            'trailer' => 'Trailer',
-            'seal_number' => 'Seal Number',
-            'drivers_id' => 'Drivers ID',
-        ];
+        $trackedFields = $this->shipmentImportTrackedFieldLabels();
 
         $changes = [];
 
@@ -1505,6 +1589,85 @@ class ShipmentController extends Controller
             'is_admin' => false,
             'user_id' => auth()->id() ?? null,
         ]);
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function googleSheetsProtectedShipmentFields(Shipment $shipment): array
+    {
+        $labelToField = array_flip($this->shipmentImportTrackedFieldLabels());
+
+        $protectedFields = [];
+
+        $notes = $shipment->notes()
+            ->where('content', 'like', 'Google Sheets import updated this shipment:%')
+            ->latest('id')
+            ->get(['content']);
+
+        foreach ($notes as $note) {
+            foreach (preg_split('/\r\n|\r|\n/', (string) $note->content) as $line) {
+                if (! is_string($line) || trim($line) === '') {
+                    continue;
+                }
+
+                if (! preg_match('/^(.+?) changed from /', trim($line), $matches)) {
+                    continue;
+                }
+
+                $label = trim($matches[1]);
+                $field = $labelToField[$label] ?? null;
+
+                if ($field) {
+                    $protectedFields[$field] = $field;
+                }
+            }
+        }
+
+        return array_values($protectedFields);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function shipmentImportTrackedFieldLabels(): array
+    {
+        return [
+            'status' => 'Status',
+            'po_number' => 'PO Number',
+            'pickup_location_id' => 'Pickup Location',
+            'dc_location_id' => 'DC Location',
+            'carrier_id' => 'Carrier',
+            'drop_date' => 'Drop Date',
+            'pickup_date' => 'Pickup Date',
+            'delivery_date' => 'Delivery Date',
+            'rack_qty' => 'Pallets/Rack Qty',
+            'load_bar_qty' => 'Load Bar Qty',
+            'strap_qty' => 'Strap Qty',
+            'trailer' => 'Trailer',
+            'seal_number' => 'Seal Number',
+            'drivers_id' => 'Drivers ID',
+        ];
+    }
+
+    protected function resolveLocationIdByGuid(?string $guid): string|int|null
+    {
+        if (blank($guid)) {
+            return null;
+        }
+
+        return Location::query()
+            ->where('guid', $guid)
+            ->value('id');
+    }
+
+    protected function formatDateValue(mixed $value, string $format): ?string
+    {
+        if (! $value instanceof Carbon) {
+            return null;
+        }
+
+        return $value->format($format);
     }
 
     /**
@@ -1545,7 +1708,41 @@ class ShipmentController extends Controller
             ->get();
 
         return Inertia::render('Admin/Shipments/SendPaperwork', [
-            'shipment' => $shipment,
+            'shipment' => [
+                'id' => $shipment->guid,
+                'shipment_number' => $shipment->shipment_number,
+                'bol' => $shipment->bol,
+                'po_number' => $shipment->po_number,
+                'status' => $shipment->status,
+                'pickup_location' => $shipment->pickupLocation ? [
+                    'id' => $shipment->pickupLocation->guid,
+                    'short_code' => $shipment->pickupLocation->short_code,
+                    'name' => $shipment->pickupLocation->name,
+                ] : null,
+                'dc_location' => $shipment->dcLocation ? [
+                    'id' => $shipment->dcLocation->guid,
+                    'short_code' => $shipment->dcLocation->short_code,
+                    'name' => $shipment->dcLocation->name,
+                ] : null,
+                'carrier' => $shipment->carrier ? [
+                    'name' => $shipment->carrier->name,
+                ] : null,
+                'drop_date' => $shipment->drop_date,
+                'pickup_date' => $shipment->pickup_date,
+                'delivery_date' => $shipment->delivery_date,
+                'rack_qty' => $shipment->rack_qty,
+                'load_bar_qty' => $shipment->load_bar_qty,
+                'strap_qty' => $shipment->strap_qty,
+                'trailer' => $shipment->trailer,
+                'drayage' => $shipment->drayage,
+                'on_site' => $shipment->on_site,
+                'shipped' => $shipment->shipped,
+                'recycling_sent' => $shipment->recycling_sent,
+                'paperwork_sent' => $shipment->paperwork_sent,
+                'delivery_alert_sent' => $shipment->delivery_alert_sent,
+                'created_at' => $shipment->created_at,
+                'updated_at' => $shipment->updated_at,
+            ],
             'templates' => $templates,
         ]);
     }

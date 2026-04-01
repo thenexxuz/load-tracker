@@ -13,6 +13,10 @@ class Carrier extends Model
 {
     use HasFactory, LogsActivity;
 
+    public $incrementing = false;
+
+    protected $keyType = 'string';
+
     protected $fillable = [
         'guid',
         'short_code',
@@ -31,8 +35,12 @@ class Carrier extends Model
     protected static function booted()
     {
         static::creating(function ($carrier) {
+            if (empty($carrier->id)) {
+                $carrier->id = $carrier->guid ?: (string) Str::uuid();
+            }
+
             if (empty($carrier->guid)) {
-                $carrier->guid = (string) Str::uuid();
+                $carrier->guid = $carrier->id;
             }
         });
     }

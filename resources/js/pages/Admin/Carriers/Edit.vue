@@ -6,7 +6,7 @@ import AdminLayout from '@/layouts/AppLayout.vue'
 
 const props = defineProps<{
     carrier: {
-        id: number
+        id: string
         short_code: string
         wt_code: string | null
         name: string

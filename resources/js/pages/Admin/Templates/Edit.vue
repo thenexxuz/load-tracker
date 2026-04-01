@@ -11,12 +11,12 @@ const props = defineProps<{
     id: number
     name: string
     model_type: string  // e.g. 'App\\Models\\Carrier' or 'App\\Models\\Location'
-    model_id: number
+    model_id: string | null
     subject: string | null
     message: string | null
   }
-  carriers: Array<{ id: number; name: string; short_code: string }>
-  locations: Array<{ id: number; short_code: string; name: string | null }>
+  carriers: Array<{ id: string; name: string; short_code: string }>
+  locations: Array<{ id: string; short_code: string; name: string | null }>
 }>()
 
 const form = useForm({

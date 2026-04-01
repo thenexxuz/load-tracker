@@ -11,23 +11,23 @@ const props = defineProps<{
     name: string | null
     type: 'flat' | 'per_mile'
     rate: number
-    pickup_location_id: number | null
+    pickup_location_id: string | null
     destination_city: string | null
     destination_state: string | null
     destination_country: string | null
-    carrier_id: number | null
+    carrier_id: string | null
     effective_from: string | null
     effective_to: string | null
   }
   locations: Array<{
-    id: number
+    id: string
     short_code: string
     name: string | null
     city: string | null
     state: string | null
   }>
   carriers: Array<{
-    id: number
+    id: string
     name: string
     short_code?: string | null
   }>

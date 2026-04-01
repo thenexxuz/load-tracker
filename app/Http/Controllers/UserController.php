@@ -83,7 +83,7 @@ class UserController extends Controller
         // Update carrier association
         if (in_array('carrier', $request->input('roles', []))) {
             $request->validate([
-                'carrier_id' => 'required|exists:carriers,id',
+                'carrier_id' => 'required|uuid|exists:carriers,id',
             ]);
         } else {
             // If user is not a carrier, ensure carrier_id is null

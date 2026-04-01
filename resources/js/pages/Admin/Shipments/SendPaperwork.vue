@@ -8,7 +8,7 @@ import AdminLayout from '@/layouts/AppLayout.vue'
 
 const props = defineProps<{
   shipment: {
-    id: number
+    id: string
     shipment_number: string
     bol: string | null
     po_number: string | null

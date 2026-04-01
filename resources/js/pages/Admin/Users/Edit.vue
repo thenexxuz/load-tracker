@@ -10,11 +10,11 @@ const props = defineProps<{
     name: string
     email: string
     roles: { name: string }[]
-    carrier_id: number | null
+    carrier_id: string | null
   }
   allRoles: string[]
   allCarriers: Array<{
-    id: number
+    id: string
     short_code: string
     name: string
   }>

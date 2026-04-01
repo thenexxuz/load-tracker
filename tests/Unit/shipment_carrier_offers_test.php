@@ -55,7 +55,7 @@ it('keeps shipment offers editable from the shipment show page and revokes offer
         ->toContain("abort_unless(\$request->user()?->hasRole(['administrator', 'supervisor']), 403);")
         ->toContain("\$shipmentData['offered_carrier_ids'] = \$shipment->offeredCarriers->pluck('id')->all();")
         ->toContain("'offered_carrier_ids' => 'nullable|array',")
-        ->toContain("'offered_carrier_ids.*' => 'integer|exists:carriers,id',")
+        ->toContain("'offered_carrier_ids.*' => 'uuid|exists:carriers,id',")
         ->toContain('$shipment->offeredCarriers()->sync([]);')
         ->toContain('private function buildOfferSyncPayload(Shipment $shipment, array $offeredCarrierIds, ?int $offeredByUserId): array')
         ->toContain("'offered_by_user_id' => \$existingOfferUserIds->get(\$carrierId, \$offeredByUserId),")

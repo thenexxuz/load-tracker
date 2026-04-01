@@ -7,19 +7,19 @@ import AdminLayout from '@/layouts/AppLayout.vue'
 
 const props = defineProps<{
   shipment: {
-    id: number
+    id: string
     status: string
     bol: string | null
     shipment_number: number | null
-    pickup_location_id: number
-    dc_location_id: number
+    pickup_location_id: string
+    dc_location_id: string
     drop_date: string | null
     pickup_date: string | null
     delivery_date: string | null
     po_number: string | null
     rack_qty: number
-    carrier_id: number | null
-    offered_carrier_ids: number[]
+    carrier_id: string | null
+    offered_carrier_ids: string[]
     trailer: string | null
     load_bar_qty: number
     strap_qty: number
@@ -35,9 +35,9 @@ const props = defineProps<{
     consolidation_number: string | null
     other: object | null | string
   }
-  pickupLocations: Array<{ id: number; short_code: string; name: string | null }>
-  dcLocations: Array<{ id: number; short_code: string; name: string | null }>
-  carriers: Array<{ id: number; name: string; short_code: string }>
+  pickupLocations: Array<{ id: string; short_code: string; name: string | null }>
+  dcLocations: Array<{ id: string; short_code: string; name: string | null }>
+  carriers: Array<{ id: string; name: string; short_code: string }>
   statuses: string[]
 }>()
 

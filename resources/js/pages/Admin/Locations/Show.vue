@@ -10,7 +10,7 @@ import 'mapbox-gl/dist/mapbox-gl.css'
 
 const props = defineProps<{
   location: {
-    id: number
+    id: string
     short_code: string
     name: string | null
     type: string
@@ -25,7 +25,7 @@ const props = defineProps<{
     expected_arrival_time: string | null
     is_active: boolean
     recycling_location?: {
-      id: number
+      id: string
       short_code: string
       name: string | null
       latitude?: number | null
@@ -35,11 +35,11 @@ const props = defineProps<{
     updated_at: string
   }
   shipments?: Array<{
-    id: number
+    id: string
     shipment_number: string
     bol: string | null
     status: string
-    carrier_id: number | null
+    carrier_id: string | null
     carrier_name: string | null
     trailer_id: number | null
     trailer_number: string | null
@@ -48,7 +48,7 @@ const props = defineProps<{
     updated_at: string
   }>
   carriers?: Array<{
-    id: number
+    id: string
     name: string
     is_active: boolean
   }>
@@ -56,7 +56,7 @@ const props = defineProps<{
     id: number
     number: string
     type: string | null
-    carrier_id: number | null
+    carrier_id: string | null
     carrier_name: string | null
   }>
   routeData?: {
@@ -76,9 +76,9 @@ let map: mapboxgl.Map | null = null
 
 // Modal state for quick edit
 const showEditModal = ref(false)
-const selectedShipment = ref<(typeof props.shipments)[0] | null>(null)
+const selectedShipment = ref<NonNullable<typeof props.shipments>[number] | null>(null)
 const editForm = ref({
-  carrier_id: null as number | null,
+  carrier_id: null as string | null,
   trailer_id: null as number | null,
   loaned_from_trailer_id: null as number | null,
 })
@@ -141,7 +141,7 @@ const filteredTrailers = computed(() => {
   )
 })
 
-const loanedFromCarrierId = ref<number | null>(null)
+const loanedFromCarrierId = ref<string | null>(null)
 
 const loanedFromCarrierTrailers = computed(() => {
   if (!loanedFromCarrierId.value || !props.trailers) return []
@@ -606,7 +606,7 @@ onUnmounted(() => {
               Carrier
             </label>
             <select
-              v-model.number="editForm.carrier_id"
+              v-model="editForm.carrier_id"
               class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
               <option :value="null">— Select Carrier —</option>
@@ -670,7 +670,7 @@ onUnmounted(() => {
                 Select a carrier to borrow a trailer from
               </p>
               <select
-                v-model.number="loanedFromCarrierId"
+                v-model="loanedFromCarrierId"
                 class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               >
                 <option :value="null">-- Select Carrier --</option>

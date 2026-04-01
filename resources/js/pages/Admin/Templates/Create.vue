@@ -7,14 +7,14 @@ import { ref, watch } from 'vue'
 import AdminLayout from '@/layouts/AppLayout.vue'
 
 const props = defineProps<{
-  carriers: Array<{ id: number; name: string; short_code: string }>
-  locations: Array<{ id: number; short_code: string; name: string | null }>
+  carriers: Array<{ id: string; name: string; short_code: string }>
+  locations: Array<{ id: string; short_code: string; name: string | null }>
 }>()
 
 const form = useForm({
   name: '',
   model_type: '', // 'carrier' or 'location'
-  model_id: null as number | null,
+  model_id: null as string | null,
   subject: '',
   message: '<p>Start typing your message here...</p>',
 })

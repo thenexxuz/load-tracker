@@ -10,7 +10,7 @@ import MultiSelect from 'vue-multiselect'
 import 'vue-multiselect/dist/vue-multiselect.css'
 
 const props = defineProps<{
-  locations: Array<{ id: number; short_code: string; address: string; type: string }>
+  locations: Array<{ id: string; short_code: string; address: string; type: string }>
   preselected?: string | null
   mapbox_token: string
   default_rate_per_mile?: number
@@ -19,7 +19,7 @@ const props = defineProps<{
 // Auto-select preloaded IDs on mount
 onMounted(() => {
   if (props.preselected) {
-    const ids = props.preselected.split(',').map(Number).filter(id => !isNaN(id))
+    const ids = props.preselected.split(',').map(id => id.trim()).filter(Boolean)
     if (ids.length >= 2) {
       const preselectedItems = props.locations.filter(loc => ids.includes(loc.id))
       if (preselectedItems.length === ids.length) {
@@ -30,7 +30,7 @@ onMounted(() => {
   }
 })
 
-const selectedLocations = ref<Array<{ id: number; short_code: string; address: string; type?: string }>>([])
+const selectedLocations = ref<Array<{ id: string; short_code: string; address: string; type?: string }>>([])
 const isLoading = ref(false)
 const routeData = ref<{
   total_km: number

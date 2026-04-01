@@ -41,11 +41,22 @@ class LocationController extends Controller
 
         $locations = $query->paginate($validated['per_page'] ?? 15);
 
-        // Add has_notes flag to each item
-        $locations->getCollection()->transform(function ($location) {
-            $location->has_notes = $location->notes()->exists();
-
-            return $location;
+        $locations->getCollection()->transform(function (Location $location) {
+            return [
+                'id' => $location->guid,
+                'short_code' => $location->short_code,
+                'name' => $location->name,
+                'type' => $location->type,
+                'address' => $location->address,
+                'city' => $location->city,
+                'state' => $location->state,
+                'zip' => $location->zip,
+                'country' => $location->country,
+                'latitude' => $location->latitude,
+                'longitude' => $location->longitude,
+                'created_at' => $location->created_at,
+                'has_notes' => $location->notes()->exists(),
+            ];
         });
 
         return Inertia::render('Admin/Locations/Index', [
@@ -58,7 +69,17 @@ class LocationController extends Controller
      */
     public function create()
     {
-        return Inertia::render('Admin/Locations/Create');
+        $recyclingLocations = Location::where('type', 'recycling')
+            ->orderBy('short_code')
+            ->get(['id', 'guid', 'short_code', 'name']);
+
+        return Inertia::render('Admin/Locations/Create', [
+            'availableRecyclingLocations' => $recyclingLocations->map(fn (Location $location) => [
+                'id' => $location->guid,
+                'short_code' => $location->short_code,
+                'name' => $location->name,
+            ])->values(),
+        ]);
     }
 
     /**
@@ -82,7 +103,7 @@ class LocationController extends Controller
             'latitude' => 'nullable|numeric|between:-90,90',
             'longitude' => 'nullable|numeric|between:-180,180',
             'is_active' => 'boolean',
-            'recycling_location_id' => 'nullable|exists:locations,id',
+            'recycling_location_id' => 'nullable|uuid|exists:locations,guid',
             'emails' => 'nullable|string', // comma-separated list
             'expected_arrival_time' => 'nullable|date_format:H:i',
         ]);
@@ -97,6 +118,7 @@ class LocationController extends Controller
         $validated['expected_arrival_time'] = $this->normalizeExpectedArrivalTime(
             $validated['expected_arrival_time'] ?? null
         );
+        $validated['recycling_location_id'] = $this->resolveLocationRecordIdFromGuid($validated['recycling_location_id'] ?? null);
 
         // Create location
         $location = Location::create($validated);
@@ -136,7 +158,7 @@ class LocationController extends Controller
                 $trailer = $shipment->getRelation('trailer');
 
                 return [
-                    'id' => $shipment->id,
+                    'id' => $shipment->guid,
                     'shipment_number' => $shipment->shipment_number,
                     'bol' => $shipment->bol,
                     'status' => $shipment->status,
@@ -165,7 +187,8 @@ class LocationController extends Controller
 
         return Inertia::render('Admin/Locations/Show', [
             'location' => [
-                'id' => $location->id,
+                'id' => $location->guid,
+                'notable_id' => $location->getKey(),
                 'short_code' => $location->short_code,
                 'name' => $location->name,
                 'type' => $location->type,
@@ -180,7 +203,7 @@ class LocationController extends Controller
                 'expected_arrival_time' => $this->formatExpectedArrivalTime($location->expected_arrival_time),
                 'is_active' => $location->is_active,
                 'recycling_location' => $location->recyclingLocation ? [
-                    'id' => $location->recyclingLocation->id,
+                    'id' => $location->recyclingLocation->guid,
                     'short_code' => $location->recyclingLocation->short_code,
                     'name' => $location->recyclingLocation->name,
                     'latitude' => $location->recyclingLocation->latitude,
@@ -203,13 +226,17 @@ class LocationController extends Controller
     public function edit(Location $location)
     {
         $recyclingLocations = Location::where('type', 'recycling')
-            ->select('id', 'short_code', 'name')
+            ->orderBy('short_code')
             ->get();
 
         return Inertia::render('Admin/Locations/Edit', [
-            'availableRecyclingLocations' => $recyclingLocations,
+            'availableRecyclingLocations' => $recyclingLocations->map(fn (Location $recyclingLocation) => [
+                'id' => $recyclingLocation->guid,
+                'short_code' => $recyclingLocation->short_code,
+                'name' => $recyclingLocation->name,
+            ])->values(),
             'location' => [
-                'id' => $location->id,
+                'id' => $location->guid,
                 'short_code' => $location->short_code,
                 'name' => $location->name,
                 'address' => $location->address,
@@ -221,7 +248,7 @@ class LocationController extends Controller
                 'longitude' => $location->longitude,
                 'type' => $location->type,
                 'is_active' => $location->is_active,
-                'recycling_location_id' => $location->recycling_location_id,
+                'recycling_location_id' => $location->recyclingLocation?->guid,
                 'emails' => $location->emails,
                 'expected_arrival_time' => $this->formatExpectedArrivalTime($location->expected_arrival_time),
             ],
@@ -249,7 +276,7 @@ class LocationController extends Controller
             'latitude' => 'nullable|numeric|between:-90,90',
             'longitude' => 'nullable|numeric|between:-180,180',
             'is_active' => 'boolean',
-            'recycling_location_id' => 'nullable|exists:locations,id',
+            'recycling_location_id' => 'nullable|uuid|exists:locations,guid',
             'emails' => 'nullable|string', // comma-separated list
             'expected_arrival_time' => 'nullable|date_format:H:i',
         ]);
@@ -274,6 +301,7 @@ class LocationController extends Controller
         $validated['expected_arrival_time'] = $this->normalizeExpectedArrivalTime(
             $validated['expected_arrival_time'] ?? null
         );
+        $validated['recycling_location_id'] = $this->resolveLocationRecordIdFromGuid($validated['recycling_location_id'] ?? null);
 
         // Update the location
         $location->update($validated);
@@ -340,8 +368,8 @@ class LocationController extends Controller
 
         if ($recyclingId === 'none') {
             $query->whereNull('recycling_location_id');
-        } elseif ($recyclingId && is_numeric($recyclingId)) {
-            $query->where('recycling_location_id', $recyclingId);
+        } elseif ($recyclingId && is_string($recyclingId)) {
+            $query->where('recycling_location_id', $this->resolveLocationRecordIdFromGuid($recyclingId));
         }
 
         $dcLocations = $query->paginate($perPage);
@@ -351,7 +379,7 @@ class LocationController extends Controller
 
             if (! $rec) {
                 return [
-                    'dc_id' => $dc->id,
+                    'dc_id' => $dc->guid,
                     'dc_short_code' => $dc->short_code,
                     'rec_id' => null,
                     'rec_short_code' => null,
@@ -365,9 +393,9 @@ class LocationController extends Controller
             $distance = $dc->distanceTo($rec);
 
             return [
-                'dc_id' => $dc->id,
+                'dc_id' => $dc->guid,
                 'dc_short_code' => $dc->short_code,
-                'rec_id' => $rec->id,
+                'rec_id' => $rec->guid,
                 'rec_short_code' => $rec->short_code,
                 'distance_km' => $distance['km'] ?? null,
                 'distance_miles' => $distance['miles'] ?? null,
@@ -377,31 +405,36 @@ class LocationController extends Controller
         });
 
         $recyclingLocations = Location::where('type', 'recycling')
-            ->select('id', 'short_code')
             ->orderBy('short_code')
-            ->get();
+            ->get(['id', 'guid', 'short_code']);
 
         return Inertia::render('Admin/Locations/RecyclingDistance', [
             'distances' => $distances,
-            'recycling_locations' => $recyclingLocations,
+            'recycling_locations' => $recyclingLocations->map(fn (Location $recyclingLocation) => [
+                'id' => $recyclingLocation->guid,
+                'short_code' => $recyclingLocation->short_code,
+            ])->values(),
         ]);
     }
 
     public function recyclingDistanceMap($dc_id, $rec_id)
     {
-        // Validate IDs exist
-        $dc = Location::findOrFail($dc_id);
-        $rec = Location::findOrFail($rec_id);
+        $dc = $this->findLocationByGuidOrFail((string) $dc_id);
+        $rec = $this->findLocationByGuidOrFail((string) $rec_id);
 
         // Build ordered array: DC first, Recycling second
-        $locationIds = [$dc->id, $rec->id];
+        $locationIds = [$dc->guid, $rec->guid];
 
-        $locations = Location::select('id', 'short_code', 'address', 'type')
-            ->orderBy('short_code')
-            ->get();
+        $locations = Location::orderBy('short_code')
+            ->get(['id', 'guid', 'short_code', 'address', 'type']);
 
         return Inertia::render('Admin/Locations/MultiLocationRoute', [
-            'locations' => $locations,
+            'locations' => $locations->map(fn (Location $location) => [
+                'id' => $location->guid,
+                'short_code' => $location->short_code,
+                'address' => $location->address,
+                'type' => $location->type,
+            ])->values(),
             'preselected' => implode(',', $locationIds),
             'mapbox_token' => config('services.mapbox.key'),
         ]);
@@ -412,12 +445,16 @@ class LocationController extends Controller
      */
     public function multiRoute()
     {
-        $locations = Location::select('id', 'short_code', 'address', 'type')
-            ->orderBy('short_code')
-            ->get();
+        $locations = Location::orderBy('short_code')
+            ->get(['id', 'guid', 'short_code', 'address', 'type']);
 
         return Inertia::render('Admin/Locations/MultiLocationRoute', [
-            'locations' => $locations,
+            'locations' => $locations->map(fn (Location $location) => [
+                'id' => $location->guid,
+                'short_code' => $location->short_code,
+                'address' => $location->address,
+                'type' => $location->type,
+            ])->values(),
             'mapbox_token' => config('services.mapbox.key'),
         ]);
     }
@@ -429,7 +466,7 @@ class LocationController extends Controller
     {
         $validated = $request->validate([
             'location_ids' => 'required|array|min:2',
-            'location_ids.*' => 'exists:locations,id',
+            'location_ids.*' => 'uuid|exists:locations,guid',
         ]);
 
         $locationIds = $validated['location_ids'];
@@ -439,10 +476,10 @@ class LocationController extends Controller
 
         $routeData = Cache::remember($cacheKey, now()->addDays(7), function () use ($locationIds) {
             // Load locations in the requested order
-            $locations = Location::whereIn('id', $locationIds)
-                ->select('id', 'short_code', 'address', 'latitude', 'longitude')
+            $locations = Location::whereIn('guid', $locationIds)
+                ->select('id', 'guid', 'short_code', 'address', 'latitude', 'longitude')
                 ->get()
-                ->keyBy('id');
+                ->keyBy('guid');
 
             // Build waypoints array with exact coordinates
             $waypoints = [];
@@ -498,12 +535,16 @@ class LocationController extends Controller
         });
 
         // Load all locations for the dropdown
-        $allLocations = Location::select('id', 'short_code', 'address', 'type')
-            ->orderBy('short_code')
-            ->get();
+        $allLocations = Location::orderBy('short_code')
+            ->get(['id', 'guid', 'short_code', 'address', 'type']);
 
         return Inertia::render('Admin/Locations/MultiLocationRoute', [
-            'locations' => $allLocations,
+            'locations' => $allLocations->map(fn (Location $location) => [
+                'id' => $location->guid,
+                'short_code' => $location->short_code,
+                'address' => $location->address,
+                'type' => $location->type,
+            ])->values(),
             'route_data' => $routeData,
             'mapbox_token' => config('services.mapbox.key'),
             'default_rate_per_mile' => 2.50,
@@ -642,6 +683,7 @@ class LocationController extends Controller
             foreach ($locations as $loc) {
                 fputcsv($file, [
                     $loc->id,
+                    $loc->guid,
                     $loc->short_code,
                     $loc->name ?? '',
                     $loc->address ?? '',
@@ -697,5 +739,19 @@ class LocationController extends Controller
         fclose($handle);
 
         return back()->with('success', 'Locations imported successfully!');
+    }
+
+    private function resolveLocationRecordIdFromGuid(?string $guid): string|int|null
+    {
+        if (blank($guid)) {
+            return null;
+        }
+
+        return Location::query()->where('guid', $guid)->value('id');
+    }
+
+    private function findLocationByGuidOrFail(string $guid): Location
+    {
+        return Location::query()->where('guid', $guid)->firstOrFail();
     }
 }

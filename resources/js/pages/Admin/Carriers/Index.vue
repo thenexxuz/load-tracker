@@ -12,7 +12,7 @@ import AdminLayout from '@/layouts/AppLayout.vue'
 const props = defineProps<{
   carriers: {
     data: Array<{
-      id: number
+      id: string
       short_code: string
       name: string
       contact_name: string | null
@@ -99,7 +99,7 @@ const exportCarriers = () => {
 }
 
 // Delete
-const destroy = async (id: number) => {
+const destroy = async (id: string) => {
   const result = await Confirm.show(
     'Delete Carrier',
     'Are you sure you want to delete this carrier? This action cannot be undone.',
@@ -179,7 +179,7 @@ const changePerPage = (value: number) => {
 }
 
 // Navigate to Carrier Show page
-const goToShow = (id: number) => {
+const goToShow = (id: string) => {
   router.visit(route('admin.carriers.show', id))
 }
 

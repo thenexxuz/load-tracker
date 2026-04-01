@@ -139,6 +139,11 @@ class Shipment extends Model
         });
     }
 
+    public function getRouteKeyName(): string
+    {
+        return 'guid';
+    }
+
     // Relationships
     public function pickupLocation(): BelongsTo
     {

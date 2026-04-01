@@ -12,13 +12,13 @@ import { Notify } from 'notiflix'
 
 const props = defineProps<{
   shipment: {
-    id: number
+    id: string
     shipment_number: string
     bol: string | null
     po_number: string | null
     status: string
     pickup_location: { 
-      id: number;
+      id: string;
       short_code: string; 
       name: string | null; 
       address: string | null;
@@ -30,7 +30,7 @@ const props = defineProps<{
       longitude?: number | null;
     } | null
     dc_location: { 
-      id: number;
+      id: string;
       short_code: string; 
       name: string | null; 
       address: string | null;
@@ -40,7 +40,7 @@ const props = defineProps<{
       country: string | null;
       latitude?: number | null;
       longitude?: number | null;
-      recycling_location_id?: number | null;
+      recycling_location_id?: string | null;
     } | null
     carrier: { name: string; short_code: string; wt_code?: string } | null
     drop_date: string | null
@@ -75,7 +75,7 @@ const props = defineProps<{
     dc_to_recycling_miles: number | null
     duration: string | null
     waypoints: Array<{
-      id: number
+      id: string
       short_code: string
       name: string | null
       type: string
@@ -86,7 +86,7 @@ const props = defineProps<{
   mapbox_token: string
   rates: Array<{
     id: number
-    carrier: { id: number; name: string; short_code: string; wt_code?: string } | null
+    carrier: { id: string; name: string; short_code: string; wt_code?: string } | null
     rate_per_mile: number
     effective_date: string | null
     expires_at: string | null
@@ -97,12 +97,12 @@ const props = defineProps<{
   }>
   hasAssignedCarrier: boolean
   availableCarriers: Array<{
-    id: number
+    id: string
     name: string
     short_code: string
   }>
   offeredCarriers: Array<{
-    id: number
+    id: string
     name: string
     short_code: string
     offered_by_user: {

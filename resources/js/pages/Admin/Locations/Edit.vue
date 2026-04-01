@@ -7,7 +7,7 @@ import AdminLayout from '@/layouts/AppLayout.vue'
 
 const props = defineProps<{
   location: {
-    id: number
+    id: string
     short_code: string
     name: string | null
     address: string | null
@@ -19,12 +19,12 @@ const props = defineProps<{
     longitude: number | null
     type: string
     is_active: boolean
-    recycling_location_id: number | null
+    recycling_location_id: string | null
     emails: string[] | null  // ← array from backend (json cast)
     expected_arrival_time: string | null
   }
   availableRecyclingLocations: Array<{
-    id: number
+    id: string
     short_code: string
     name: string | null
   }>

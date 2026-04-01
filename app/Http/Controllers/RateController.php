@@ -86,9 +86,16 @@ class RateController extends Controller
     public function create()
     {
         return Inertia::render('Admin/Rates/Create', [
-            'locations' => Location::select('id', 'short_code', 'name', 'city', 'state')
-                ->orderBy('short_code')
-                ->get(),
+            'locations' => Location::orderBy('short_code')
+                ->get(['id', 'guid', 'short_code', 'name', 'city', 'state'])
+                ->map(fn (Location $location) => [
+                    'id' => $location->guid,
+                    'short_code' => $location->short_code,
+                    'name' => $location->name,
+                    'city' => $location->city,
+                    'state' => $location->state,
+                ])
+                ->values(),
             'carriers' => Carrier::select('id', 'name', 'short_code')
                 ->orderBy('name')
                 ->get(),
@@ -101,14 +108,16 @@ class RateController extends Controller
             'name' => 'required|string|max:255',
             'type' => ['required', Rule::in(['flat', 'per_mile'])],
             'rate' => 'required|numeric|min:0.01',
-            'pickup_location_id' => 'nullable|exists:locations,id',
+            'pickup_location_id' => 'nullable|uuid|exists:locations,guid',
             'destination_city' => 'nullable|string|max:255',
             'destination_state' => 'nullable|string|max:2',
             'destination_country' => 'nullable|string|max:2',
-            'carrier_id' => 'nullable|exists:carriers,id',
+            'carrier_id' => 'nullable|uuid|exists:carriers,id',
             'effective_from' => 'nullable|date',
             'effective_to' => 'nullable|date|after_or_equal:effective_from',
         ]);
+
+        $validated['pickup_location_id'] = $this->resolveLocationIdByGuid($validated['pickup_location_id'] ?? null);
 
         Rate::create($validated);
 
@@ -137,9 +146,16 @@ class RateController extends Controller
 
         return Inertia::render('Admin/Rates/Edit', [
             'rate' => $rate,
-            'locations' => Location::select('id', 'short_code', 'name', 'city', 'state')
-                ->orderBy('short_code')
-                ->get(),
+            'locations' => Location::orderBy('short_code')
+                ->get(['id', 'guid', 'short_code', 'name', 'city', 'state'])
+                ->map(fn (Location $location) => [
+                    'id' => $location->guid,
+                    'short_code' => $location->short_code,
+                    'name' => $location->name,
+                    'city' => $location->city,
+                    'state' => $location->state,
+                ])
+                ->values(),
             'carriers' => Carrier::select('id', 'name', 'short_code')
                 ->orderBy('name')
                 ->get(),
@@ -152,14 +168,16 @@ class RateController extends Controller
             'name' => 'required|string|max:255',
             'type' => ['required', Rule::in(['flat', 'per_mile'])],
             'rate' => 'required|numeric|min:0.01',
-            'pickup_location_id' => 'nullable|exists:locations,id',
+            'pickup_location_id' => 'nullable|uuid|exists:locations,guid',
             'destination_city' => 'nullable|string|max:255',
             'destination_state' => 'nullable|string|max:2',
             'destination_country' => 'nullable|string|max:2',
-            'carrier_id' => 'nullable|exists:carriers,id',
+            'carrier_id' => 'nullable|uuid|exists:carriers,id',
             'effective_from' => 'nullable|date',
             'effective_to' => 'nullable|date|after_or_equal:effective_from',
         ]);
+
+        $validated['pickup_location_id'] = $this->resolveLocationIdByGuid($validated['pickup_location_id'] ?? null);
 
         $rate->update($validated);
 
@@ -183,5 +201,14 @@ class RateController extends Controller
                 'page',
             ]))
             ->with('success', 'Rate deleted successfully.');
+    }
+
+    private function resolveLocationIdByGuid(?string $guid): string|int|null
+    {
+        if (blank($guid)) {
+            return null;
+        }
+
+        return Location::query()->where('guid', $guid)->value('id');
     }
 }
