@@ -54,6 +54,26 @@ class PopulateLocationDistances extends Command
                 continue;
             }
 
+            if (isset($result['duration_minutes']) && $result['duration_minutes'] > 120) {
+                $this->warn("Route DC {$dc->short_code} → Recycling {$rec->short_code} exceeds 2 hours ({$result['duration_text']}). Recalculating with updated coordinates...");
+
+                $dcRefreshed = $dc->refreshCoordinates();
+                $recRefreshed = $dcRefreshed && $rec->refreshCoordinates();
+
+                if ($dcRefreshed && $recRefreshed) {
+                    $retryResult = $dc->distanceTo($rec, true, true);
+
+                    if (isset($retryResult['error'])) {
+                        $this->warn("Recalculation failed for DC {$dc->short_code} → Recycling {$rec->short_code}: ".$retryResult['error']);
+                    } else {
+                        $result = $retryResult;
+                        $this->info("Recalculated DC {$dc->short_code} → Recycling {$rec->short_code}: {$result['duration_text']}");
+                    }
+                } else {
+                    $this->warn("Could not refresh coordinates for DC {$dc->short_code} or Recycling {$rec->short_code}. Skipping recalculation.");
+                }
+            }
+
             $dcProcessed++;
             $this->info("Processed DC {$dc->short_code} → Recycling {$rec->short_code}");
         }

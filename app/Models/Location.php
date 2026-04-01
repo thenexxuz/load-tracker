@@ -120,11 +120,33 @@ class Location extends Model
     }
 
     /**
+     * Re-geocode this location's address and update the stored coordinates.
+     */
+    public function refreshCoordinates(): bool
+    {
+        $coords = $this->geocodeAddress($this->fullAddress());
+
+        if (isset($coords['error'])) {
+            return false;
+        }
+
+        $this->updateQuietly([
+            'longitude' => $coords[0],
+            'latitude' => $coords[1],
+        ]);
+
+        $this->refresh();
+
+        return true;
+    }
+
+    /**
      * Calculate distance to another location.
      *
      * @param  bool  $forceRecalculate  Force new calculation even if cached
+     * @param  bool  $forceMapboxRouting  Skip Haversine and use Mapbox Directions API even when coordinates are available
      */
-    public function distanceTo(Location $other, bool $forceRecalculate = false): array
+    public function distanceTo(Location $other, bool $forceRecalculate = false, bool $forceMapboxRouting = false): array
     {
         // Try to find existing distance record (bidirectional)
         $distanceRecord = LocationDistance::where(function ($q) use ($other) {
@@ -147,7 +169,7 @@ class Location extends Model
         }
 
         // Calculate new distance
-        $distanceData = $this->computeDistance($other);
+        $distanceData = $this->computeDistance($other, $forceMapboxRouting);
 
         if (isset($distanceData['error'])) {
             Log::warning("Distance calculation failed from Location {$this->id} to {$other->id}: ".$distanceData['error']);
@@ -176,11 +198,13 @@ class Location extends Model
 
     /**
      * Internal method to compute distance (Haversine if coords available, else Mapbox).
+     *
+     * @param  bool  $forceMapboxRouting  Skip Haversine fast path and use Mapbox Directions API
      */
-    private function computeDistance(Location $other): array
+    private function computeDistance(Location $other, bool $forceMapboxRouting = false): array
     {
-        // Fast path: both have coordinates → use Haversine
-        if ($this->hasCoordinates() && $other->hasCoordinates()) {
+        // Fast path: both have coordinates → use Haversine (unless Mapbox routing is forced)
+        if (! $forceMapboxRouting && $this->hasCoordinates() && $other->hasCoordinates()) {
             $km = $this->haversineDistance(
                 $this->latitude,
                 $this->longitude,
