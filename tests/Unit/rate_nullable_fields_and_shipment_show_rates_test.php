@@ -49,6 +49,8 @@ it('keeps shipment show rates using viewer-specific carrier visibility rules', f
         ->toContain('destination_country: string | null')
         ->toContain('Name')
         ->toContain('Destination')
+        ->toContain('hasAssignedCarrier ? rates.map((rate) => rate.id) : []')
+        ->toContain("{{ hasAssignedCarrier ? 'Total Rate Cost:' : 'Possible Total Rate Cost:' }}")
         ->toContain('toggleRateIncludedInTotal')
         ->toContain("{{ rate.name ?? 'Unnamed Rate' }}")
         ->toContain('{{ formatRateDestination(rate) }}');

@@ -147,7 +147,7 @@ const { shipment, route_data, rates = [], hasAssignedCarrier, availableCarriers,
 
 const mapContainer = ref<HTMLDivElement | null>(null)
 let map: mapboxgl.Map | null = null
-const includedRateIds = ref<number[]>(rates.map((rate) => rate.id))
+const includedRateIds = ref<number[]>(hasAssignedCarrier ? rates.map((rate) => rate.id) : [])
 
 const isRateIncludedInTotal = (rateId: number): boolean => includedRateIds.value.includes(rateId)
 
@@ -184,22 +184,34 @@ const calculateRateTotal = (rate: typeof rates[0]): number | null => {
 }
 
 const totalRateCost = computed(() => {
-  if (!hasAssignedCarrier || !route_data) return null
+  if (includedRateIds.value.length === 0) return null
 
-  return rates.reduce((total, rate) => {
+  const result = rates.reduce((accumulator, rate) => {
     if (!isRateIncludedInTotal(rate.id)) {
-      return total
+      return accumulator
     }
 
     const rateTotal = calculateRateTotal(rate)
     if (rateTotal !== null) {
-      return total + rateTotal
+      accumulator.total += rateTotal
+      accumulator.hasAnyValue = true
+      return accumulator
     }
+
     if (rate.type === 'flat') {
-      return total + rate.rate_per_mile
+      accumulator.total += rate.rate_per_mile
+      accumulator.hasAnyValue = true
+      return accumulator
     }
-    return total
-  }, 0)
+
+    return accumulator
+  }, { total: 0, hasAnyValue: false })
+
+  if (!result.hasAnyValue) {
+    return null
+  }
+
+  return result.total
 })
 
 onMounted(() => {
@@ -772,10 +784,10 @@ const clearConsolidation = () => {
               ({{ route_data.total_miles.toFixed(1) }} miles)
             </span>
           </p>
-          <div v-if="hasAssignedCarrier && totalRateCost !== null" class="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800">
+          <div v-if="totalRateCost !== null" class="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800">
             <div class="flex items-center justify-between">
               <span class="text-sm font-medium text-blue-800 dark:text-blue-200">
-                Total Rate Cost:
+                {{ hasAssignedCarrier ? 'Total Rate Cost:' : 'Possible Total Rate Cost:' }}
               </span>
               <span class="text-lg font-bold text-blue-900 dark:text-blue-100">
                 ${{ totalRateCost.toFixed(2) }}
