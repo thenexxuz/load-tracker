@@ -462,6 +462,9 @@ class ShipmentController extends Controller
                 'notes' => $rate->notes,
                 'type' => $rate->type,
                 'name' => $rate->name,
+                'destination_city' => $rate->destination_city,
+                'destination_state' => $rate->destination_state,
+                'destination_country' => $rate->destination_country,
                 'calculation_type' => $calculationType,
             ];
         });

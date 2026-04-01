@@ -37,10 +37,19 @@ it('keeps shipment show rates using viewer-specific carrier visibility rules', f
         ->toContain("\$carrierQuery->where('carrier_id', \$viewerCarrierId)")
         ->toContain('->when($viewerIsCarrier && ! $viewerCarrierId, function ($query) {')
         ->toContain('->when(! $viewerIsCarrier && $shipment->carrier_id, function ($query) use ($shipment) {')
-        ->toContain("'name' => \$rate->name");
+        ->toContain("'name' => \$rate->name")
+        ->toContain("'destination_city' => \$rate->destination_city")
+        ->toContain("'destination_state' => \$rate->destination_state")
+        ->toContain("'destination_country' => \$rate->destination_country");
 
     expect($page)
         ->toContain('name: string | null')
+        ->toContain('destination_city: string | null')
+        ->toContain('destination_state: string | null')
+        ->toContain('destination_country: string | null')
         ->toContain('Name')
-        ->toContain("{{ rate.name ?? 'Unnamed Rate' }}");
+        ->toContain('Destination')
+        ->toContain('toggleRateIncludedInTotal')
+        ->toContain("{{ rate.name ?? 'Unnamed Rate' }}")
+        ->toContain('{{ formatRateDestination(rate) }}');
 });

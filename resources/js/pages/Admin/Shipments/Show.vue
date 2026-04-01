@@ -94,6 +94,9 @@ const props = defineProps<{
     notes: string | null
     type: string
     name: string | null
+    destination_city: string | null
+    destination_state: string | null
+    destination_country: string | null
     calculation_type: string
   }>
   hasAssignedCarrier: boolean
@@ -144,6 +147,18 @@ const { shipment, route_data, rates = [], hasAssignedCarrier, availableCarriers,
 
 const mapContainer = ref<HTMLDivElement | null>(null)
 let map: mapboxgl.Map | null = null
+const includedRateIds = ref<number[]>(rates.map((rate) => rate.id))
+
+const isRateIncludedInTotal = (rateId: number): boolean => includedRateIds.value.includes(rateId)
+
+const toggleRateIncludedInTotal = (rateId: number): void => {
+  if (includedRateIds.value.includes(rateId)) {
+    includedRateIds.value = includedRateIds.value.filter((id) => id !== rateId)
+    return
+  }
+
+  includedRateIds.value = [...includedRateIds.value, rateId]
+}
 
 const calculateRateTotal = (rate: typeof rates[0]): number | null => {
   if (!route_data) return null
@@ -172,6 +187,10 @@ const totalRateCost = computed(() => {
   if (!hasAssignedCarrier || !route_data) return null
 
   return rates.reduce((total, rate) => {
+    if (!isRateIncludedInTotal(rate.id)) {
+      return total
+    }
+
     const rateTotal = calculateRateTotal(rate)
     if (rateTotal !== null) {
       return total + rateTotal
@@ -299,6 +318,16 @@ const formatLocationAddress = (loc: any) => {
   if (loc.country) parts.push(loc.country)
 
   return parts.length > 0 ? parts.join('\n') : 'No address recorded'
+}
+
+const formatRateDestination = (rate: typeof rates[number]): string => {
+  const destinationParts = [rate.destination_city, rate.destination_state, rate.destination_country].filter((part): part is string => Boolean(part && part.trim()))
+
+  if (destinationParts.length === 0) {
+    return 'Any destination'
+  }
+
+  return destinationParts.join(', ')
 }
 
 const { auth } = usePage().props
@@ -760,10 +789,16 @@ const clearConsolidation = () => {
             <thead class="bg-gray-50 dark:bg-gray-900/50">
               <tr>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Include
+                </th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Name
                 </th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Carrier
+                </th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Destination
                 </th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Rate per Mile
@@ -781,6 +816,17 @@ const clearConsolidation = () => {
             </thead>
             <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
               <tr v-for="rate in rates" :key="rate.id" class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
+                  <label class="inline-flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      :checked="isRateIncludedInTotal(rate.id)"
+                      class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      @change="toggleRateIncludedInTotal(rate.id)"
+                    >
+                    <span class="text-xs text-gray-600 dark:text-gray-400">Use</span>
+                  </label>
+                </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
                   {{ rate.name ?? 'Unnamed Rate' }}
                 </td>
@@ -789,6 +835,9 @@ const clearConsolidation = () => {
                   <span v-if="rate.carrier?.short_code" class="ml-1 text-xs text-gray-500 dark:text-gray-400">
                     ({{ rate.carrier.short_code }})
                   </span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
+                  {{ formatRateDestination(rate) }}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100 font-medium">
                   ${{ rate.rate_per_mile.toFixed(2) }}
@@ -812,7 +861,7 @@ const clearConsolidation = () => {
                 </td>
               </tr>
               <tr v-if="rates.length === 0">
-                <td colspan="6" class="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
+                <td colspan="8" class="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
                   No rates found for this lane.
                 </td>
               </tr>
