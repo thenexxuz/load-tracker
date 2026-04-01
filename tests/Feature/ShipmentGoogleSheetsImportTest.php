@@ -299,6 +299,48 @@ it('normalizes checked-in status from google sheets import', function (): void {
         ->status->toBe('Checked In');
 });
 
+it('nulls shipment dates when google sheets date values are blank or TBD', function (): void {
+    $workbookContents = buildGoogleSheetsWorkbook([
+        'Sheet 1' => [
+            ['Shipment Number', 'Drop Date', 'Pickup Date', 'Delivery Date', 'Status'],
+            ['LOAD-511', '', 'TBD', '', 'Booked'],
+        ],
+    ]);
+
+    Http::fake([
+        'docs.google.com/spreadsheets/*' => Http::response($workbookContents, 200, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]),
+    ]);
+
+    $admin = User::factory()->create();
+    $admin->assignRole('administrator');
+
+    $pickup = Location::factory()->pickup()->create(['short_code' => 'ING', 'name' => 'Ingrasys']);
+    $dc = Location::factory()->distribution_center()->create(['short_code' => 'AMS', 'name' => 'AMS DC']);
+
+    $shipment = Shipment::query()->create([
+        'shipment_number' => 'LOAD-511',
+        'status' => 'Pending',
+        'pickup_location_id' => $pickup->id,
+        'dc_location_id' => $dc->id,
+        'drop_date' => '2026-03-25',
+        'pickup_date' => '2026-03-26 08:00:00',
+        'delivery_date' => '2026-03-27 08:00:00',
+    ]);
+
+    $response = $this->actingAs($admin)->post(route('admin.shipments.google-sheets-import'), [
+        'google_sheet_url' => 'https://docs.google.com/spreadsheets/d/test-sheet-id/edit#gid=0',
+    ]);
+
+    $response->assertRedirect(route('admin.shipments.index'));
+
+    expect($shipment->fresh())
+        ->drop_date->toBeNull()
+        ->pickup_date->toBeNull()
+        ->delivery_date->toBeNull();
+});
+
 it('maps elp rjs pickup to wiwynn rjs during google sheets import', function (): void {
     $workbookContents = buildGoogleSheetsWorkbook([
         'Sheet 1' => [

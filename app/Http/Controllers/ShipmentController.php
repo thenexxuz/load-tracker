@@ -1102,7 +1102,7 @@ class ShipmentController extends Controller
                     'po_number' => ['nullable', 'string', 'max:100'],
                     'pickup_location' => ['required', 'string', 'max:50'],
                     'dc_location' => ['required', 'string', 'max:50'],
-                    'pickup_date' => ['required'],
+                    'pickup_date' => ['nullable'],
                     'delivery_date' => ['nullable'],
                     'rack_qty' => ['required', 'integer', 'min:0'],
                 ]);
@@ -1116,18 +1116,21 @@ class ShipmentController extends Controller
 
                 $validated = $validator->validated();
 
-                try {
-                    $pickupDateRaw = $this->parsePbiImportDate($validated['pickup_date'], 'Ship Date');
-                } catch (Exception $exception) {
-                    $failedRows[] = array_merge($originalRow, ['ERROR' => $exception->getMessage()]);
+                $pickupDateRaw = null;
+                if (array_key_exists('pickup_date', $mapped)) {
+                    try {
+                        $pickupDateRaw = $this->parsePbiImportDate($mapped['pickup_date'] ?? null, 'Ship Date');
+                    } catch (Exception $exception) {
+                        $failedRows[] = array_merge($originalRow, ['ERROR' => $exception->getMessage()]);
 
-                    continue;
+                        continue;
+                    }
                 }
 
                 $deliveryDateRaw = null;
-                if (filled($validated['delivery_date'] ?? null)) {
+                if (array_key_exists('delivery_date', $mapped)) {
                     try {
-                        $deliveryDateRaw = $this->parsePbiImportDate($validated['delivery_date'], 'Deliver Date');
+                        $deliveryDateRaw = $this->parsePbiImportDate($mapped['delivery_date'] ?? null, 'Deliver Date');
                     } catch (Exception $exception) {
                         $failedRows[] = array_merge($originalRow, ['ERROR' => $exception->getMessage()]);
 
@@ -1172,15 +1175,18 @@ class ShipmentController extends Controller
                     ? Carbon::parse($dc->expected_arrival_time)->format('H:i:s')
                     : '00:00:00';
 
-                $pickupDate = $pickupDateRaw->format('Y-m-d').' '.$time;
+                $pickupDate = $pickupDateRaw ? $pickupDateRaw->format('Y-m-d').' '.$time : null;
                 $deliveryDate = $deliveryDateRaw ? $deliveryDateRaw->format('Y-m-d').' '.$time : null;
                 $equipmentDefaults = Shipment::defaultEquipmentCountsForRackQty((int) $validated['rack_qty']);
 
-                $dropDate = Carbon::parse($pickupDate)->subDays(2);
-                if ($dropDate->isSaturday()) {
-                    $dropDate->subDay();
-                } elseif ($dropDate->isSunday()) {
-                    $dropDate->subDays(2);
+                $dropDate = null;
+                if ($pickupDate !== null) {
+                    $dropDate = Carbon::parse($pickupDate)->subDays(2);
+                    if ($dropDate->isSaturday()) {
+                        $dropDate->subDay();
+                    } elseif ($dropDate->isSunday()) {
+                        $dropDate->subDays(2);
+                    }
                 }
 
                 $shipment = Shipment::firstOrNew(['shipment_number' => $validated['shipment_number']]);
@@ -1533,7 +1539,7 @@ class ShipmentController extends Controller
         };
     }
 
-    private function parsePbiImportDate(mixed $value, string $field): Carbon
+    private function parsePbiImportDate(mixed $value, string $field): ?Carbon
     {
         if ($value instanceof \DateTimeInterface) {
             return Carbon::instance($value);
@@ -1541,8 +1547,8 @@ class ShipmentController extends Controller
 
         $normalizedValue = trim((string) $value);
 
-        if ($normalizedValue === '') {
-            throw new Exception("Invalid '{$field}' format.");
+        if ($this->isImportDateMarkedUnknown($normalizedValue)) {
+            return null;
         }
 
         if (is_numeric($normalizedValue)) {
@@ -1739,15 +1745,15 @@ class ShipmentController extends Controller
             }
         }
 
-        if (($mappedRow['drop_date'] ?? '') !== '') {
+        if (array_key_exists('drop_date', $mappedRow)) {
             $attributes['drop_date'] = $this->parseGoogleSheetsDate($mappedRow['drop_date'])?->toDateString();
         }
 
-        if (($mappedRow['pickup_date'] ?? '') !== '') {
+        if (array_key_exists('pickup_date', $mappedRow)) {
             $attributes['pickup_date'] = $this->parseGoogleSheetsDate($mappedRow['pickup_date'])?->format('Y-m-d H:i:s');
         }
 
-        if (($mappedRow['delivery_date'] ?? '') !== '') {
+        if (array_key_exists('delivery_date', $mappedRow)) {
             $attributes['delivery_date'] = $this->parseGoogleSheetsDate($mappedRow['delivery_date'])?->format('Y-m-d H:i:s');
         }
 
@@ -1874,6 +1880,13 @@ class ShipmentController extends Controller
         return $normalizedValue;
     }
 
+    private function isImportDateMarkedUnknown(string $value): bool
+    {
+        $normalizedValue = Str::lower(trim($value));
+
+        return $normalizedValue === '' || $normalizedValue === 'tbd';
+    }
+
     private function resolveCarrierForGoogleSheetsImport(string $value): Carrier
     {
         $normalizedValue = trim($value);
@@ -1899,7 +1912,7 @@ class ShipmentController extends Controller
     {
         $normalizedValue = trim($value);
 
-        if ($normalizedValue === '') {
+        if ($this->isImportDateMarkedUnknown($normalizedValue)) {
             return null;
         }
 
