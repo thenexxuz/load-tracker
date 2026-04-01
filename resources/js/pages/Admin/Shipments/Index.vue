@@ -18,6 +18,7 @@ const props = defineProps<{
       status: string
       bol: string | null
       shipment_number: string
+      consolidation_number: string | null
       pickup_location: { short_code: string; name: string | null } | null
       dc_location: { short_code: string; name: string | null } | null
       drop_date: string | null
@@ -609,7 +610,12 @@ onMounted(() => {
             <tr
               v-for="shipment in shipments.data"
               :key="shipment.id"
-              class="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer"
+              :class="[
+                'cursor-pointer',
+                shipment.consolidation_number
+                  ? 'bg-amber-50/60 hover:bg-amber-100/70 dark:bg-amber-900/15 dark:hover:bg-amber-900/30'
+                  : 'hover:bg-gray-50 dark:hover:bg-gray-700/50',
+              ]"
               @click="goToShow(shipment.id)"
             >
               <td class="px-6 py-4 capitalize text-gray-600 dark:text-gray-400">

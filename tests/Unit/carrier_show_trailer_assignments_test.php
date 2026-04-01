@@ -15,6 +15,7 @@ it('keeps carrier show loading active trailer assignments for undelivered shipme
         ->toContain("\$trailer = \$shipment->getRelation('trailer');")
         ->toContain("'trailer_number' => \$trailer?->number")
         ->toContain("'shipment_number' => \$shipment->shipment_number")
+        ->toContain("'consolidation_number' => \$shipment->consolidation_number")
         ->toContain("'bol' => \$shipment->bol")
         ->toContain("'pickup_location_name' => \$shipment->pickupLocation?->name")
         ->toContain("'is_assigned_to_shipment' => true")
@@ -30,6 +31,7 @@ it('keeps carrier show rendering the trailer assignment table', function (): voi
 
     expect($page)
         ->toContain('activeTrailerAssignments: Array<{')
+        ->toContain('consolidation_number: string | null')
         ->toContain('Trailers Assigned Or Parked At Pickup Locations')
         ->toContain('Trailer Number')
         ->toContain('Shipment Number')

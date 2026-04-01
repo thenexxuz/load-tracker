@@ -39,6 +39,7 @@ const props = defineProps<{
     shipment_number: string
     bol: string | null
     status: string
+    consolidation_number: string | null
     carrier_id: string | null
     carrier_name: string | null
     trailer_id: number | null
@@ -525,7 +526,16 @@ onUnmounted(() => {
                 </tr>
               </thead>
               <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                <tr v-for="shipment in filteredShipments" :key="shipment.id" class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                <tr
+                  v-for="shipment in filteredShipments"
+                  :key="shipment.id"
+                  :class="[
+                    'transition-colors',
+                    shipment.consolidation_number
+                      ? 'bg-amber-50/60 hover:bg-amber-100/70 dark:bg-amber-900/15 dark:hover:bg-amber-900/30'
+                      : 'hover:bg-gray-50 dark:hover:bg-gray-700/50',
+                  ]"
+                >
                   <td class="px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">
                     {{ shipment.shipment_number }}
                   </td>

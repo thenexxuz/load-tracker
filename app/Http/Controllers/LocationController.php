@@ -162,6 +162,7 @@ class LocationController extends Controller
                     'shipment_number' => $shipment->shipment_number,
                     'bol' => $shipment->bol,
                     'status' => $shipment->status,
+                    'consolidation_number' => $shipment->consolidation_number,
                     'carrier_id' => $shipment->carrier_id,
                     'carrier_name' => $shipment->carrier?->name,
                     'trailer_id' => $shipment->trailer_id,

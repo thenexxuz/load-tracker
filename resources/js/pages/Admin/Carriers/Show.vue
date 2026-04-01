@@ -30,6 +30,7 @@ const props = defineProps<{
     id: string
     trailer_number: string | null
     shipment_number: string | null
+    consolidation_number: string | null
     bol: string | null
     pickup_location_name: string | null
     pickup_location_short_code: string | null
@@ -202,7 +203,13 @@ onMounted(() => {
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800">
-              <tr v-for="assignment in activeTrailerAssignments" :key="assignment.id" class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+              <tr
+                v-for="assignment in activeTrailerAssignments"
+                :key="assignment.id"
+                :class="assignment.consolidation_number
+                  ? 'bg-amber-50/60 hover:bg-amber-100/70 dark:bg-amber-900/15 dark:hover:bg-amber-900/30'
+                  : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'"
+              >
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
                   {{ assignment.trailer_number ?? '—' }}
                 </td>

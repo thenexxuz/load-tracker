@@ -24,6 +24,7 @@ test('shipments index exposes guid as the public id', function (): void {
         'guid' => (string) str()->uuid(),
         'shipment_number' => 'SHIP-UUID-001',
         'status' => 'Pending',
+        'consolidation_number' => 'CONSOL-001',
         'pickup_location_id' => $pickup->id,
         'dc_location_id' => $dc->id,
     ]);
@@ -35,6 +36,7 @@ test('shipments index exposes guid as the public id', function (): void {
             ->component('Admin/Shipments/Index')
             ->where('shipments.data.0.id', $shipment->guid)
             ->where('shipments.data.0.shipment_number', 'SHIP-UUID-001')
+            ->where('shipments.data.0.consolidation_number', 'CONSOL-001')
         );
 });
 

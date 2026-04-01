@@ -124,6 +124,7 @@ class ShipmentController extends Controller
                 'status' => $shipment->status,
                 'bol' => $shipment->bol,
                 'shipment_number' => $shipment->shipment_number,
+                'consolidation_number' => $shipment->consolidation_number,
                 'pickup_location' => $shipment->pickupLocation ? [
                     'id' => $shipment->pickupLocation->guid,
                     'short_code' => $shipment->pickupLocation->short_code,
