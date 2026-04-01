@@ -299,6 +299,46 @@ it('normalizes checked-in status from google sheets import', function (): void {
         ->status->toBe('Checked In');
 });
 
+it('maps elp rjs pickup to wiwynn rjs during google sheets import', function (): void {
+    $workbookContents = buildGoogleSheetsWorkbook([
+        'Sheet 1' => [
+            ['Shipment Number', 'Origin', 'Destination', 'Status'],
+            ['LOAD-510', 'ELP-RJS', 'AMS', 'Booked'],
+        ],
+    ]);
+
+    Http::fake([
+        'docs.google.com/spreadsheets/*' => Http::response($workbookContents, 200, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]),
+    ]);
+
+    $admin = User::factory()->create();
+    $admin->assignRole('administrator');
+
+    $mappedPickup = Location::factory()->pickup()->create(['short_code' => 'WIWYNN - RJS', 'name' => 'WIWYNN - RJS']);
+    Location::factory()->pickup()->create(['short_code' => 'ELP-RJS', 'name' => 'Legacy ELP']);
+    $dc = Location::factory()->distribution_center()->create(['short_code' => 'AMS', 'name' => 'AMS DC']);
+
+    $shipment = Shipment::query()->create([
+        'shipment_number' => 'LOAD-510',
+        'status' => 'Pending',
+        'pickup_location_id' => $dc->id,
+        'dc_location_id' => $dc->id,
+    ]);
+
+    $response = $this->actingAs($admin)->post(route('admin.shipments.google-sheets-import'), [
+        'google_sheet_url' => 'https://docs.google.com/spreadsheets/d/test-sheet-id/edit#gid=0',
+    ]);
+
+    $response->assertRedirect(route('admin.shipments.index'));
+
+    expect($shipment->fresh())
+        ->pickup_location_id->toBe($mappedPickup->id)
+        ->dc_location_id->toBe($dc->id)
+        ->status->toBe('Booked');
+});
+
 it('treats trailer, load bars, and straps carets as carry-forward values from the prior row', function (): void {
     $workbookContents = buildGoogleSheetsWorkbook([
         'Sheet 1' => [

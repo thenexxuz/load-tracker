@@ -1121,11 +1121,13 @@ class ShipmentController extends Controller
                     }
                 }
 
+                $normalizedPickupLocation = $this->normalizeImportedPickupLocationCode($validated['pickup_location']);
+
                 $pickup = Location::firstOrCreate(
-                    ['short_code' => strtoupper($validated['pickup_location'])],
+                    ['short_code' => strtoupper($normalizedPickupLocation)],
                     [
                         'guid' => \Str::uuid(),
-                        'name' => strtoupper($validated['pickup_location']),
+                        'name' => strtoupper($normalizedPickupLocation),
                         'address' => 'Unknown Address',
                         'city' => 'Unknown City',
                         'state' => 'Unknown State',
@@ -1817,6 +1819,10 @@ class ShipmentController extends Controller
     {
         $normalizedValue = trim($value);
 
+        if ($type === 'pickup') {
+            $normalizedValue = $this->normalizeImportedPickupLocationCode($normalizedValue);
+        }
+
         $location = Location::query()
             ->where(function ($query) use ($normalizedValue) {
                 $query->whereRaw('LOWER(short_code) = ?', [Str::lower($normalizedValue)])
@@ -1841,6 +1847,17 @@ class ShipmentController extends Controller
             'is_active' => false,
             'type' => $type,
         ]);
+    }
+
+    private function normalizeImportedPickupLocationCode(string $value): string
+    {
+        $normalizedValue = trim($value);
+
+        if (Str::upper($normalizedValue) === 'ELP-RJS') {
+            return 'WIWYNN - RJS';
+        }
+
+        return $normalizedValue;
     }
 
     private function resolveCarrierForGoogleSheetsImport(string $value): Carrier

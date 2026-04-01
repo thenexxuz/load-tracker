@@ -67,3 +67,32 @@ it('fails when csv file is missing or invalid header', function () {
     $this->artisan('rates:import', ['file' => $tmpPath, '--force' => true])
         ->assertFailed();
 });
+
+it('maps elp rjs origin to wiwynn rjs when importing rates', function () {
+    $mappedPickup = Location::factory()->create(['short_code' => 'WIWYNN - RJS']);
+    $legacyPickup = Location::factory()->create(['short_code' => 'ELP-RJS']);
+
+    $carrier = Carrier::factory()->create(['wt_code' => 'WT3', 'short_code' => 'C3']);
+
+    $csv = implode("\n", [
+        'TYPE,NAME,ORIGIN,DESTINATION,WT3',
+        'per_mile,ELP Lane,ELP-RJS,"El Paso,TX",2.75',
+    ]);
+
+    $path = sys_get_temp_dir().'/rates_import_elp_alias.csv';
+    file_put_contents($path, $csv);
+
+    $this->artisan('rates:import', ['file' => $path, '--force' => true])->assertSuccessful();
+
+    $this->assertDatabaseHas('rates', [
+        'carrier_id' => $carrier->id,
+        'pickup_location_id' => $mappedPickup->id,
+        'destination_city' => 'El Paso',
+        'destination_state' => 'TX',
+        'destination_country' => 'US',
+        'rate' => 2.75,
+        'name' => 'ELP Lane',
+    ]);
+
+    expect(Rate::query()->where('pickup_location_id', $legacyPickup->id)->count())->toBe(0);
+});

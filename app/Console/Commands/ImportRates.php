@@ -112,7 +112,7 @@ class ImportRates extends Command
 
             $type = trim($row[0] ?? '');
             $name = trim($row[1] ?? '');
-            $origin = trim($row[2] ?? '');
+            $origin = $this->normalizeOriginShortCode(trim($row[2] ?? ''));
             $destinationCell = trim($row[3] ?? '');
 
             if ($type === '' || $name === '' || $origin === '' || $destinationCell === '') {
@@ -131,7 +131,9 @@ class ImportRates extends Command
 
             $rateType = strtolower($type);
 
-            $pickupLocation = Location::where('short_code', $origin)->first();
+            $pickupLocation = Location::query()
+                ->whereRaw('LOWER(short_code) = ?', [strtolower($origin)])
+                ->first();
 
             if (! $pickupLocation) {
                 $this->warn("Skipping row {$rows}: pickup location '{$origin}' not found.");
@@ -144,7 +146,7 @@ class ImportRates extends Command
             $destinationState = null;
 
             if (str_contains($destinationCell, ',')) {
-                [ $destinationCity, $destinationState ] = array_map(fn ($v) => trim($v), explode(',', $destinationCell, 2));
+                [$destinationCity, $destinationState] = array_map(fn ($v) => trim($v), explode(',', $destinationCell, 2));
                 $destinationState = strtoupper($destinationState);
             } else {
                 if (strlen($destinationCell) === 2) {
@@ -245,5 +247,14 @@ class ImportRates extends Command
         }
 
         return self::SUCCESS;
+    }
+
+    private function normalizeOriginShortCode(string $origin): string
+    {
+        if (strtoupper($origin) === 'ELP-RJS') {
+            return 'WIWYNN - RJS';
+        }
+
+        return $origin;
     }
 }
