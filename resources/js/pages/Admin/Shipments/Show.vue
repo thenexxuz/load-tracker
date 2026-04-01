@@ -2,6 +2,7 @@
 import { Head, router, useForm, usePage } from '@inertiajs/vue3'
 import mapboxgl from 'mapbox-gl'
 import { onMounted, onUnmounted, ref, computed } from 'vue'
+import { route } from 'ziggy-js'
 
 import 'mapbox-gl/dist/mapbox-gl.css'
 import ActionIconButton from '@/components/ActionIconButton.vue'
@@ -110,9 +111,36 @@ const props = defineProps<{
       name: string | null
     } | null
   }>
+  canManageConsolidation: boolean
+  consolidationData: {
+    number: string | null
+    members: Array<{
+      id: string
+      shipment_number: string
+      bol: string | null
+      rack_qty: number
+      load_bar_qty: number
+      strap_qty: number
+      carrier_id: string | null
+      trailer_id: number | null
+    }>
+    totals: {
+      rack_qty: number
+      load_bar_qty: number
+      strap_qty: number
+    }
+    eligible_shipments: Array<{
+      id: string
+      shipment_number: string
+      bol: string | null
+      carrier_id: string | null
+      trailer_id: number | null
+    }>
+    selected_shipment_ids: string[]
+  }
 }>()
 
-const { shipment, route_data, rates = [], hasAssignedCarrier, availableCarriers, offeredCarriers } = props
+const { shipment, route_data, rates = [], hasAssignedCarrier, availableCarriers, offeredCarriers, canManageConsolidation, consolidationData } = props
 
 const mapContainer = ref<HTMLDivElement | null>(null)
 let map: mapboxgl.Map | null = null
@@ -281,6 +309,24 @@ const offerForm = useForm({
   offered_carrier_ids: offeredCarriers.map((carrier) => carrier.id),
 })
 
+const consolidationForm = useForm({
+  consolidated_shipment_ids: [...consolidationData.selected_shipment_ids],
+  clear_consolidation: false,
+})
+
+const consolidationMembers = computed(() => consolidationData.members ?? [])
+const hasConsolidation = computed(() => consolidationMembers.value.length > 1)
+
+const displayedRackQty = computed(() =>
+  hasConsolidation.value ? consolidationData.totals.rack_qty : shipment.rack_qty
+)
+const displayedLoadBarQty = computed(() =>
+  hasConsolidation.value ? consolidationData.totals.load_bar_qty : shipment.load_bar_qty
+)
+const displayedStrapQty = computed(() =>
+  hasConsolidation.value ? consolidationData.totals.strap_qty : shipment.strap_qty
+)
+
 const submitOfferUpdate = () => {
   offerForm.patch(route('admin.shipments.update-offers', shipment.id), {
     preserveScroll: true,
@@ -289,6 +335,32 @@ const submitOfferUpdate = () => {
     },
     onError: () => {
       Notify.failure('Failed to update shipment offers.')
+    },
+  })
+}
+
+const submitConsolidationUpdate = () => {
+  consolidationForm.clear_consolidation = false
+  consolidationForm.patch(route('admin.shipments.update-consolidation', shipment.id), {
+    preserveScroll: true,
+    onSuccess: () => {
+      Notify.success('Shipment consolidation updated successfully.')
+    },
+    onError: () => {
+      Notify.failure('Failed to update shipment consolidation.')
+    },
+  })
+}
+
+const clearConsolidation = () => {
+  consolidationForm.clear_consolidation = true
+  consolidationForm.patch(route('admin.shipments.update-consolidation', shipment.id), {
+    preserveScroll: true,
+    onSuccess: () => {
+      Notify.success('Shipment unconsolidated successfully.')
+    },
+    onError: () => {
+      Notify.failure('Failed to remove shipment consolidation.')
     },
   })
 }
@@ -441,15 +513,15 @@ const submitOfferUpdate = () => {
             <dd class="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
                 <div class="text-xs text-gray-500 dark:text-gray-400">Rack Qty</div>
-                <div class="text-gray-900 dark:text-gray-100 font-medium">{{ shipment.rack_qty }}</div>
+                <div class="text-gray-900 dark:text-gray-100 font-medium">{{ displayedRackQty }}</div>
               </div>
               <div>
                 <div class="text-xs text-gray-500 dark:text-gray-400">Load Bar Qty</div>
-                <div class="text-gray-900 dark:text-gray-100 font-medium">{{ shipment.load_bar_qty }}</div>
+                <div class="text-gray-900 dark:text-gray-100 font-medium">{{ displayedLoadBarQty }}</div>
               </div>
               <div>
                 <div class="text-xs text-gray-500 dark:text-gray-400">Strap Qty</div>
-                <div class="text-gray-900 dark:text-gray-100 font-medium">{{ shipment.strap_qty }}</div>
+                <div class="text-gray-900 dark:text-gray-100 font-medium">{{ displayedStrapQty }}</div>
               </div>
             </dd>
           </div>
@@ -548,6 +620,94 @@ const submitOfferUpdate = () => {
             </button>
           </div>
         </form>
+      </div>
+
+      <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Consolidation</h2>
+            <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+              Consolidated shipments share carrier and trailer. Candidates are restricted to the same pickup and DC locations.
+            </p>
+          </div>
+          <div class="text-sm text-gray-600 dark:text-gray-400">
+            Number: <strong class="text-gray-900 dark:text-gray-100">{{ consolidationData.number || '—' }}</strong>
+          </div>
+        </div>
+
+        <div class="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div>
+            <div class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Consolidated Shipments</div>
+            <div v-if="consolidationMembers.length" class="space-y-2">
+              <div
+                v-for="member in consolidationMembers"
+                :key="member.id"
+                class="rounded-md border border-gray-200 dark:border-gray-700 px-3 py-2"
+              >
+                <div class="font-medium text-gray-900 dark:text-gray-100">{{ member.shipment_number }}</div>
+                <div class="text-xs text-gray-600 dark:text-gray-400">BOL: {{ member.bol || '—' }}</div>
+              </div>
+            </div>
+            <div v-else class="text-sm text-gray-500 dark:text-gray-400">No consolidation members.</div>
+
+            <div class="mt-4 grid grid-cols-3 gap-3 text-sm">
+              <div class="rounded bg-gray-50 dark:bg-gray-900/40 p-2">
+                <div class="text-gray-500 dark:text-gray-400">Rack Qty</div>
+                <div class="font-semibold text-gray-900 dark:text-gray-100">{{ consolidationData.totals.rack_qty }}</div>
+              </div>
+              <div class="rounded bg-gray-50 dark:bg-gray-900/40 p-2">
+                <div class="text-gray-500 dark:text-gray-400">Load Bars</div>
+                <div class="font-semibold text-gray-900 dark:text-gray-100">{{ consolidationData.totals.load_bar_qty }}</div>
+              </div>
+              <div class="rounded bg-gray-50 dark:bg-gray-900/40 p-2">
+                <div class="text-gray-500 dark:text-gray-400">Straps</div>
+                <div class="font-semibold text-gray-900 dark:text-gray-100">{{ consolidationData.totals.strap_qty }}</div>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="canManageConsolidation">
+            <div class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Manage Consolidation</div>
+            <select
+              v-model="consolidationForm.consolidated_shipment_ids"
+              multiple
+              class="w-full min-h-44 p-3 border rounded-md focus:ring-2 focus:outline-none appearance-none border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500"
+            >
+              <option
+                v-for="candidate in consolidationData.eligible_shipments"
+                :key="candidate.id"
+                :value="candidate.id"
+              >
+                {{ candidate.shipment_number }}{{ candidate.bol ? ` | BOL ${candidate.bol}` : '' }}
+              </option>
+            </select>
+            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+              Selected shipments will be consolidated with this shipment and inherit this shipment's carrier and trailer.
+            </p>
+            <p v-if="consolidationForm.errors.consolidated_shipment_ids" class="mt-2 text-sm text-red-600 dark:text-red-400">
+              {{ consolidationForm.errors.consolidated_shipment_ids }}
+            </p>
+
+            <div class="mt-4 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                :disabled="consolidationForm.processing"
+                class="px-4 py-2 rounded-md border border-red-300 text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-300 dark:hover:bg-red-900/30 disabled:opacity-60"
+                @click="clearConsolidation"
+              >
+                Unconsolidate
+              </button>
+              <button
+                type="button"
+                :disabled="consolidationForm.processing"
+                class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-md font-medium transition-colors disabled:opacity-60"
+                @click="submitConsolidationUpdate"
+              >
+                {{ consolidationForm.processing ? 'Saving...' : 'Save Consolidation' }}
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Route Map -->

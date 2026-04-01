@@ -237,6 +237,7 @@ class ShipmentController extends Controller
             'load_bar_qty' => ['integer', 'min:0'],
             'strap_qty' => ['integer', 'min:0'],
             'trailer' => ['nullable', 'string', 'max:50'],
+            'consolidation_number' => ['nullable', 'string', 'max:255'],
             'drayage' => ['nullable', 'string'],
             'on_site' => ['nullable', 'boolean'],
             'shipped' => ['nullable', 'boolean'],
@@ -479,6 +480,57 @@ class ShipmentController extends Controller
                 : null,
         ])->values();
 
+        $canManageConsolidation = (bool) $request->user()?->hasRole(['administrator', 'supervisor']);
+
+        $consolidatedShipments = collect();
+        if (filled($shipment->consolidation_number)) {
+            $consolidatedShipments = Shipment::query()
+                ->where('consolidation_number', $shipment->consolidation_number)
+                ->orderBy('shipment_number')
+                ->get();
+        }
+
+        if ($consolidatedShipments->isEmpty()) {
+            $consolidatedShipments = collect([$shipment]);
+        }
+
+        $consolidationMembers = $consolidatedShipments->map(fn (Shipment $groupShipment): array => [
+            'id' => $groupShipment->guid,
+            'shipment_number' => $groupShipment->shipment_number,
+            'bol' => $groupShipment->bol,
+            'rack_qty' => (int) ($groupShipment->rack_qty ?? 0),
+            'load_bar_qty' => (int) ($groupShipment->load_bar_qty ?? 0),
+            'strap_qty' => (int) ($groupShipment->strap_qty ?? 0),
+            'carrier_id' => $groupShipment->carrier_id,
+            'trailer_id' => $groupShipment->trailer_id,
+        ])->values();
+
+        $consolidationTotals = [
+            'rack_qty' => $consolidatedShipments->sum(fn (Shipment $groupShipment): int => (int) ($groupShipment->rack_qty ?? 0)),
+            'load_bar_qty' => $consolidatedShipments->sum(fn (Shipment $groupShipment): int => (int) ($groupShipment->load_bar_qty ?? 0)),
+            'strap_qty' => $consolidatedShipments->sum(fn (Shipment $groupShipment): int => (int) ($groupShipment->strap_qty ?? 0)),
+        ];
+
+        $eligibleConsolidationShipments = Shipment::query()
+            ->where('pickup_location_id', $shipment->pickup_location_id)
+            ->where('dc_location_id', $shipment->dc_location_id)
+            ->whereKeyNot($shipment->getKey())
+            ->orderBy('shipment_number')
+            ->get(['id', 'guid', 'shipment_number', 'bol', 'carrier_id', 'trailer_id'])
+            ->map(fn (Shipment $candidate): array => [
+                'id' => $candidate->guid,
+                'shipment_number' => $candidate->shipment_number,
+                'bol' => $candidate->bol,
+                'carrier_id' => $candidate->carrier_id,
+                'trailer_id' => $candidate->trailer_id,
+            ])
+            ->values();
+
+        $selectedConsolidationShipmentIds = $consolidationMembers
+            ->pluck('id')
+            ->filter(fn (string $shipmentGuid): bool => $shipmentGuid !== $shipment->guid)
+            ->values();
+
         $shipmentData['pickup_location'] = $shipment->pickupLocation ? [
             'id' => $shipment->pickupLocation->guid,
             'short_code' => $shipment->pickupLocation->short_code,
@@ -514,6 +566,14 @@ class ShipmentController extends Controller
             'googleSheetsUrl' => AppSetting::getValue(AppSetting::GOOGLE_SHEET_URL_KEY),
             'availableCarriers' => $availableCarriers,
             'offeredCarriers' => $offeredCarriers,
+            'canManageConsolidation' => $canManageConsolidation,
+            'consolidationData' => [
+                'number' => $shipment->consolidation_number,
+                'members' => $consolidationMembers,
+                'totals' => $consolidationTotals,
+                'eligible_shipments' => $eligibleConsolidationShipments,
+                'selected_shipment_ids' => $selectedConsolidationShipmentIds,
+            ],
         ]);
     }
 
@@ -678,6 +738,7 @@ class ShipmentController extends Controller
             'load_bar_qty' => 'integer|min:0',
             'strap_qty' => 'integer|min:0',
             'trailer' => 'nullable|string|max:50',
+            'consolidation_number' => 'nullable|string|max:255',
             'drayage' => 'nullable|string',
             'on_site' => 'nullable|date',
             'shipped' => 'nullable|date',
@@ -691,6 +752,14 @@ class ShipmentController extends Controller
 
         $validated['pickup_location_id'] = $this->resolveLocationIdByGuid($validated['pickup_location_id'] ?? null);
         $validated['dc_location_id'] = $this->resolveLocationIdByGuid($validated['dc_location_id'] ?? null);
+        $validated['consolidation_number'] = isset($validated['consolidation_number'])
+            ? trim((string) $validated['consolidation_number'])
+            : null;
+        $validated['consolidation_number'] = $validated['consolidation_number'] === ''
+            ? null
+            : $validated['consolidation_number'];
+
+        $previousConsolidationNumber = $shipment->consolidation_number;
 
         $offeredCarrierIds = collect($validated['offered_carrier_ids'] ?? [])
             ->map(fn ($carrierId) => (string) $carrierId)
@@ -702,6 +771,14 @@ class ShipmentController extends Controller
         $this->syncTrailerAssignments($shipment, $validated);
 
         $shipment->update($validated);
+
+        if (array_key_exists('consolidation_number', $validated) && $previousConsolidationNumber !== $shipment->consolidation_number) {
+            if (filled($previousConsolidationNumber)) {
+                Shipment::query()
+                    ->where('consolidation_number', $previousConsolidationNumber)
+                    ->update(['consolidation_number' => $shipment->consolidation_number]);
+            }
+        }
 
         if ($shipment->carrier_id) {
             $shipment->offeredCarriers()->sync([]);
@@ -742,6 +819,91 @@ class ShipmentController extends Controller
 
         return redirect()->route('admin.shipments.show', $shipment)
             ->with('success', 'Shipment offers updated successfully.');
+    }
+
+    public function updateConsolidation(Request $request, Shipment $shipment)
+    {
+        abort_unless($request->user()?->hasRole(['administrator', 'supervisor']), 403);
+
+        $validated = $request->validate([
+            'consolidated_shipment_ids' => 'nullable|array',
+            'consolidated_shipment_ids.*' => 'uuid|exists:shipments,guid',
+            'clear_consolidation' => 'nullable|boolean',
+        ]);
+
+        if (($validated['clear_consolidation'] ?? false) === true) {
+            if (filled($shipment->consolidation_number)) {
+                Shipment::query()
+                    ->where('consolidation_number', $shipment->consolidation_number)
+                    ->update(['consolidation_number' => null]);
+            } else {
+                $shipment->update(['consolidation_number' => null]);
+            }
+
+            return redirect()->route('admin.shipments.show', $shipment)
+                ->with('success', 'Shipment consolidation removed successfully.');
+        }
+
+        $selectedGuids = collect($validated['consolidated_shipment_ids'] ?? [])
+            ->map(fn (string $shipmentGuid): string => (string) $shipmentGuid)
+            ->filter(fn (string $shipmentGuid): bool => $shipmentGuid !== $shipment->guid)
+            ->unique()
+            ->values();
+
+        $selectedShipments = Shipment::query()
+            ->whereIn('guid', $selectedGuids->all())
+            ->where('pickup_location_id', $shipment->pickup_location_id)
+            ->where('dc_location_id', $shipment->dc_location_id)
+            ->get();
+
+        if ($selectedShipments->count() !== $selectedGuids->count()) {
+            throw ValidationException::withMessages([
+                'consolidated_shipment_ids' => 'All selected shipments must have the same pickup and DC locations as this shipment.',
+            ]);
+        }
+
+        if ($selectedShipments->isEmpty()) {
+            if (filled($shipment->consolidation_number)) {
+                Shipment::query()
+                    ->where('consolidation_number', $shipment->consolidation_number)
+                    ->update(['consolidation_number' => null]);
+            } else {
+                $shipment->update(['consolidation_number' => null]);
+            }
+
+            return redirect()->route('admin.shipments.show', $shipment)
+                ->with('success', 'Shipment consolidation updated successfully.');
+        }
+
+        $consolidationNumber = filled($shipment->consolidation_number)
+            ? (string) $shipment->consolidation_number
+            : (string) Str::uuid();
+
+        $targetShipmentIds = $selectedShipments
+            ->pluck('id')
+            ->push($shipment->getKey())
+            ->unique()
+            ->values();
+
+        Shipment::query()
+            ->whereIn('id', $targetShipmentIds->all())
+            ->update([
+                'consolidation_number' => $consolidationNumber,
+                'carrier_id' => $shipment->carrier_id,
+                'trailer_id' => $shipment->trailer_id,
+                'loaned_from_trailer_id' => $shipment->loaned_from_trailer_id,
+                'trailer' => $shipment->trailer,
+            ]);
+
+        Shipment::query()
+            ->where('pickup_location_id', $shipment->pickup_location_id)
+            ->where('dc_location_id', $shipment->dc_location_id)
+            ->where('consolidation_number', $consolidationNumber)
+            ->whereNotIn('id', $targetShipmentIds->all())
+            ->update(['consolidation_number' => null]);
+
+        return redirect()->route('admin.shipments.show', $shipment)
+            ->with('success', 'Shipment consolidation updated successfully.');
     }
 
     public function destroy(Shipment $shipment)
@@ -1055,6 +1217,8 @@ class ShipmentController extends Controller
             $failedMessages = [];
 
             foreach ($sheetRows as [$headers, $rows]) {
+                $previousGoogleSheetsRowContext = null;
+
                 foreach ($rows as $row) {
                     if ($this->rowIsEmpty($row)) {
                         continue;
@@ -1062,6 +1226,11 @@ class ShipmentController extends Controller
 
                     try {
                         $mappedRow = $this->mapGoogleSheetsRow($headers, $row);
+                        [$mappedRow, $shouldConsolidateWithPrevious] = $this->resolveGoogleSheetsCarryForwardValues(
+                            $mappedRow,
+                            $previousGoogleSheetsRowContext
+                        );
+
                         $shipment = $this->resolveShipmentForGoogleSheetsRow($mappedRow);
 
                         if (! $shipment) {
@@ -1072,7 +1241,16 @@ class ShipmentController extends Controller
 
                         $attributes = $this->buildGoogleSheetsShipmentAttributes($mappedRow, $shipment);
 
+                        if ($shouldConsolidateWithPrevious) {
+                            $attributes = $this->applyGoogleSheetsConsolidationAttributes(
+                                $attributes,
+                                $shipment,
+                                $previousGoogleSheetsRowContext['shipment']
+                            );
+                        }
+
                         if ($attributes === []) {
+                            $previousGoogleSheetsRowContext = $this->buildGoogleSheetsPreviousRowContext($shipment);
                             $unchanged++;
 
                             continue;
@@ -1085,6 +1263,7 @@ class ShipmentController extends Controller
                         $shipment->fill($attributes);
 
                         if (! $shipment->isDirty()) {
+                            $previousGoogleSheetsRowContext = $this->buildGoogleSheetsPreviousRowContext($shipment);
                             $unchanged++;
 
                             continue;
@@ -1102,6 +1281,7 @@ class ShipmentController extends Controller
                             'Google Sheets import updated this shipment:'
                         );
 
+                        $previousGoogleSheetsRowContext = $this->buildGoogleSheetsPreviousRowContext($shipment);
                         $updated++;
                     } catch (ValidationException $exception) {
                         $failed++;
@@ -1157,6 +1337,57 @@ class ShipmentController extends Controller
         $spreadsheetId = $matches[1];
 
         return 'https://docs.google.com/spreadsheets/d/'.$spreadsheetId.'/export?format=xlsx';
+    }
+
+    /**
+     * @param  array<string, string>  $mappedRow
+     * @param  array{shipment: Shipment, trailer: string, load_bar_qty: int, strap_qty: int}|null  $previousRowContext
+     * @return array{0: array<string, string>, 1: bool}
+     */
+    private function resolveGoogleSheetsCarryForwardValues(array $mappedRow, ?array $previousRowContext): array
+    {
+        $shouldConsolidateWithPrevious = $this->isGoogleSheetsCarryForwardMarker($mappedRow['trailer'] ?? null);
+
+        if ($shouldConsolidateWithPrevious) {
+            if ($previousRowContext === null) {
+                throw ValidationException::withMessages([
+                    'google_sheet_url' => 'Trailer "^" requires a shipment row immediately above it on the same sheet.',
+                ]);
+            }
+
+            $mappedRow['trailer'] = $previousRowContext['trailer'];
+        }
+
+        if ($this->isGoogleSheetsCarryForwardMarker($mappedRow['load_bar_qty'] ?? null)) {
+            if ($previousRowContext === null) {
+                throw ValidationException::withMessages([
+                    'google_sheet_url' => 'Load bars "^" requires a shipment row immediately above it on the same sheet.',
+                ]);
+            }
+
+            $mappedRow['load_bar_qty'] = (string) $previousRowContext['load_bar_qty'];
+        }
+
+        if ($this->isGoogleSheetsCarryForwardMarker($mappedRow['strap_qty'] ?? null)) {
+            if ($previousRowContext === null) {
+                throw ValidationException::withMessages([
+                    'google_sheet_url' => 'Straps "^" requires a shipment row immediately above it on the same sheet.',
+                ]);
+            }
+
+            $mappedRow['strap_qty'] = (string) $previousRowContext['strap_qty'];
+        }
+
+        return [$mappedRow, $shouldConsolidateWithPrevious];
+    }
+
+    private function isGoogleSheetsCarryForwardMarker(?string $value): bool
+    {
+        if ($value === null) {
+            return false;
+        }
+
+        return str_contains(trim($value), '^');
     }
 
     /**
@@ -1463,6 +1694,56 @@ class ShipmentController extends Controller
         }
 
         return $attributes;
+    }
+
+    /**
+     * @param  array<string, mixed>  $attributes
+     * @return array<string, mixed>
+     */
+    private function applyGoogleSheetsConsolidationAttributes(array $attributes, Shipment $shipment, Shipment $previousShipment): array
+    {
+        $currentPickupLocationId = $attributes['pickup_location_id'] ?? $shipment->pickup_location_id;
+        $currentDcLocationId = $attributes['dc_location_id'] ?? $shipment->dc_location_id;
+
+        if (
+            $currentPickupLocationId !== $previousShipment->pickup_location_id
+            || $currentDcLocationId !== $previousShipment->dc_location_id
+        ) {
+            throw ValidationException::withMessages([
+                'google_sheet_url' => 'Trailer "^" can only consolidate shipments that have the same pickup location and the same DC location as the row above it.',
+            ]);
+        }
+
+        $consolidationNumber = $previousShipment->consolidation_number;
+
+        if (blank($consolidationNumber)) {
+            $consolidationNumber = (string) Str::uuid();
+
+            $previousShipment->forceFill([
+                'consolidation_number' => $consolidationNumber,
+            ])->saveQuietly();
+        }
+
+        $attributes['consolidation_number'] = $consolidationNumber;
+        $attributes['carrier_id'] = $previousShipment->carrier_id;
+        $attributes['trailer_id'] = $previousShipment->trailer_id;
+        $attributes['loaned_from_trailer_id'] = $previousShipment->loaned_from_trailer_id;
+        $attributes['trailer'] = $previousShipment->trailer;
+
+        return $attributes;
+    }
+
+    /**
+     * @return array{shipment: Shipment, trailer: string, load_bar_qty: int, strap_qty: int}
+     */
+    private function buildGoogleSheetsPreviousRowContext(Shipment $shipment): array
+    {
+        return [
+            'shipment' => $shipment,
+            'trailer' => (string) ($shipment->trailer ?? ''),
+            'load_bar_qty' => (int) ($shipment->load_bar_qty ?? 0),
+            'strap_qty' => (int) ($shipment->strap_qty ?? 0),
+        ];
     }
 
     private function resolveLocationForGoogleSheetsImport(string $value, string $type): Location

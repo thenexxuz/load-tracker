@@ -299,6 +299,179 @@ it('normalizes checked-in status from google sheets import', function (): void {
         ->status->toBe('Checked In');
 });
 
+it('treats trailer, load bars, and straps carets as carry-forward values from the prior row', function (): void {
+    $workbookContents = buildGoogleSheetsWorkbook([
+        'Sheet 1' => [
+            ['Shipment Number', 'Status', 'Origin', 'Destination', 'Carrier', 'Trailer Number', 'Load Bars', 'Straps'],
+            ['LOAD-700', 'Booked', 'ING', 'AMS', 'Carrier Beta', 'TRL-700', '4', '12'],
+            ['LOAD-701', 'Booked', 'ING', 'AMS', '', '^', '^', '^'],
+        ],
+    ]);
+
+    Http::fake([
+        'docs.google.com/spreadsheets/*' => Http::response($workbookContents, 200, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]),
+    ]);
+
+    $admin = User::factory()->create();
+    $admin->assignRole('administrator');
+
+    $pickup = Location::factory()->pickup()->create(['short_code' => 'ING', 'name' => 'Ingrasys']);
+    $dc = Location::factory()->distribution_center()->create(['short_code' => 'AMS', 'name' => 'AMS DC']);
+    $carrier = Carrier::factory()->create(['name' => 'Carrier Beta', 'short_code' => 'BETA']);
+
+    $shipmentOne = Shipment::query()->create([
+        'shipment_number' => 'LOAD-700',
+        'status' => 'Pending',
+        'pickup_location_id' => $pickup->id,
+        'dc_location_id' => $dc->id,
+        'rack_qty' => 1,
+        'load_bar_qty' => 1,
+        'strap_qty' => 1,
+    ]);
+
+    $shipmentTwo = Shipment::query()->create([
+        'shipment_number' => 'LOAD-701',
+        'status' => 'Pending',
+        'pickup_location_id' => $pickup->id,
+        'dc_location_id' => $dc->id,
+        'rack_qty' => 2,
+        'load_bar_qty' => 0,
+        'strap_qty' => 0,
+    ]);
+
+    $response = $this->actingAs($admin)->post(route('admin.shipments.google-sheets-import'), [
+        'google_sheet_url' => 'https://docs.google.com/spreadsheets/d/test-sheet-id/edit#gid=0',
+    ]);
+
+    $response->assertRedirect(route('admin.shipments.index'));
+    $response->assertSessionHas('success', fn (string $message) => str_contains($message, '2 shipment(s) updated from Google Sheets.'));
+
+    $trailer = Trailer::query()->where('number', 'TRL-700')->where('carrier_id', $carrier->id)->first();
+
+    expect($trailer)->not->toBeNull();
+
+    $shipmentOne->refresh();
+    $shipmentTwo->refresh();
+
+    expect($shipmentOne)
+        ->carrier_id->toBe($carrier->id)
+        ->trailer_id->toBe($trailer?->id)
+        ->trailer->toBe('TRL-700')
+        ->load_bar_qty->toBe(4)
+        ->strap_qty->toBe(12);
+
+    expect($shipmentTwo)
+        ->carrier_id->toBe($carrier->id)
+        ->trailer_id->toBe($trailer?->id)
+        ->trailer->toBe('TRL-700')
+        ->load_bar_qty->toBe(4)
+        ->strap_qty->toBe(12)
+        ->consolidation_number->toBe($shipmentOne->consolidation_number);
+
+    expect($shipmentOne->consolidation_number)->not->toBeNull();
+});
+
+it('rejects a trailer caret on the first shipment row of a worksheet', function (): void {
+    $workbookContents = buildGoogleSheetsWorkbook([
+        'Sheet 1' => [
+            ['Shipment Number', 'Status', 'Origin', 'Destination', 'Trailer Number'],
+            ['LOAD-710', 'Booked', 'ING', 'AMS', '^'],
+        ],
+    ]);
+
+    Http::fake([
+        'docs.google.com/spreadsheets/*' => Http::response($workbookContents, 200, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]),
+    ]);
+
+    $admin = User::factory()->create();
+    $admin->assignRole('administrator');
+
+    $pickup = Location::factory()->pickup()->create(['short_code' => 'ING', 'name' => 'Ingrasys']);
+    $dc = Location::factory()->distribution_center()->create(['short_code' => 'AMS', 'name' => 'AMS DC']);
+
+    Shipment::query()->create([
+        'shipment_number' => 'LOAD-710',
+        'status' => 'Pending',
+        'pickup_location_id' => $pickup->id,
+        'dc_location_id' => $dc->id,
+    ]);
+
+    $response = $this->actingAs($admin)
+        ->from(route('admin.shipments.index'))
+        ->post(route('admin.shipments.google-sheets-import'), [
+            'google_sheet_url' => 'https://docs.google.com/spreadsheets/d/test-sheet-id/edit#gid=0',
+        ]);
+
+    $response->assertRedirect(route('admin.shipments.index'));
+    $response->assertSessionHasErrors('google_sheet_url');
+
+    expect(session('errors')->first('google_sheet_url'))
+        ->toContain('Trailer "^" requires a shipment row immediately above it on the same sheet.');
+});
+
+it('rejects trailer caret consolidation when the row lane does not match the shipment above it', function (): void {
+    $workbookContents = buildGoogleSheetsWorkbook([
+        'Sheet 1' => [
+            ['Shipment Number', 'Status', 'Origin', 'Destination', 'Carrier', 'Trailer Number'],
+            ['LOAD-720', 'Booked', 'ING', 'AMS', 'Carrier Beta', 'TRL-720'],
+            ['LOAD-721', 'Booked', 'DAL', 'HOU', '', '^'],
+        ],
+    ]);
+
+    Http::fake([
+        'docs.google.com/spreadsheets/*' => Http::response($workbookContents, 200, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]),
+    ]);
+
+    $admin = User::factory()->create();
+    $admin->assignRole('administrator');
+
+    $pickupOne = Location::factory()->pickup()->create(['short_code' => 'ING', 'name' => 'Ingrasys']);
+    $dcOne = Location::factory()->distribution_center()->create(['short_code' => 'AMS', 'name' => 'AMS DC']);
+    $pickupTwo = Location::factory()->pickup()->create(['short_code' => 'DAL', 'name' => 'Dallas']);
+    $dcTwo = Location::factory()->distribution_center()->create(['short_code' => 'HOU', 'name' => 'Houston']);
+    $carrier = Carrier::factory()->create(['name' => 'Carrier Beta', 'short_code' => 'BETA']);
+
+    $shipmentOne = Shipment::query()->create([
+        'shipment_number' => 'LOAD-720',
+        'status' => 'Pending',
+        'pickup_location_id' => $pickupOne->id,
+        'dc_location_id' => $dcOne->id,
+    ]);
+
+    $shipmentTwo = Shipment::query()->create([
+        'shipment_number' => 'LOAD-721',
+        'status' => 'Pending',
+        'pickup_location_id' => $pickupTwo->id,
+        'dc_location_id' => $dcTwo->id,
+    ]);
+
+    $response = $this->actingAs($admin)->post(route('admin.shipments.google-sheets-import'), [
+        'google_sheet_url' => 'https://docs.google.com/spreadsheets/d/test-sheet-id/edit#gid=0',
+    ]);
+
+    $response->assertRedirect(route('admin.shipments.index'));
+    $response->assertSessionHas('success', fn (string $message) => str_contains($message, '1 shipment(s) updated from Google Sheets.') && str_contains($message, '1 row(s) were skipped.'));
+
+    $shipmentOne->refresh();
+    $shipmentTwo->refresh();
+
+    expect($shipmentOne)
+        ->carrier_id->toBe($carrier->id)
+        ->trailer->toBe('TRL-720');
+
+    expect($shipmentTwo)
+        ->carrier_id->toBeNull()
+        ->trailer_id->toBeNull()
+        ->trailer->toBeNull()
+        ->consolidation_number->toBeNull();
+});
+
 /**
  * @param  array<string, array<int, array<int, string>>>  $sheets
  */
