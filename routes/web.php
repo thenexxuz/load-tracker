@@ -73,6 +73,7 @@ Route::middleware(['auth', 'role:administrator|supervisor'])->prefix('admin')->n
     Route::resource('scheduled-items', ScheduledItemController::class);
     // Location Routes
     Route::get('locations/recycling-distances', [LocationController::class, 'recyclingDistances'])->name('locations.recycling-distances');
+    Route::get('locations/recycling-map', [LocationController::class, 'recyclingMap'])->name('locations.recycling-map');
     Route::get('locations/distances/{dc_id}/{rec_id}/map', [LocationController::class, 'recyclingDistanceMap'])->name('locations.recycling-distance-map');
     Route::get('locations/multi-route', [LocationController::class, 'multiRoute'])->name('locations.multi-route');
     Route::post('locations/multi-route', [LocationController::class, 'calculateMultiRoute'])->name('locations.multi-route-calculate');

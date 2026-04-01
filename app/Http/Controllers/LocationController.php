@@ -450,6 +450,30 @@ class LocationController extends Controller
         ]);
     }
 
+    public function recyclingMap()
+    {
+        $recyclingLocations = Location::query()
+            ->where('type', 'recycling')
+            ->orderBy('short_code')
+            ->get(['id', 'guid', 'short_code', 'name', 'address', 'city', 'state', 'zip', 'country', 'latitude', 'longitude']);
+
+        return Inertia::render('Admin/Locations/RecyclingLocationsMap', [
+            'recycling_locations' => $recyclingLocations->map(fn (Location $location) => [
+                'id' => $location->guid,
+                'short_code' => $location->short_code,
+                'name' => $location->name,
+                'address' => $location->address,
+                'city' => $location->city,
+                'state' => $location->state,
+                'zip' => $location->zip,
+                'country' => $location->country,
+                'latitude' => $location->latitude,
+                'longitude' => $location->longitude,
+            ])->values(),
+            'mapbox_token' => config('services.mapbox.key'),
+        ]);
+    }
+
     /**
      * Show the multi-location route planner page.
      */

@@ -130,6 +130,13 @@ const mainNavItems: NavItem[] = [
         icon: Ruler,
       }]
     : []),
+  ...(hasLocationsAccess && isOnLocations.value
+    ? [{
+        title: 'Recycling Map',
+        href: route('admin.locations.recycling-map'),
+        icon: Map,
+      }]
+    : []),
   ...(hasShipmentAccess
     ? [{
         title: 'Shipments',
