@@ -5,10 +5,15 @@ it('keeps the rates index controller query wired for filters and name sorting', 
     $controller = file_get_contents($projectRoot.'/app/Http/Controllers/RateController.php');
 
     expect($controller)
+        ->toContain('$search = trim((string) $request->input(\'search\', \'\'));')
         ->toContain('$sortBy = $request->input(\'sort_by\');')
         ->toContain('$status = $request->input(\'status\');')
         ->toContain('$type = $request->input(\'type\');')
         ->toContain('$carrierId = $request->input(\'carrier_id\');')
+        ->toContain('if ($search !== \'\')')
+        ->toContain('->where(\'destination_city\', \'like\', $searchLike)')
+        ->toContain('->orWhereHas(\'pickupLocation\'')
+        ->toContain('->orWhereHas(\'carrier\'')
         ->toContain('if ($status === \'active\')')
         ->toContain('if ($status === \'inactive\')')
         ->toContain('if ($sortBy === \'name\')')
@@ -32,6 +37,11 @@ it('keeps the rates index page controls for type carrier status filters and sort
     $page = file_get_contents($projectRoot.'/resources/js/pages/Admin/Rates/Index.vue');
 
     expect($page)
+        ->toContain("const searchQuery = ref(props.filters?.search ?? '')")
+        ->toContain('const applySearch = debounce(() => {')
+        ->toContain('watch(searchQuery, () => {')
+        ->toContain('v-model="searchQuery"')
+        ->toContain('placeholder="Search all rate fields..."')
         ->toContain('const typeHeaderText = computed(() => {')
         ->toContain('const carrierHeaderText = computed(() => {')
         ->toContain('const statusHeaderText = computed(() => {')

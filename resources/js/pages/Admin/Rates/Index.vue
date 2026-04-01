@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, Link, router } from '@inertiajs/vue3'
 import { onClickOutside } from '@vueuse/core'
+import { debounce } from 'lodash'
 import { format } from 'date-fns' // optional: better date formatting (npm install date-fns)
 import { Confirm, Notify } from 'notiflix'
 import { computed, nextTick, ref, watch } from 'vue'
@@ -52,9 +53,10 @@ const props = defineProps<{
 const typeFilter = ref(props.filters?.type ?? '')
 const carrierFilter = ref(props.filters?.carrier_id ? String(props.filters.carrier_id) : '')
 const statusFilter = ref(props.filters?.status ?? '')
+const searchQuery = ref(props.filters?.search ?? '')
 
 const currentParams = computed(() => ({
-  search: props.filters?.search || undefined,
+  search: searchQuery.value.trim() || undefined,
   type: typeFilter.value || undefined,
   carrier_id: carrierFilter.value || undefined,
   status: statusFilter.value || undefined,
@@ -76,6 +78,14 @@ const applyFilters = () => {
 
 watch([typeFilter, carrierFilter, statusFilter], () => {
   applyFilters()
+})
+
+const applySearch = debounce(() => {
+  applyFilters()
+}, 300)
+
+watch(searchQuery, () => {
+  applySearch()
 })
 
 const typeHeaderText = computed(() => {
@@ -320,6 +330,15 @@ const changePerPage = (value: number) => {
         >
           Create New Rate
         </Link>
+      </div>
+
+      <div class="mb-4">
+        <input
+          v-model="searchQuery"
+          type="text"
+          placeholder="Search all rate fields..."
+          class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+        >
       </div>
 
       <!-- Table -->

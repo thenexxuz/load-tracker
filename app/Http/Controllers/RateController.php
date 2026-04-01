@@ -13,6 +13,7 @@ class RateController extends Controller
 {
     public function index(Request $request)
     {
+        $search = trim((string) $request->input('search', ''));
         $sortBy = $request->input('sort_by');
         $sortDirection = $request->input('sort_direction') === 'desc' ? 'desc' : 'asc';
         $status = $request->input('status');
@@ -25,8 +26,34 @@ class RateController extends Controller
                 'carrier:id,name,short_code',
             ]);
 
-        if ($request->search) {
-            $query->where('name', 'like', '%'.$request->search.'%');
+        if ($search !== '') {
+            $query->where(function ($searchQuery) use ($search) {
+                $searchLike = '%'.$search.'%';
+
+                $searchQuery
+                    ->where('name', 'like', $searchLike)
+                    ->orWhere('type', 'like', $searchLike)
+                    ->orWhere('rate', 'like', $searchLike)
+                    ->orWhere('destination_city', 'like', $searchLike)
+                    ->orWhere('destination_state', 'like', $searchLike)
+                    ->orWhere('destination_country', 'like', $searchLike)
+                    ->orWhere('effective_from', 'like', $searchLike)
+                    ->orWhere('effective_to', 'like', $searchLike)
+                    ->orWhereHas('pickupLocation', function ($pickupQuery) use ($searchLike) {
+                        $pickupQuery
+                            ->where('short_code', 'like', $searchLike)
+                            ->orWhere('name', 'like', $searchLike)
+                            ->orWhere('city', 'like', $searchLike)
+                            ->orWhere('state', 'like', $searchLike)
+                            ->orWhere('country', 'like', $searchLike);
+                    })
+                    ->orWhereHas('carrier', function ($carrierQuery) use ($searchLike) {
+                        $carrierQuery
+                            ->where('name', 'like', $searchLike)
+                            ->orWhere('short_code', 'like', $searchLike)
+                            ->orWhere('wt_code', 'like', $searchLike);
+                    });
+            });
         }
 
         if (in_array($type, ['flat', 'per_mile'], true)) {
@@ -73,7 +100,7 @@ class RateController extends Controller
                 ->orderBy('name')
                 ->get(),
             'filters' => [
-                'search' => $request->input('search'),
+                'search' => $search !== '' ? $search : null,
                 'type' => $type,
                 'carrier_id' => $carrierId,
                 'status' => $status,
