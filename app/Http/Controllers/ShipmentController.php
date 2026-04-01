@@ -439,8 +439,19 @@ class ShipmentController extends Controller
             ->orderBy('rate')
             ->get();
 
-        // Combine rates, with regular rates first, then recycling rates
-        $rates = $regularRates->merge($recyclingRates);
+        // Combine rates and sort for display: shared rates first, then carrier-specific rates, lowest to highest.
+        $rates = $regularRates->merge($recyclingRates)
+            ->sort(function (Rate $leftRate, Rate $rightRate): int {
+                $leftHasCarrier = $leftRate->carrier_id !== null;
+                $rightHasCarrier = $rightRate->carrier_id !== null;
+
+                if ($leftHasCarrier !== $rightHasCarrier) {
+                    return $leftHasCarrier <=> $rightHasCarrier;
+                }
+
+                return $leftRate->rate <=> $rightRate->rate;
+            })
+            ->values();
 
         // Transform rates to match frontend expectations
         $transformedRates = $rates->map(function ($rate) {
