@@ -83,7 +83,18 @@ class CarrierController extends Controller
             ->orderBy('created_at', 'desc')
             ->get();
 
-        $activeTrailerAssignments = $assignedShipments
+        $groupedAssignedShipments = $assignedShipments
+            ->groupBy(fn (Shipment $shipment): string => filled($shipment->consolidation_number)
+                ? 'consolidation:'.$shipment->consolidation_number
+                : 'shipment:'.$shipment->getKey())
+            ->map(fn ($shipmentGroup) => filled($shipmentGroup->first()?->consolidation_number)
+                ? $shipmentGroup->sortBy('shipment_number', SORT_NATURAL)->values()
+                : $shipmentGroup->values())
+            ->values()
+            ->flatten(1)
+            ->values();
+
+        $activeTrailerAssignments = $groupedAssignedShipments
             ->map(function (Shipment $shipment) {
                 $trailer = $shipment->getRelation('trailer');
 

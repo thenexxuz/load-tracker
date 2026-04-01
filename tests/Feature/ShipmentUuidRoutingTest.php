@@ -40,6 +40,56 @@ test('shipments index exposes guid as the public id', function (): void {
         );
 });
 
+test('shipments index keeps consolidated shipments adjacent within the list', function (): void {
+    $admin = User::factory()->create();
+    $admin->assignRole('administrator');
+
+    $pickup = Location::factory()->pickup()->create();
+    $dc = Location::factory()->distribution_center()->create();
+
+    Shipment::query()->create([
+        'guid' => (string) str()->uuid(),
+        'shipment_number' => 'SHIP-GROUP-A',
+        'status' => 'Pending',
+        'consolidation_number' => 'CONSOL-GROUP-001',
+        'pickup_location_id' => $pickup->id,
+        'dc_location_id' => $dc->id,
+        'created_at' => now()->subMinute(),
+        'updated_at' => now()->subMinute(),
+    ]);
+
+    Shipment::query()->create([
+        'guid' => (string) str()->uuid(),
+        'shipment_number' => 'SHIP-SOLO-001',
+        'status' => 'Pending',
+        'pickup_location_id' => $pickup->id,
+        'dc_location_id' => $dc->id,
+        'created_at' => now()->subMinutes(2),
+        'updated_at' => now()->subMinutes(2),
+    ]);
+
+    Shipment::query()->create([
+        'guid' => (string) str()->uuid(),
+        'shipment_number' => 'SHIP-GROUP-B',
+        'status' => 'Pending',
+        'consolidation_number' => 'CONSOL-GROUP-001',
+        'pickup_location_id' => $pickup->id,
+        'dc_location_id' => $dc->id,
+        'created_at' => now()->subMinutes(3),
+        'updated_at' => now()->subMinutes(3),
+    ]);
+
+    $this->actingAs($admin)
+        ->get(route('admin.shipments.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Admin/Shipments/Index')
+            ->where('shipments.data.0.shipment_number', 'SHIP-GROUP-A')
+            ->where('shipments.data.1.shipment_number', 'SHIP-GROUP-B')
+            ->where('shipments.data.2.shipment_number', 'SHIP-SOLO-001')
+        );
+});
+
 test('shipment show and edit pages resolve shipments by guid', function (): void {
     $admin = User::factory()->create();
     $admin->assignRole('administrator');

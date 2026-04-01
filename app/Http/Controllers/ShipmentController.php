@@ -117,6 +117,19 @@ class ShipmentController extends Controller
 
         $shipments = $query->paginate($perPage);
 
+        $shipments->setCollection(
+            $shipments->getCollection()
+                ->groupBy(fn (Shipment $shipment): string => filled($shipment->consolidation_number)
+                    ? 'consolidation:'.$shipment->consolidation_number
+                    : 'shipment:'.$shipment->getKey())
+                ->map(fn ($shipmentGroup) => filled($shipmentGroup->first()?->consolidation_number)
+                    ? $shipmentGroup->sortBy('shipment_number', SORT_NATURAL)->values()
+                    : $shipmentGroup->values())
+                ->values()
+                ->flatten(1)
+                ->values()
+        );
+
         // Transform to add has_notes if you use that indicator
         $shipments->getCollection()->transform(function (Shipment $shipment): array {
             return [

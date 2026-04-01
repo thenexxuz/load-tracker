@@ -154,6 +154,15 @@ class LocationController extends Controller
             ->orderBy('created_at', 'desc')
             ->limit(50)
             ->get()
+            ->groupBy(fn ($shipment): string => filled($shipment->consolidation_number)
+                ? 'consolidation:'.$shipment->consolidation_number
+                : 'shipment:'.$shipment->getKey())
+            ->map(fn ($shipmentGroup) => filled($shipmentGroup->first()?->consolidation_number)
+                ? $shipmentGroup->sortBy('shipment_number', SORT_NATURAL)->values()
+                : $shipmentGroup->values())
+            ->values()
+            ->flatten(1)
+            ->values()
             ->map(function ($shipment) {
                 $trailer = $shipment->getRelation('trailer');
 

@@ -86,6 +86,19 @@ const editForm = ref({
 const trailerSearchInput = ref('')
 const isSubmitting = ref(false)
 const editError = ref<string | null>(null)
+const hoveredConsolidationNumber = ref<string | null>(null)
+
+const setHoveredConsolidationNumber = (consolidationNumber: string | null): void => {
+  hoveredConsolidationNumber.value = consolidationNumber
+}
+
+const clearHoveredConsolidationNumber = (): void => {
+  hoveredConsolidationNumber.value = null
+}
+
+const isHoveredConsolidation = (consolidationNumber: string | null): boolean => {
+  return Boolean(consolidationNumber) && hoveredConsolidationNumber.value === consolidationNumber
+}
 
 const formatDate = (date: string | null): string => {
   if (!date) return '—'
@@ -531,10 +544,14 @@ onUnmounted(() => {
                   :key="shipment.id"
                   :class="[
                     'transition-colors',
-                    shipment.consolidation_number
-                      ? 'bg-amber-50/60 hover:bg-amber-100/70 dark:bg-amber-900/15 dark:hover:bg-amber-900/30'
+                    shipment.consolidation_number && isHoveredConsolidation(shipment.consolidation_number)
+                      ? 'bg-amber-100 hover:bg-amber-100 dark:bg-amber-900/35 dark:hover:bg-amber-900/35'
+                      : shipment.consolidation_number
+                        ? 'bg-amber-50/60 hover:bg-amber-100/70 dark:bg-amber-900/15 dark:hover:bg-amber-900/30'
                       : 'hover:bg-gray-50 dark:hover:bg-gray-700/50',
                   ]"
+                  @mouseenter="setHoveredConsolidationNumber(shipment.consolidation_number)"
+                  @mouseleave="clearHoveredConsolidationNumber"
                 >
                   <td class="px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">
                     {{ shipment.shipment_number }}

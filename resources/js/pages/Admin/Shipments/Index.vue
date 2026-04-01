@@ -85,6 +85,19 @@ const dropStart = ref<string>(props.filters?.drop_start || '')
 const dropEnd = ref<string>(props.filters?.drop_end || '')
 const search = ref<string>(props.filters?.search || '')
 const onlyUnassigned = ref<boolean>(Boolean(props.filters?.only_unassigned))
+const hoveredConsolidationNumber = ref<string | null>(null)
+
+const setHoveredConsolidationNumber = (consolidationNumber: string | null): void => {
+  hoveredConsolidationNumber.value = consolidationNumber
+}
+
+const clearHoveredConsolidationNumber = (): void => {
+  hoveredConsolidationNumber.value = null
+}
+
+const isHoveredConsolidation = (consolidationNumber: string | null): boolean => {
+  return Boolean(consolidationNumber) && hoveredConsolidationNumber.value === consolidationNumber
+}
 
 // ── Computed excluded values & payload ──────────────────────────────────
 const excludedStatuses = computed(() => props.statuses.filter(s => !selectedStatuses.value.includes(s)))
@@ -612,10 +625,14 @@ onMounted(() => {
               :key="shipment.id"
               :class="[
                 'cursor-pointer',
-                shipment.consolidation_number
-                  ? 'bg-amber-50/60 hover:bg-amber-100/70 dark:bg-amber-900/15 dark:hover:bg-amber-900/30'
+                shipment.consolidation_number && isHoveredConsolidation(shipment.consolidation_number)
+                  ? 'bg-amber-100 hover:bg-amber-100 dark:bg-amber-900/35 dark:hover:bg-amber-900/35'
+                  : shipment.consolidation_number
+                    ? 'bg-amber-50/60 hover:bg-amber-100/70 dark:bg-amber-900/15 dark:hover:bg-amber-900/30'
                   : 'hover:bg-gray-50 dark:hover:bg-gray-700/50',
               ]"
+              @mouseenter="setHoveredConsolidationNumber(shipment.consolidation_number)"
+              @mouseleave="clearHoveredConsolidationNumber"
               @click="goToShow(shipment.id)"
             >
               <td class="px-6 py-4 capitalize text-gray-600 dark:text-gray-400">

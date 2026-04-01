@@ -42,6 +42,19 @@ const page = usePage()
 const { auth } = page.props
 const userRoles = auth?.user?.roles || []
 const hasAdminAccess = userRoles.includes('administrator') || userRoles.includes('supervisor')
+const hoveredConsolidationNumber = ref<string | null>(null)
+
+const setHoveredConsolidationNumber = (consolidationNumber: string | null): void => {
+  hoveredConsolidationNumber.value = consolidationNumber
+}
+
+const clearHoveredConsolidationNumber = (): void => {
+  hoveredConsolidationNumber.value = null
+}
+
+const isHoveredConsolidation = (consolidationNumber: string | null): boolean => {
+  return Boolean(consolidationNumber) && hoveredConsolidationNumber.value === consolidationNumber
+}
 
 // Safe formatted dates
 const formattedCreatedAt = computed(() => {
@@ -206,9 +219,13 @@ onMounted(() => {
               <tr
                 v-for="assignment in activeTrailerAssignments"
                 :key="assignment.id"
-                :class="assignment.consolidation_number
-                  ? 'bg-amber-50/60 hover:bg-amber-100/70 dark:bg-amber-900/15 dark:hover:bg-amber-900/30'
-                  : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'"
+                :class="assignment.consolidation_number && isHoveredConsolidation(assignment.consolidation_number)
+                  ? 'bg-amber-100 hover:bg-amber-100 dark:bg-amber-900/35 dark:hover:bg-amber-900/35'
+                  : assignment.consolidation_number
+                    ? 'bg-amber-50/60 hover:bg-amber-100/70 dark:bg-amber-900/15 dark:hover:bg-amber-900/30'
+                    : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'"
+                @mouseenter="setHoveredConsolidationNumber(assignment.consolidation_number)"
+                @mouseleave="clearHoveredConsolidationNumber"
               >
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
                   {{ assignment.trailer_number ?? '—' }}
