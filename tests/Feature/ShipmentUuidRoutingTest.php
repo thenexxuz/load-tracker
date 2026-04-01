@@ -204,6 +204,59 @@ test('shipment show displays rates for same pickup when destination is within 60
         );
 });
 
+test('shipment show still includes rates without start or end lane fields', function (): void {
+    $admin = User::factory()->create();
+    $admin->assignRole('administrator');
+
+    $pickup = Location::factory()->pickup()->create();
+    $dc = Location::factory()->distribution_center()->create([
+        'city' => 'Austin',
+        'state' => 'TX',
+        'country' => 'US',
+        'latitude' => 30.2672,
+        'longitude' => -97.7431,
+    ]);
+
+    $shipment = Shipment::query()->create([
+        'guid' => (string) str()->uuid(),
+        'shipment_number' => 'SHIP-RATE-002',
+        'status' => 'Booked',
+        'pickup_location_id' => $pickup->id,
+        'dc_location_id' => $dc->id,
+    ]);
+
+    $globalRate = Rate::query()->create([
+        'name' => 'Global Fallback',
+        'type' => 'flat',
+        'pickup_location_id' => null,
+        'destination_city' => null,
+        'destination_state' => null,
+        'destination_country' => null,
+        'carrier_id' => null,
+        'rate' => 125.00,
+    ]);
+
+    $farPickupRate = Rate::query()->create([
+        'name' => 'Far Pickup Only',
+        'type' => 'flat',
+        'pickup_location_id' => Location::factory()->pickup()->create()->id,
+        'destination_city' => null,
+        'destination_state' => null,
+        'destination_country' => null,
+        'carrier_id' => null,
+        'rate' => 150.00,
+    ]);
+
+    $this->actingAs($admin)
+        ->get(route('admin.shipments.show', $shipment->guid))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Admin/Shipments/Show')
+            ->where('rates.0.id', $globalRate->id)
+            ->where('rates.1.id', $farPickupRate->id)
+        );
+});
+
 test('administrators can consolidate and unconsolidate shipments on the same lane', function (): void {
     $admin = User::factory()->create();
     $admin->assignRole('administrator');

@@ -382,10 +382,10 @@ class ShipmentController extends Controller
 
         // Base query for regular rates
         $ratesQuery = Rate::query()
-            ->where('pickup_location_id', $shipment->pickup_location_id)
-            ->whereNotNull('destination_city')
-            ->whereNotNull('destination_state')
-            ->whereNotNull('destination_country')
+            ->where(function ($query) {
+                $query->whereNull('name')
+                    ->orWhere('name', '!=', 'Recycling');
+            })
             ->with('carrier:id,name,short_code');
 
         if ($viewerIsCarrier && $viewerCarrierId) {
@@ -409,7 +409,7 @@ class ShipmentController extends Controller
             ->orderBy('carrier_id')
             ->orderBy('rate')
             ->get()
-            ->filter(fn (Rate $rate): bool => $this->isRateDestinationWithinMilesOfDc($dcLocation, $rate, 60.0))
+            ->filter(fn (Rate $rate): bool => $this->shouldIncludeRegularRateForShipment($shipment, $dcLocation, $rate))
             ->values();
 
         // Get recycling rates (separate query)
@@ -607,6 +607,23 @@ class ShipmentController extends Controller
                 ],
             ])
             ->all();
+    }
+
+    private function shouldIncludeRegularRateForShipment(Shipment $shipment, ?Location $dcLocation, Rate $rate): bool
+    {
+        // Global/fallback rates (no start or no end lane fields) should be visible on every shipment.
+        if (blank($rate->pickup_location_id)
+            || blank($rate->destination_city)
+            || blank($rate->destination_state)
+            || blank($rate->destination_country)) {
+            return true;
+        }
+
+        if ((string) $rate->pickup_location_id !== (string) $shipment->pickup_location_id) {
+            return false;
+        }
+
+        return $this->isRateDestinationWithinMilesOfDc($dcLocation, $rate, 60.0);
     }
 
     private function isRateDestinationWithinMilesOfDc(?Location $dcLocation, Rate $rate, float $maxMiles): bool

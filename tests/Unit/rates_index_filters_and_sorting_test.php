@@ -11,7 +11,7 @@ it('keeps the rates index controller query wired for filters and name sorting', 
         ->toContain('$type = $request->input(\'type\');')
         ->toContain('$carrierId = $request->input(\'carrier_id\');')
         ->toContain('if ($search !== \'\')')
-        ->toContain('->where(\'destination_city\', \'like\', $searchLike)')
+        ->toContain('->orWhere(\'destination_city\', \'like\', $searchLike)')
         ->toContain('->orWhereHas(\'pickupLocation\'')
         ->toContain('->orWhereHas(\'carrier\'')
         ->toContain('if ($status === \'active\')')
