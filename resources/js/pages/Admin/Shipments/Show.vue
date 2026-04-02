@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Head, router, useForm, usePage } from '@inertiajs/vue3'
 import mapboxgl from 'mapbox-gl'
-import { onMounted, onUnmounted, ref, computed, watch } from 'vue'
+import { onMounted, onUnmounted, ref, computed } from 'vue'
 import { route } from 'ziggy-js'
 
 import 'mapbox-gl/dist/mapbox-gl.css'
@@ -149,29 +149,6 @@ const { shipment, route_data, rates = [], hasAssignedCarrier, availableCarriers,
 const mapContainer = ref<HTMLDivElement | null>(null)
 let map: mapboxgl.Map | null = null
 const includedRateIds = ref<number[]>(hasAssignedCarrier ? rates.map((rate) => rate.id) : [])
-const selectedRateRadiusMiles = ref(60)
-
-const isRateWithinSelectedRadius = (rate: typeof rates[number]): boolean => {
-  if (rate.destination_distance_miles === null) {
-    return true
-  }
-
-  return rate.destination_distance_miles <= selectedRateRadiusMiles.value
-}
-
-const displayedRates = computed(() => rates.filter((rate) => isRateWithinSelectedRadius(rate)))
-
-watch(selectedRateRadiusMiles, () => {
-  includedRateIds.value = includedRateIds.value.filter((rateId) => {
-    const rate = rates.find((currentRate) => currentRate.id === rateId)
-
-    if (!rate) {
-      return false
-    }
-
-    return isRateWithinSelectedRadius(rate)
-  })
-})
 
 const isRateIncludedInTotal = (rateId: number): boolean => includedRateIds.value.includes(rateId)
 
@@ -210,7 +187,7 @@ const calculateRateTotal = (rate: typeof rates[0]): number | null => {
 const totalRateCost = computed(() => {
   if (includedRateIds.value.length === 0) return null
 
-  const result = displayedRates.value.reduce((accumulator, rate) => {
+  const result = rates.reduce((accumulator, rate) => {
     if (!isRateIncludedInTotal(rate.id)) {
       return accumulator
     }
@@ -799,38 +776,15 @@ const clearConsolidation = () => {
       <!-- Rates Table - Integrated per your request -->
       <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
         <div class="p-6 border-b dark:border-gray-700">
-          <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <h2 class="text-xl font-semibold text-gray-900 dark:text-gray-100">
-                {{ hasAssignedCarrier ? 'Rate for Assigned Carrier' : 'Available Rates' }}
-              </h2>
-              <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                {{ shipment.pickup_location?.short_code || '—' }} → {{ shipment.dc_location?.short_code || '—' }}
-                <span v-if="route_data?.total_miles" class="ml-2 text-gray-500">
-                  ({{ route_data.total_miles.toFixed(1) }} miles)
-                </span>
-              </p>
-            </div>
-
-            <div class="w-full max-w-sm">
-              <div class="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                <span>Destination Radius</span>
-                <span>{{ selectedRateRadiusMiles }} miles</span>
-              </div>
-              <input
-                v-model.number="selectedRateRadiusMiles"
-                type="range"
-                min="0"
-                max="200"
-                step="1"
-                class="mt-2 h-2 w-full cursor-pointer appearance-none rounded-lg bg-gray-200 dark:bg-gray-700"
-              >
-              <div class="mt-1 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-                <span>0</span>
-                <span>200</span>
-              </div>
-            </div>
-          </div>
+          <h2 class="text-xl font-semibold text-gray-900 dark:text-gray-100">
+            {{ hasAssignedCarrier ? 'Rate for Assigned Carrier' : 'Available Rates' }}
+          </h2>
+          <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+            {{ shipment.pickup_location?.short_code || '—' }} → {{ shipment.dc_location?.short_code || '—' }}
+            <span v-if="route_data?.total_miles" class="ml-2 text-gray-500">
+              ({{ route_data.total_miles.toFixed(1) }} miles)
+            </span>
+          </p>
           <div v-if="totalRateCost !== null" class="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800">
             <div class="flex items-center justify-between">
               <span class="text-sm font-medium text-blue-800 dark:text-blue-200">
@@ -874,7 +828,7 @@ const clearConsolidation = () => {
               </tr>
             </thead>
             <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-              <tr v-for="rate in displayedRates" :key="rate.id" class="hover:bg-gray-50 dark:hover:bg-gray-700">
+              <tr v-for="rate in rates" :key="rate.id" class="hover:bg-gray-50 dark:hover:bg-gray-700">
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
                   <label class="inline-flex items-center gap-2">
                     <input
@@ -919,9 +873,9 @@ const clearConsolidation = () => {
                   {{ rate.expires_at ?? '—' }}
                 </td>
               </tr>
-              <tr v-if="displayedRates.length === 0">
+              <tr v-if="rates.length === 0">
                 <td colspan="8" class="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
-                  No rates found for the selected radius.
+                  No rates found for this lane.
                 </td>
               </tr>
             </tbody>

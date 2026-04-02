@@ -404,12 +404,18 @@ class ShipmentController extends Controller
             });
         }
 
-        // Get regular rates and keep destination-scoped lanes within 200 miles of the shipment DC.
-        $regularRates = $ratesQuery
+        $regularRatesCollection = $ratesQuery
             ->orderBy('carrier_id')
             ->orderBy('rate')
-            ->get()
-            ->filter(fn (Rate $rate): bool => $this->shouldIncludeRegularRateForShipment($shipment, $dcLocation, $rate, 200.0))
+            ->get();
+
+        $hasRatesForDcCity = $regularRatesCollection->contains(
+            fn (Rate $rate): bool => $this->isRegularRateForDcCity($shipment, $dcLocation, $rate)
+        );
+
+        // Prefer rates specifically for the DC city. If none exist, fall back to a 100-mile radius.
+        $regularRates = $regularRatesCollection
+            ->filter(fn (Rate $rate): bool => $this->shouldIncludeRegularRateForShipment($shipment, $dcLocation, $rate, $hasRatesForDcCity, 100.0))
             ->values();
 
         // Get recycling rates (separate query)
@@ -624,7 +630,13 @@ class ShipmentController extends Controller
             ->all();
     }
 
-    private function shouldIncludeRegularRateForShipment(Shipment $shipment, ?Location $dcLocation, Rate $rate, float $maxDistanceMiles = 60.0): bool
+    private function shouldIncludeRegularRateForShipment(
+        Shipment $shipment,
+        ?Location $dcLocation,
+        Rate $rate,
+        bool $preferDcCityRates,
+        float $maxDistanceMiles = 100.0
+    ): bool
     {
         // Global/fallback rates (no start or no end lane fields) should be visible on every shipment.
         if (blank($rate->pickup_location_id)
@@ -638,7 +650,33 @@ class ShipmentController extends Controller
             return false;
         }
 
+        if ($preferDcCityRates) {
+            return $this->isRegularRateForDcCity($shipment, $dcLocation, $rate);
+        }
+
         return $this->isRateDestinationWithinMilesOfDc($dcLocation, $rate, $maxDistanceMiles);
+    }
+
+    private function isRegularRateForDcCity(Shipment $shipment, ?Location $dcLocation, Rate $rate): bool
+    {
+        if (! $dcLocation
+            || blank($dcLocation->city)
+            || blank($dcLocation->state)
+            || blank($dcLocation->country)
+            || blank($rate->pickup_location_id)
+            || blank($rate->destination_city)
+            || blank($rate->destination_state)
+            || blank($rate->destination_country)) {
+            return false;
+        }
+
+        if ((string) $rate->pickup_location_id !== (string) $shipment->pickup_location_id) {
+            return false;
+        }
+
+        return Str::lower(trim((string) $rate->destination_city)) === Str::lower(trim((string) $dcLocation->city))
+            && Str::lower(trim((string) $rate->destination_state)) === Str::lower(trim((string) $dcLocation->state))
+            && Str::lower(trim((string) $rate->destination_country)) === Str::lower(trim((string) $dcLocation->country));
     }
 
     private function rateDestinationDistanceMilesFromDc(Shipment $shipment, ?Location $dcLocation, Rate $rate): ?float
