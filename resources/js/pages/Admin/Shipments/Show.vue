@@ -157,6 +157,9 @@ const { shipment, route_data, rates = [], rate_destinations: rateDestinations = 
 const mapContainer = ref<HTMLDivElement | null>(null)
 let map: mapboxgl.Map | null = null
 const includedRateIds = ref<number[]>(hasAssignedCarrier ? rates.map((rate) => rate.id) : [])
+const rateNameFilter = ref('')
+const rateCarrierFilter = ref('')
+const rateDestinationFilter = ref('')
 
 const isRateIncludedInTotal = (rateId: number): boolean => includedRateIds.value.includes(rateId)
 
@@ -192,10 +195,36 @@ const calculateRateTotal = (rate: typeof rates[0]): number | null => {
   return miles * rate.rate_per_mile
 }
 
+const filteredRates = computed(() => {
+  const nameQuery = rateNameFilter.value.trim().toLowerCase()
+  const carrierQuery = rateCarrierFilter.value.trim().toLowerCase()
+  const destinationQuery = rateDestinationFilter.value.trim().toLowerCase()
+
+  return rates.filter((rate) => {
+    const destinationParts = [rate.destination_city, rate.destination_state, rate.destination_country].filter((part): part is string => Boolean(part && part.trim()))
+    const destinationText = destinationParts.length > 0 ? destinationParts.join(', ') : 'Any destination'
+    const carrierText = `${rate.carrier?.name ?? 'Unknown Carrier'} ${rate.carrier?.short_code ?? ''}`
+
+    if (nameQuery && ! (rate.name ?? 'Unnamed Rate').toLowerCase().includes(nameQuery)) {
+      return false
+    }
+
+    if (carrierQuery && !carrierText.toLowerCase().includes(carrierQuery)) {
+      return false
+    }
+
+    if (destinationQuery && !destinationText.toLowerCase().includes(destinationQuery)) {
+      return false
+    }
+
+    return true
+  })
+})
+
 const totalRateCost = computed(() => {
   if (includedRateIds.value.length === 0) return null
 
-  const result = rates.reduce((accumulator, rate) => {
+  const result = filteredRates.value.reduce((accumulator, rate) => {
     if (!isRateIncludedInTotal(rate.id)) {
       return accumulator
     }
@@ -811,6 +840,26 @@ const clearConsolidation = () => {
               ({{ route_data.total_miles.toFixed(1) }} miles)
             </span>
           </p>
+          <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+            <input
+              v-model="rateNameFilter"
+              type="text"
+              placeholder="Filter by name"
+              class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+            >
+            <input
+              v-model="rateCarrierFilter"
+              type="text"
+              placeholder="Filter by carrier"
+              class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+            >
+            <input
+              v-model="rateDestinationFilter"
+              type="text"
+              placeholder="Filter by destination"
+              class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+            >
+          </div>
           <div v-if="totalRateCost !== null" class="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800">
             <div class="flex items-center justify-between">
               <span class="text-sm font-medium text-blue-800 dark:text-blue-200">
@@ -854,7 +903,7 @@ const clearConsolidation = () => {
               </tr>
             </thead>
             <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-              <tr v-for="rate in rates" :key="rate.id" class="hover:bg-gray-50 dark:hover:bg-gray-700">
+              <tr v-for="rate in filteredRates" :key="rate.id" class="hover:bg-gray-50 dark:hover:bg-gray-700">
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
                   <label class="inline-flex items-center gap-2">
                     <input
@@ -899,7 +948,7 @@ const clearConsolidation = () => {
                   {{ rate.expires_at ?? '—' }}
                 </td>
               </tr>
-              <tr v-if="rates.length === 0">
+              <tr v-if="filteredRates.length === 0">
                 <td colspan="8" class="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
                   No rates found for this lane.
                 </td>
