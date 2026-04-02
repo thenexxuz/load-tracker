@@ -404,12 +404,12 @@ class ShipmentController extends Controller
             });
         }
 
-        // Get regular rates and keep only rates whose destination is within 60 miles of the shipment DC.
+        // Get regular rates and keep only rates whose destination is within 100 miles of the shipment DC.
         $regularRates = $ratesQuery
             ->orderBy('carrier_id')
             ->orderBy('rate')
             ->get()
-            ->filter(fn (Rate $rate): bool => $this->shouldIncludeRegularRateForShipment($shipment, $dcLocation, $rate))
+            ->filter(fn (Rate $rate): bool => $this->shouldIncludeRegularRateForShipment($shipment, $dcLocation, $rate, 100.0))
             ->values();
 
         // Get recycling rates (separate query)
@@ -454,7 +454,7 @@ class ShipmentController extends Controller
             ->values();
 
         // Transform rates to match frontend expectations
-        $transformedRates = $rates->map(function ($rate) {
+        $transformedRates = $rates->map(function (Rate $rate) use ($shipment, $dcLocation) {
             // Determine calculation type
             $calculationType = 'full_route'; // default
 
@@ -476,6 +476,7 @@ class ShipmentController extends Controller
                 'destination_city' => $rate->destination_city,
                 'destination_state' => $rate->destination_state,
                 'destination_country' => $rate->destination_country,
+                'destination_distance_miles' => $this->rateDestinationDistanceMilesFromDc($shipment, $dcLocation, $rate),
                 'calculation_type' => $calculationType,
             ];
         });
@@ -623,7 +624,7 @@ class ShipmentController extends Controller
             ->all();
     }
 
-    private function shouldIncludeRegularRateForShipment(Shipment $shipment, ?Location $dcLocation, Rate $rate): bool
+    private function shouldIncludeRegularRateForShipment(Shipment $shipment, ?Location $dcLocation, Rate $rate, float $maxDistanceMiles = 60.0): bool
     {
         // Global/fallback rates (no start or no end lane fields) should be visible on every shipment.
         if (blank($rate->pickup_location_id)
@@ -637,7 +638,48 @@ class ShipmentController extends Controller
             return false;
         }
 
-        return $this->isRateDestinationWithinMilesOfDc($dcLocation, $rate, 60.0);
+        return $this->isRateDestinationWithinMilesOfDc($dcLocation, $rate, $maxDistanceMiles);
+    }
+
+    private function rateDestinationDistanceMilesFromDc(Shipment $shipment, ?Location $dcLocation, Rate $rate): ?float
+    {
+        if (blank($rate->pickup_location_id)
+            || blank($rate->destination_city)
+            || blank($rate->destination_state)
+            || blank($rate->destination_country)) {
+            return null;
+        }
+
+        if ((string) $rate->pickup_location_id !== (string) $shipment->pickup_location_id) {
+            return null;
+        }
+
+        if (! $dcLocation || ! $dcLocation->latitude || ! $dcLocation->longitude) {
+            return null;
+        }
+
+        $destinationLocations = Location::query()
+            ->whereRaw('LOWER(city) = ?', [Str::lower((string) $rate->destination_city)])
+            ->whereRaw('LOWER(state) = ?', [Str::lower((string) $rate->destination_state)])
+            ->whereRaw('LOWER(country) = ?', [Str::lower((string) $rate->destination_country)])
+            ->whereNotNull('latitude')
+            ->whereNotNull('longitude')
+            ->get(['latitude', 'longitude']);
+
+        if ($destinationLocations->isEmpty()) {
+            return null;
+        }
+
+        $closestMiles = $destinationLocations
+            ->map(fn (Location $destinationLocation): float => $this->haversineDistanceMiles(
+                (float) $dcLocation->latitude,
+                (float) $dcLocation->longitude,
+                (float) $destinationLocation->latitude,
+                (float) $destinationLocation->longitude,
+            ))
+            ->min();
+
+        return $closestMiles !== null ? round($closestMiles, 1) : null;
     }
 
     private function isRateDestinationWithinMilesOfDc(?Location $dcLocation, Rate $rate, float $maxMiles): bool
