@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
 import { usePage } from '@inertiajs/vue3';
+import { route } from 'ziggy-js';
 
 import { edit as editAppSettings } from '@/actions/App/Http/Controllers/Settings/AppSettingsController';
 import Heading from '@/components/Heading.vue';
@@ -37,6 +38,10 @@ const sidebarNavItems: NavItem[] = [
     },
     ...(hasAppSettingsAccess
         ? [
+              {
+                  title: 'Dashboard',
+                  href: route('dashboard-preferences.edit'),
+              },
               {
                   title: 'App Settings',
                   href: editAppSettings(),

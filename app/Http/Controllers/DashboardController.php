@@ -92,6 +92,17 @@ class DashboardController extends Controller
         return Inertia::render('Dashboard', $data);
     }
 
+    public function editPreferences(Request $request): Response
+    {
+        /** @var User $user */
+        $user = $request->user();
+
+        return Inertia::render('settings/Dashboard', [
+            'dashboardPreferences' => $this->dashboardPreferencesFor($user),
+            'availableMonitoredLocations' => $this->availableMonitoredLocations(),
+        ]);
+    }
+
     public function updatePreferences(Request $request): RedirectResponse
     {
         /** @var User $user */
@@ -137,7 +148,7 @@ class DashboardController extends Controller
             ],
         ])->save();
 
-        return redirect()->route('dashboard')
+        return redirect()->route('dashboard-preferences.edit')
             ->with('success', 'Dashboard preferences saved.');
     }
 

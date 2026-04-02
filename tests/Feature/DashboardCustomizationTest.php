@@ -28,8 +28,7 @@ it('uses pickup locations as default monitored locations for admins', function (
             ->where('dashboardPreferences.sections.monitored_locations', true)
             ->where('dashboardPreferences.sections.active_shipments_by_carrier', true)
             ->where('dashboardPreferences.sections.shipment_offers_by_user', true)
-            ->where('dashboardPreferences.monitored_location_ids', fn ($locationIds): bool =>
-                collect($locationIds)->contains($pickupA->guid)
+            ->where('dashboardPreferences.monitored_location_ids', fn ($locationIds): bool => collect($locationIds)->contains($pickupA->guid)
                 && collect($locationIds)->contains($pickupB->guid)
             )
         );
@@ -65,7 +64,7 @@ it('saves dashboard preferences and uses inbound locations as dc shipment monito
         'strap_qty' => 1,
     ]);
 
-    $updateResponse = $this->actingAs($admin)->patch(route('dashboard.preferences'), [
+    $updateResponse = $this->actingAs($admin)->patch(route('dashboard-preferences.update'), [
         'sections' => [
             'booked_shipments' => true,
             'deliveries_chart' => false,
@@ -76,7 +75,7 @@ it('saves dashboard preferences and uses inbound locations as dc shipment monito
         'monitored_location_ids' => [$dc->guid],
     ]);
 
-    $updateResponse->assertRedirect(route('dashboard'));
+    $updateResponse->assertRedirect(route('dashboard-preferences.edit'));
 
     expect($admin->fresh()?->dashboard_preferences)
         ->toBeArray()

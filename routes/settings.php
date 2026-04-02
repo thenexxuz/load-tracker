@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Settings\AppSettingsController;
 use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\ProfileController;
@@ -29,6 +30,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('settings/two-factor', [TwoFactorAuthenticationController::class, 'show'])
         ->name('two-factor.show');
+
+    Route::middleware(['role:administrator|supervisor'])->group(function () {
+        Route::get('settings/dashboard', [DashboardController::class, 'editPreferences'])
+            ->name('dashboard-preferences.edit');
+        Route::patch('settings/dashboard', [DashboardController::class, 'updatePreferences'])
+            ->name('dashboard-preferences.update');
+    });
 });
 
 Route::middleware(['auth', 'role:administrator'])->group(function () {

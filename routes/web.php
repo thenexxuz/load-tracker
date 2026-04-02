@@ -34,7 +34,6 @@ Route::get('/', function () {
 })->name('home');
 
 Route::get('dashboard', [DashboardController::class, 'index'])->middleware(['auth'])->name('dashboard');
-Route::patch('dashboard/preferences', [DashboardController::class, 'updatePreferences'])->middleware(['auth'])->name('dashboard.preferences');
 
 Route::middleware(['auth', 'role:administrator'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('audits', [AuditController::class, 'index'])->name('audits.index');
