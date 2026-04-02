@@ -36,12 +36,12 @@ const sidebarNavItems: NavItem[] = [
         title: 'Appearance',
         href: editAppearance(),
     },
+    {
+        title: 'Dashboard',
+        href: route('dashboard-preferences.edit'),
+    },
     ...(hasAppSettingsAccess
         ? [
-              {
-                  title: 'Dashboard',
-                  href: route('dashboard-preferences.edit'),
-              },
               {
                   title: 'App Settings',
                   href: editAppSettings(),

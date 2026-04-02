@@ -95,3 +95,31 @@ it('saves dashboard preferences and uses inbound locations as dc shipment monito
             ->where('monitoredLocationShipmentSummary.0.shipment_count', 2)
         );
 });
+
+it('allows non-admin users to manage only their own dashboard preferences', function (): void {
+    $user = User::factory()->create();
+    $otherUser = User::factory()->create();
+
+    $pickup = Location::factory()->pickup()->create();
+
+    $this->actingAs($user)
+        ->patch(route('dashboard-preferences.update'), [
+            'sections' => [
+                'booked_shipments' => false,
+                'deliveries_chart' => true,
+                'monitored_locations' => false,
+                'active_shipments_by_carrier' => true,
+                'shipment_offers_by_user' => false,
+            ],
+            'monitored_location_ids' => [$pickup->guid],
+        ])
+        ->assertRedirect(route('dashboard-preferences.edit'));
+
+    expect($user->fresh()?->dashboard_preferences)
+        ->toBeArray()
+        ->and($user->fresh()?->dashboard_preferences['sections']['booked_shipments'] ?? null)->toBeFalse()
+        ->and($user->fresh()?->dashboard_preferences['sections']['monitored_locations'] ?? null)->toBeFalse()
+        ->and($user->fresh()?->dashboard_preferences['monitored_location_ids'] ?? [])->toBe([$pickup->guid]);
+
+    expect($otherUser->fresh()?->dashboard_preferences)->toBeNull();
+});
