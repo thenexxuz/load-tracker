@@ -152,6 +152,10 @@ const includedRateIds = ref<number[]>(hasAssignedCarrier ? rates.map((rate) => r
 const selectedRateRadiusMiles = ref(60)
 
 const displayedRates = computed(() => rates.filter((rate) => {
+  if (selectedRateRadiusMiles.value === 200) {
+    return true
+  }
+
   if (rate.destination_distance_miles === null) {
     return true
   }

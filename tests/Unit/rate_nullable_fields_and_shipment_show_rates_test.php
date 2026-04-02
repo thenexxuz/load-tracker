@@ -46,7 +46,7 @@ it('keeps shipment show rates using viewer-specific carrier visibility rules', f
         ->toContain("'destination_state' => \$rate->destination_state")
         ->toContain("'destination_country' => \$rate->destination_country")
         ->toContain("'destination_distance_miles' => \$this->rateDestinationDistanceMilesFromDc(\$shipment, \$dcLocation, \$rate)")
-        ->toContain('shouldIncludeRegularRateForShipment($shipment, $dcLocation, $rate, 200.0)');
+        ->toContain('shouldIncludeRegularRateForShipment($shipment, $rate)');
 
     expect($page)
         ->toContain('name: string | null')
@@ -59,6 +59,7 @@ it('keeps shipment show rates using viewer-specific carrier visibility rules', f
         ->toContain('selectedRateRadiusMiles = ref(60)')
         ->toContain('v-model.number="selectedRateRadiusMiles"')
         ->toContain('displayedRates = computed(() => rates.filter((rate) => {')
+        ->toContain('selectedRateRadiusMiles.value === 200')
         ->toContain('rate.destination_distance_miles <= selectedRateRadiusMiles.value')
         ->toContain('hasAssignedCarrier ? rates.map((rate) => rate.id) : []')
         ->toContain("{{ hasAssignedCarrier ? 'Total Rate Cost:' : 'Possible Total Rate Cost:' }}")

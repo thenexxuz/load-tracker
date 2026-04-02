@@ -404,12 +404,12 @@ class ShipmentController extends Controller
             });
         }
 
-        // Get regular rates and keep only rates whose destination is within 200 miles of the shipment DC.
+        // Get regular rates for this shipment lane. Radius filtering is handled client-side.
         $regularRates = $ratesQuery
             ->orderBy('carrier_id')
             ->orderBy('rate')
             ->get()
-            ->filter(fn (Rate $rate): bool => $this->shouldIncludeRegularRateForShipment($shipment, $dcLocation, $rate, 200.0))
+            ->filter(fn (Rate $rate): bool => $this->shouldIncludeRegularRateForShipment($shipment, $rate))
             ->values();
 
         // Get recycling rates (separate query)
@@ -624,7 +624,7 @@ class ShipmentController extends Controller
             ->all();
     }
 
-    private function shouldIncludeRegularRateForShipment(Shipment $shipment, ?Location $dcLocation, Rate $rate, float $maxDistanceMiles = 60.0): bool
+    private function shouldIncludeRegularRateForShipment(Shipment $shipment, Rate $rate): bool
     {
         // Global/fallback rates (no start or no end lane fields) should be visible on every shipment.
         if (blank($rate->pickup_location_id)
@@ -638,7 +638,7 @@ class ShipmentController extends Controller
             return false;
         }
 
-        return $this->isRateDestinationWithinMilesOfDc($dcLocation, $rate, $maxDistanceMiles);
+        return true;
     }
 
     private function rateDestinationDistanceMilesFromDc(Shipment $shipment, ?Location $dcLocation, Rate $rate): ?float
