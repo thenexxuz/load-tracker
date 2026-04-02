@@ -46,6 +46,8 @@ it('keeps shipment show rates using viewer-specific carrier visibility rules', f
         ->toContain("'destination_state' => \$rate->destination_state")
         ->toContain("'destination_country' => \$rate->destination_country")
         ->toContain("'destination_distance_miles' => \$this->rateDestinationDistanceMilesFromDc(\$shipment, \$dcLocation, \$rate)")
+        ->toContain("'rate_destinations' => \$rateDestinations")
+        ->toContain('$rateDestinations = $this->buildRateDestinationsForMap($rates);')
         ->toContain('isRegularRateForDcCity($shipment, $dcLocation, $rate)')
         ->toContain('shouldIncludeRegularRateForShipment($shipment, $dcLocation, $rate, $hasRatesForDcCity, 100.0)');
 
@@ -55,8 +57,12 @@ it('keeps shipment show rates using viewer-specific carrier visibility rules', f
         ->toContain('destination_state: string | null')
         ->toContain('destination_country: string | null')
         ->toContain('destination_distance_miles: number | null')
+        ->toContain('rate_destinations: Array<{')
+        ->toContain("rate_destinations: rateDestinations = []")
         ->toContain('Name')
         ->toContain('Destination')
+        ->toContain("destinationMarker.textContent = '$'")
+        ->toContain("destinationMarker.className = 'rate-destination-marker'")
         ->toContain('hasAssignedCarrier ? rates.map((rate) => rate.id) : []')
         ->toContain("{{ hasAssignedCarrier ? 'Total Rate Cost:' : 'Possible Total Rate Cost:' }}")
         ->toContain('toggleRateIncludedInTotal')

@@ -487,6 +487,8 @@ class ShipmentController extends Controller
             ];
         });
 
+        $rateDestinations = $this->buildRateDestinationsForMap($rates);
+
         $shipmentData = $shipment->toArray();
         $shipmentData['id'] = $shipment->guid;
         $shipmentData['notable_id'] = $shipment->getKey();
@@ -589,6 +591,7 @@ class ShipmentController extends Controller
             'route_data' => $routeData,
             'mapbox_token' => config('services.mapbox.key'),
             'rates' => $transformedRates,
+            'rate_destinations' => $rateDestinations,
             'hasAssignedCarrier' => (bool) $shipment->carrier_id,
             'googleSheetsUrl' => AppSetting::getValue(AppSetting::GOOGLE_SHEET_URL_KEY),
             'availableCarriers' => $availableCarriers,
@@ -718,6 +721,45 @@ class ShipmentController extends Controller
             ->min();
 
         return $closestMiles !== null ? round($closestMiles, 1) : null;
+    }
+
+    private function buildRateDestinationsForMap($rates): array
+    {
+        return $rates
+            ->filter(fn (Rate $rate): bool => filled($rate->destination_city)
+                && filled($rate->destination_state)
+                && filled($rate->destination_country))
+            ->groupBy(fn (Rate $rate): string => Str::lower(trim((string) $rate->destination_city)).'|'
+                .Str::lower(trim((string) $rate->destination_state)).'|'
+                .Str::lower(trim((string) $rate->destination_country)))
+            ->map(function ($destinationRates) {
+                /** @var Rate $firstRate */
+                $firstRate = $destinationRates->first();
+
+                $location = Location::query()
+                    ->whereRaw('LOWER(city) = ?', [Str::lower(trim((string) $firstRate->destination_city))])
+                    ->whereRaw('LOWER(state) = ?', [Str::lower(trim((string) $firstRate->destination_state))])
+                    ->whereRaw('LOWER(country) = ?', [Str::lower(trim((string) $firstRate->destination_country))])
+                    ->whereNotNull('latitude')
+                    ->whereNotNull('longitude')
+                    ->first(['city', 'state', 'country', 'latitude', 'longitude']);
+
+                if (! $location) {
+                    return null;
+                }
+
+                return [
+                    'city' => (string) $firstRate->destination_city,
+                    'state' => (string) $firstRate->destination_state,
+                    'country' => (string) $firstRate->destination_country,
+                    'lat' => (float) $location->latitude,
+                    'lng' => (float) $location->longitude,
+                    'rate_count' => $destinationRates->count(),
+                ];
+            })
+            ->filter()
+            ->values()
+            ->all();
     }
 
     private function isRateDestinationWithinMilesOfDc(?Location $dcLocation, Rate $rate, float $maxMiles): bool

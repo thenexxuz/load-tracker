@@ -100,6 +100,14 @@ const props = defineProps<{
     destination_distance_miles: number | null
     calculation_type: string
   }>
+  rate_destinations: Array<{
+    city: string
+    state: string
+    country: string
+    lat: number
+    lng: number
+    rate_count: number
+  }>
   hasAssignedCarrier: boolean
   availableCarriers: Array<{
     id: string
@@ -144,7 +152,7 @@ const props = defineProps<{
   }
 }>()
 
-const { shipment, route_data, rates = [], hasAssignedCarrier, availableCarriers, offeredCarriers, canManageConsolidation, consolidationData } = props
+const { shipment, route_data, rates = [], rate_destinations: rateDestinations = [], hasAssignedCarrier, availableCarriers, offeredCarriers, canManageConsolidation, consolidationData } = props
 
 const mapContainer = ref<HTMLDivElement | null>(null)
 let map: mapboxgl.Map | null = null
@@ -265,8 +273,26 @@ onMounted(() => {
         .addTo(map!)
     })
 
+    rateDestinations.forEach((destination) => {
+      const destinationMarker = document.createElement('div')
+      destinationMarker.className = 'rate-destination-marker'
+      destinationMarker.textContent = '$'
+
+      const destinationLabel = `${destination.city}, ${destination.state}, ${destination.country}`
+      const rateCountLabel = destination.rate_count === 1 ? '1 rate destination' : `${destination.rate_count} rate destinations`
+
+      new mapboxgl.Marker({ element: destinationMarker })
+        .setLngLat([destination.lng, destination.lat])
+        .setPopup(new mapboxgl.Popup().setHTML(`
+          <strong>${destinationLabel}</strong><br>
+          ${rateCountLabel}
+        `))
+        .addTo(map!)
+    })
+
     const bounds = new mapboxgl.LngLatBounds()
     route_data.route_coords.forEach(([lng, lat]) => bounds.extend([lng, lat]))
+    rateDestinations.forEach((destination) => bounds.extend([destination.lng, destination.lat]))
     map!.fitBounds(bounds, { padding: 80 })
 
     setTimeout(() => map?.resize(), 1200)
@@ -909,5 +935,19 @@ const clearConsolidation = () => {
 }
 :deep(.mapboxgl-popup) {
   color: black;
+}
+
+:deep(.rate-destination-marker) {
+  width: 18px;
+  height: 18px;
+  border-radius: 9999px;
+  background: #16a34a;
+  border: 1px solid #ffffff;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
 }
 </style>
