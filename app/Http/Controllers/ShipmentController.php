@@ -404,12 +404,12 @@ class ShipmentController extends Controller
             });
         }
 
-        // Get regular rates and keep only rates whose destination is within 100 miles of the shipment DC.
+        // Get regular rates and keep only rates whose destination is within 200 miles of the shipment DC.
         $regularRates = $ratesQuery
             ->orderBy('carrier_id')
             ->orderBy('rate')
             ->get()
-            ->filter(fn (Rate $rate): bool => $this->shouldIncludeRegularRateForShipment($shipment, $dcLocation, $rate, 100.0))
+            ->filter(fn (Rate $rate): bool => $this->shouldIncludeRegularRateForShipment($shipment, $dcLocation, $rate, 200.0))
             ->values();
 
         // Get recycling rates (separate query)

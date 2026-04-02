@@ -807,13 +807,13 @@ const clearConsolidation = () => {
                 v-model.number="selectedRateRadiusMiles"
                 type="range"
                 min="0"
-                max="100"
+                max="200"
                 step="1"
                 class="mt-2 h-2 w-full cursor-pointer appearance-none rounded-lg bg-gray-200 dark:bg-gray-700"
               >
               <div class="mt-1 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
                 <span>0</span>
-                <span>100</span>
+                <span>200</span>
               </div>
             </div>
           </div>
