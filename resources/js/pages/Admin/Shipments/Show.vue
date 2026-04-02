@@ -840,26 +840,6 @@ const clearConsolidation = () => {
               ({{ route_data.total_miles.toFixed(1) }} miles)
             </span>
           </p>
-          <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
-            <input
-              v-model="rateNameFilter"
-              type="text"
-              placeholder="Filter by name"
-              class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
-            >
-            <input
-              v-model="rateCarrierFilter"
-              type="text"
-              placeholder="Filter by carrier"
-              class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
-            >
-            <input
-              v-model="rateDestinationFilter"
-              type="text"
-              placeholder="Filter by destination"
-              class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
-            >
-          </div>
           <div v-if="totalRateCost !== null" class="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800">
             <div class="flex items-center justify-between">
               <span class="text-sm font-medium text-blue-800 dark:text-blue-200">
@@ -900,6 +880,37 @@ const clearConsolidation = () => {
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Expires
                 </th>
+              </tr>
+              <tr class="bg-gray-100 dark:bg-gray-700">
+                <th class="px-6 py-2"></th>
+                <th class="px-6 py-2">
+                  <input
+                    v-model="rateNameFilter"
+                    type="text"
+                    placeholder="Filter name"
+                    class="w-full border border-gray-300 dark:border-gray-600 rounded p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500"
+                  >
+                </th>
+                <th class="px-6 py-2">
+                  <input
+                    v-model="rateCarrierFilter"
+                    type="text"
+                    placeholder="Filter carrier"
+                    class="w-full border border-gray-300 dark:border-gray-600 rounded p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500"
+                  >
+                </th>
+                <th class="px-6 py-2">
+                  <input
+                    v-model="rateDestinationFilter"
+                    type="text"
+                    placeholder="Filter destination"
+                    class="w-full border border-gray-300 dark:border-gray-600 rounded p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500"
+                  >
+                </th>
+                <th class="px-6 py-2"></th>
+                <th class="px-6 py-2"></th>
+                <th class="px-6 py-2"></th>
+                <th class="px-6 py-2"></th>
               </tr>
             </thead>
             <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
