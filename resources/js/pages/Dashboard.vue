@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3'
+import { Head, Link, useForm } from '@inertiajs/vue3'
 import {
   Chart as ChartJS,
   Filler,
@@ -13,6 +13,7 @@ import {
 } from 'chart.js'
 import { computed } from 'vue'
 import { Line } from 'vue-chartjs'
+import { route } from 'ziggy-js'
 
 import AdminLayout from '@/layouts/AppLayout.vue'
 
@@ -29,15 +30,34 @@ ChartJS.register(
 
 const props = defineProps<{
   isAdminOrSupervisor?: boolean
+  dashboardPreferences?: {
+    sections: {
+      booked_shipments: boolean
+      deliveries_chart: boolean
+      monitored_locations: boolean
+      active_shipments_by_carrier: boolean
+      shipment_offers_by_user: boolean
+    }
+    monitored_location_ids: string[]
+  }
+  availableMonitoredLocations?: Array<{
+    id: string
+    name: string | null
+    short_code: string | null
+    type: string
+    inbound: boolean
+    outbound: boolean
+  }>
   chartData?: {
     labels: string[]
     values: number[]
   }
   bookedCount?: number
-  pickupLocationShipmentSummary?: Array<{
-    id: number
+  monitoredLocationShipmentSummary?: Array<{
+    id: string
     name: string
     short_code: string | null
+    monitor_type: 'pickup' | 'dc'
     shipment_count: number
     unassigned_shipment_count: number
     unassigned_shipment_index_url: string
@@ -74,6 +94,25 @@ const props = defineProps<{
     }>
   }
 }>()
+
+const dashboardForm = useForm({
+  sections: {
+    booked_shipments: props.dashboardPreferences?.sections?.booked_shipments ?? true,
+    deliveries_chart: props.dashboardPreferences?.sections?.deliveries_chart ?? true,
+    monitored_locations: props.dashboardPreferences?.sections?.monitored_locations ?? true,
+    active_shipments_by_carrier: props.dashboardPreferences?.sections?.active_shipments_by_carrier ?? true,
+    shipment_offers_by_user: props.dashboardPreferences?.sections?.shipment_offers_by_user ?? true,
+  },
+  monitored_location_ids: props.dashboardPreferences?.monitored_location_ids ?? [],
+})
+
+const monitoredLocationOptions = computed(() => props.availableMonitoredLocations ?? [])
+
+const saveDashboardPreferences = (): void => {
+  dashboardForm.patch(route('dashboard.preferences'), {
+    preserveScroll: true,
+  })
+}
 
 const formatStatus = (status: string) => status
   .replace(/_/g, ' ')
@@ -120,8 +159,79 @@ const chartDataComputed = computed(() => ({
       </h1>
 
       <div v-if="isAdminOrSupervisor" class="space-y-8">
+        <section class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow border border-gray-200 dark:border-gray-700 space-y-5">
+          <div class="flex flex-col gap-1">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              Customize Dashboard
+            </h2>
+            <p class="text-sm text-gray-500 dark:text-gray-400">
+              Choose which sections you want to see and which locations to monitor.
+            </p>
+          </div>
+
+          <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
+              <input v-model="dashboardForm.sections.booked_shipments" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+              <span>Booked Shipments</span>
+            </label>
+            <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
+              <input v-model="dashboardForm.sections.deliveries_chart" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+              <span>Deliveries Chart</span>
+            </label>
+            <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
+              <input v-model="dashboardForm.sections.monitored_locations" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+              <span>Monitored Locations</span>
+            </label>
+            <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
+              <input v-model="dashboardForm.sections.active_shipments_by_carrier" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+              <span>Active Shipments by Carrier</span>
+            </label>
+            <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
+              <input v-model="dashboardForm.sections.shipment_offers_by_user" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+              <span>Shipment Offers by User</span>
+            </label>
+          </div>
+
+          <div>
+            <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
+              Monitored Locations
+            </label>
+            <select
+              v-model="dashboardForm.monitored_location_ids"
+              multiple
+              class="w-full min-h-44 rounded-md border border-gray-300 bg-white p-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+            >
+              <option
+                v-for="locationOption in monitoredLocationOptions"
+                :key="locationOption.id"
+                :value="locationOption.id"
+              >
+                {{ locationOption.short_code || '—' }} - {{ locationOption.name || 'Unnamed Location' }}
+                [{{ locationOption.outbound ? 'Outbound' : locationOption.inbound ? 'Inbound' : 'None' }}]
+              </option>
+            </select>
+            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+              Outbound locations are calculated using pickup shipments. Inbound locations are calculated using DC shipments.
+            </p>
+          </div>
+
+          <div class="flex justify-end">
+            <button
+              type="button"
+              :disabled="dashboardForm.processing"
+              class="rounded-md bg-blue-600 px-5 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-60"
+              @click="saveDashboardPreferences"
+            >
+              {{ dashboardForm.processing ? 'Saving...' : 'Save Dashboard Settings' }}
+            </button>
+          </div>
+        </section>
+
         <!-- Booked Shipments Card -->
-        <div class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow border border-gray-200 dark:border-gray-700">
+        <div
+          v-if="dashboardForm.sections.booked_shipments"
+          class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow border border-gray-200 dark:border-gray-700"
+        >
           <h3 class="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-2">
             Booked Shipments
           </h3>
@@ -131,7 +241,10 @@ const chartDataComputed = computed(() => ({
         </div>
 
         <!-- Line Chart -->
-        <div class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow border border-gray-200 dark:border-gray-700">
+        <div
+          v-if="dashboardForm.sections.deliveries_chart"
+          class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow border border-gray-200 dark:border-gray-700"
+        >
           <div class="h-80">
             <Line
               :data="chartDataComputed"
@@ -140,19 +253,22 @@ const chartDataComputed = computed(() => ({
           </div>
         </div>
 
-        <section class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow border border-gray-200 dark:border-gray-700 space-y-6">
+        <section
+          v-if="dashboardForm.sections.monitored_locations"
+          class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow border border-gray-200 dark:border-gray-700 space-y-6"
+        >
           <div class="flex flex-col gap-1">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              Pickup Locations
+              Monitored Locations
             </h2>
             <p class="text-sm text-gray-500 dark:text-gray-400">
-              Active shipment counts by pickup location, excluding delivered shipments.
+              Active shipment counts by monitored location. Outbound locations use pickup shipments, inbound locations use DC shipments.
             </p>
           </div>
 
           <div class="grid gap-4 lg:grid-cols-2">
             <div
-              v-for="location in pickupLocationShipmentSummary ?? []"
+              v-for="location in monitoredLocationShipmentSummary ?? []"
               :key="location.id"
               class="rounded-xl border border-gray-200 bg-gray-50 p-5 dark:border-gray-700 dark:bg-gray-900/40"
             >
@@ -160,7 +276,7 @@ const chartDataComputed = computed(() => ({
                 <div class="flex items-start justify-between gap-4">
                   <div>
                     <p class="text-sm font-medium text-gray-500 dark:text-gray-400">
-                      {{ location.short_code || 'Pickup Location' }}
+                      {{ location.short_code || 'Location' }} · {{ location.monitor_type === 'pickup' ? 'Outbound' : 'Inbound' }}
                     </p>
                     <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">
                       {{ location.name }}
@@ -200,13 +316,16 @@ const chartDataComputed = computed(() => ({
               </div>
 
               <p v-else class="mt-4 text-sm text-gray-500 dark:text-gray-400">
-                No active shipments at this pickup location.
+                No active shipments for this monitored location.
               </p>
             </div>
           </div>
         </section>
 
-        <section class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow border border-gray-200 dark:border-gray-700 space-y-6">
+        <section
+          v-if="dashboardForm.sections.active_shipments_by_carrier"
+          class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow border border-gray-200 dark:border-gray-700 space-y-6"
+        >
           <div class="flex flex-col gap-1">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
               Active Shipments by Carrier
@@ -263,7 +382,10 @@ const chartDataComputed = computed(() => ({
           </p>
         </section>
 
-        <section class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow border border-gray-200 dark:border-gray-700 space-y-6">
+        <section
+          v-if="dashboardForm.sections.shipment_offers_by_user"
+          class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow border border-gray-200 dark:border-gray-700 space-y-6"
+        >
           <div class="flex flex-col gap-1">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
               Shipment Offers by User

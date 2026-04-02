@@ -28,6 +28,7 @@ class User extends Authenticatable
         'email',
         'password',
         'is_active',
+        'dashboard_preferences',
     ];
 
     /**
@@ -54,6 +55,7 @@ class User extends Authenticatable
             'password' => 'hashed',
             'two_factor_confirmed_at' => 'datetime',
             'is_active' => 'boolean',
+            'dashboard_preferences' => 'array',
         ];
     }
 

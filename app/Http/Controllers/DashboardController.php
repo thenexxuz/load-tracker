@@ -8,21 +8,37 @@ use App\Models\Shipment;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class DashboardController extends Controller
 {
+    private const DASHBOARD_SECTION_KEYS = [
+        'booked_shipments',
+        'deliveries_chart',
+        'monitored_locations',
+        'active_shipments_by_carrier',
+        'shipment_offers_by_user',
+    ];
+
     public function index(): Response
     {
         $user = auth()->user();
         $isAdminOrSupervisor = $user->hasAnyRole(['administrator', 'supervisor']);
+        $dashboardPreferences = $this->dashboardPreferencesFor($user);
 
         $data = [
             'isAdminOrSupervisor' => $isAdminOrSupervisor,
+            'dashboardPreferences' => $dashboardPreferences,
         ];
 
         if ($isAdminOrSupervisor) {
+            $availableMonitoredLocations = $this->availableMonitoredLocations();
+            $monitoredLocations = $this->resolveMonitoredLocations(collect($dashboardPreferences['monitored_location_ids']));
+
             // Booked count (simple number)
             $bookedCount = Shipment::query()
                 ->whereRaw('LOWER(status) = ?', ['booked'])
@@ -57,10 +73,11 @@ class DashboardController extends Controller
             ];
 
             $data['bookedCount'] = $bookedCount;
+            $data['availableMonitoredLocations'] = $availableMonitoredLocations;
 
             [$lastWeekStart, $lastWeekEnd] = $this->lastCalendarWeekRange();
 
-            $data['pickupLocationShipmentSummary'] = $this->pickupLocationShipmentSummary();
+            $data['monitoredLocationShipmentSummary'] = $this->monitoredLocationShipmentSummary($monitoredLocations);
             $data['carrierActiveShipmentSummary'] = $this->carrierActiveShipmentSummary();
             $data['offerActivitySummary'] = [
                 'week' => [
@@ -75,13 +92,69 @@ class DashboardController extends Controller
         return Inertia::render('Dashboard', $data);
     }
 
+    public function updatePreferences(Request $request): RedirectResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+
+        $validated = $request->validate([
+            'sections' => ['nullable', 'array'],
+            'sections.booked_shipments' => ['nullable', 'boolean'],
+            'sections.deliveries_chart' => ['nullable', 'boolean'],
+            'sections.monitored_locations' => ['nullable', 'boolean'],
+            'sections.active_shipments_by_carrier' => ['nullable', 'boolean'],
+            'sections.shipment_offers_by_user' => ['nullable', 'boolean'],
+            'monitored_location_ids' => ['nullable', 'array'],
+            'monitored_location_ids.*' => ['uuid', 'exists:locations,guid'],
+        ]);
+
+        $current = $this->dashboardPreferencesFor($user);
+
+        $incomingSections = collect($validated['sections'] ?? []);
+        $sections = collect(self::DASHBOARD_SECTION_KEYS)
+            ->mapWithKeys(fn (string $key): array => [
+                $key => (bool) $incomingSections->get($key, $current['sections'][$key] ?? true),
+            ])
+            ->all();
+
+        $defaultMonitoredLocationIds = Location::query()
+            ->where('type', 'pickup')
+            ->pluck('guid')
+            ->filter()
+            ->values()
+            ->all();
+
+        $monitoredLocationIds = collect($validated['monitored_location_ids'] ?? $current['monitored_location_ids'] ?? $defaultMonitoredLocationIds)
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        $user->forceFill([
+            'dashboard_preferences' => [
+                'sections' => $sections,
+                'monitored_location_ids' => $monitoredLocationIds,
+            ],
+        ])->save();
+
+        return redirect()->route('dashboard')
+            ->with('success', 'Dashboard preferences saved.');
+    }
+
     /**
      * @return array<int, array{id:int, name:string, short_code:?string, shipment_count:int, unassigned_shipment_count:int, status_breakdown:array<int, array{status:string, count:int}>}>
      */
-    private function pickupLocationShipmentSummary(): array
+    private function monitoredLocationShipmentSummary(Collection $monitoredLocations): array
     {
         $allPickupCodes = Location::query()
             ->where('type', 'pickup')
+            ->pluck('short_code')
+            ->filter()
+            ->sort()
+            ->values();
+
+        $allDcCodes = Location::query()
+            ->whereIn('type', ['distribution_center', 'pickup'])
             ->pluck('short_code')
             ->filter()
             ->sort()
@@ -94,47 +167,93 @@ class DashboardController extends Controller
             ->sort()
             ->values();
 
-        $locations = Location::query()
-            ->where('type', 'pickup')
-            ->orderBy('name')
-            ->get(['id', 'name', 'short_code']);
+        $outboundLocationIds = $monitoredLocations
+            ->filter(fn (Location $location): bool => (bool) $location->outbound)
+            ->pluck('id')
+            ->all();
 
-        $shipmentsByLocation = Shipment::query()
-            ->selectRaw('pickup_location_id, status, COUNT(*) as shipment_count')
+        $inboundLocationIds = $monitoredLocations
+            ->filter(fn (Location $location): bool => ! $location->outbound && (bool) $location->inbound)
+            ->pluck('id')
+            ->all();
+
+        $shipmentsByPickupLocation = Shipment::query()
+            ->selectRaw('pickup_location_id as location_id, status, COUNT(*) as shipment_count')
             ->whereNotNull('pickup_location_id')
             ->whereRaw('LOWER(status) <> ?', ['delivered'])
-            ->groupBy('pickup_location_id', 'status')
-            ->orderBy('pickup_location_id')
+            ->when(! empty($outboundLocationIds), fn ($query) => $query->whereIn('pickup_location_id', $outboundLocationIds))
+            ->groupBy('location_id', 'status')
+            ->orderBy('location_id')
             ->orderBy('status')
             ->get()
-            ->groupBy('pickup_location_id');
+            ->groupBy('location_id');
 
-        $unassignedByLocation = Shipment::query()
-            ->selectRaw('pickup_location_id, COUNT(*) as unassigned_shipment_count')
+        $shipmentsByDcLocation = Shipment::query()
+            ->selectRaw('dc_location_id as location_id, status, COUNT(*) as shipment_count')
+            ->whereNotNull('dc_location_id')
+            ->whereRaw('LOWER(status) <> ?', ['delivered'])
+            ->when(! empty($inboundLocationIds), fn ($query) => $query->whereIn('dc_location_id', $inboundLocationIds))
+            ->groupBy('location_id', 'status')
+            ->orderBy('location_id')
+            ->orderBy('status')
+            ->get()
+            ->groupBy('location_id');
+
+        $unassignedByPickupLocation = Shipment::query()
+            ->selectRaw('pickup_location_id as location_id, COUNT(*) as unassigned_shipment_count')
             ->whereNotNull('pickup_location_id')
             ->whereNull('carrier_id')
             ->whereRaw('LOWER(status) <> ?', ['delivered'])
-            ->groupBy('pickup_location_id')
+            ->when(! empty($outboundLocationIds), fn ($query) => $query->whereIn('pickup_location_id', $outboundLocationIds))
+            ->groupBy('location_id')
             ->get()
-            ->pluck('unassigned_shipment_count', 'pickup_location_id');
+            ->pluck('unassigned_shipment_count', 'location_id');
 
-        return $locations
-            ->map(function (Location $location) use ($shipmentsByLocation, $allPickupCodes, $allStatuses, $unassignedByLocation): array {
+        $unassignedByDcLocation = Shipment::query()
+            ->selectRaw('dc_location_id as location_id, COUNT(*) as unassigned_shipment_count')
+            ->whereNotNull('dc_location_id')
+            ->whereNull('carrier_id')
+            ->whereRaw('LOWER(status) <> ?', ['delivered'])
+            ->when(! empty($inboundLocationIds), fn ($query) => $query->whereIn('dc_location_id', $inboundLocationIds))
+            ->groupBy('location_id')
+            ->get()
+            ->pluck('unassigned_shipment_count', 'location_id');
+
+        return $monitoredLocations
+            ->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)
+            ->values()
+            ->map(function (Location $location) use ($shipmentsByPickupLocation, $shipmentsByDcLocation, $allPickupCodes, $allDcCodes, $allStatuses, $unassignedByPickupLocation, $unassignedByDcLocation): array {
+                $usesOutboundDimension = (bool) $location->outbound;
+                $locationDimension = $usesOutboundDimension ? 'pickup' : 'dc';
+
                 $locationIncludedCodes = collect([$location->short_code])
                     ->filter()
                     ->values();
 
+                $shipmentsByLocation = $usesOutboundDimension
+                    ? $shipmentsByPickupLocation
+                    : $shipmentsByDcLocation;
+
+                $unassignedByLocation = $usesOutboundDimension
+                    ? $unassignedByPickupLocation
+                    : $unassignedByDcLocation;
+
+                $allLocationCodes = $usesOutboundDimension
+                    ? $allPickupCodes
+                    : $allDcCodes;
+
                 $statusBreakdown = collect($shipmentsByLocation->get($location->id, collect()))
-                    ->map(function ($shipmentGroup) use ($allPickupCodes, $allStatuses, $locationIncludedCodes): array {
+                    ->map(function ($shipmentGroup) use ($allLocationCodes, $allStatuses, $locationIncludedCodes, $locationDimension): array {
                         $status = $shipmentGroup->status;
 
                         return [
                             'status' => $status,
                             'count' => (int) $shipmentGroup->shipment_count,
-                            'shipment_index_url' => $this->shipmentIndexUrl(
+                            'shipment_index_url' => $this->shipmentIndexUrlByLocationDimension(
+                                $locationDimension,
                                 $locationIncludedCodes,
                                 collect([$status]),
-                                $allPickupCodes,
+                                $allLocationCodes,
                                 $allStatuses,
                             ),
                         ];
@@ -146,23 +265,83 @@ class DashboardController extends Controller
                     'id' => $location->id,
                     'name' => $location->name,
                     'short_code' => $location->short_code,
+                    'monitor_type' => $locationDimension,
                     'shipment_count' => $statusBreakdown->sum('count'),
                     'unassigned_shipment_count' => (int) ($unassignedByLocation[$location->id] ?? 0),
-                    'unassigned_shipment_index_url' => $this->shipmentIndexUnassignedUrl(
+                    'unassigned_shipment_index_url' => $this->shipmentIndexUnassignedUrlByLocationDimension(
+                        $locationDimension,
                         $locationIncludedCodes,
-                        $allPickupCodes,
+                        $allLocationCodes,
                         $allStatuses,
                     ),
-                    'shipment_index_url' => $this->shipmentIndexUrl(
+                    'shipment_index_url' => $this->shipmentIndexUrlByLocationDimension(
+                        $locationDimension,
                         $locationIncludedCodes,
                         $allStatuses->reject(fn (string $status): bool => strtolower($status) === 'delivered')->values(),
-                        $allPickupCodes,
+                        $allLocationCodes,
                         $allStatuses,
                     ),
                     'status_breakdown' => $statusBreakdown->all(),
                 ];
             })
             ->all();
+    }
+
+    /**
+     * @param  Collection<int, string>  $includedLocationCodes
+     * @param  Collection<int, string>  $includedStatuses
+     * @param  Collection<int, string>  $allLocationCodes
+     * @param  Collection<int, string>  $allStatuses
+     */
+    private function shipmentIndexUrlByLocationDimension(
+        string $locationDimension,
+        Collection $includedLocationCodes,
+        Collection $includedStatuses,
+        Collection $allLocationCodes,
+        Collection $allStatuses,
+    ): string {
+        $locationFilterKey = $locationDimension === 'dc'
+            ? 'excluded_dc_locations'
+            : 'excluded_pickup_locations';
+
+        return route('admin.shipments.index', [
+            $locationFilterKey => $allLocationCodes
+                ->reject(fn (string $shortCode): bool => $includedLocationCodes->contains($shortCode))
+                ->values()
+                ->all(),
+            'excluded_statuses' => $allStatuses
+                ->reject(fn (string $status): bool => $includedStatuses->contains($status))
+                ->values()
+                ->all(),
+        ], false);
+    }
+
+    /**
+     * @param  Collection<int, string>  $includedLocationCodes
+     * @param  Collection<int, string>  $allLocationCodes
+     * @param  Collection<int, string>  $allStatuses
+     */
+    private function shipmentIndexUnassignedUrlByLocationDimension(
+        string $locationDimension,
+        Collection $includedLocationCodes,
+        Collection $allLocationCodes,
+        Collection $allStatuses,
+    ): string {
+        $locationFilterKey = $locationDimension === 'dc'
+            ? 'excluded_dc_locations'
+            : 'excluded_pickup_locations';
+
+        return route('admin.shipments.index', [
+            $locationFilterKey => $allLocationCodes
+                ->reject(fn (string $shortCode): bool => $includedLocationCodes->contains($shortCode))
+                ->values()
+                ->all(),
+            'excluded_statuses' => $allStatuses
+                ->filter(fn (string $status): bool => strtolower($status) === 'delivered')
+                ->values()
+                ->all(),
+            'only_unassigned' => 1,
+        ], false);
     }
 
     /**
@@ -339,5 +518,82 @@ class DashboardController extends Controller
             ->startOfWeek(CarbonInterface::SUNDAY);
 
         return [$lastWeekStart, $lastWeekStart->endOfWeek(CarbonInterface::SATURDAY)];
+    }
+
+    private function dashboardPreferencesFor(User $user): array
+    {
+        $rawPreferences = is_array($user->dashboard_preferences ?? null)
+            ? $user->dashboard_preferences
+            : [];
+
+        $defaultSections = collect(self::DASHBOARD_SECTION_KEYS)
+            ->mapWithKeys(fn (string $key): array => [$key => true])
+            ->all();
+
+        $sections = collect($defaultSections)
+            ->merge($rawPreferences['sections'] ?? [])
+            ->only(self::DASHBOARD_SECTION_KEYS)
+            ->map(fn ($value): bool => (bool) $value)
+            ->all();
+
+        $defaultMonitoredLocationIds = Location::query()
+            ->where('type', 'pickup')
+            ->pluck('guid')
+            ->filter()
+            ->values()
+            ->all();
+
+        $monitoredLocationIds = collect($rawPreferences['monitored_location_ids'] ?? $defaultMonitoredLocationIds)
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        return [
+            'sections' => $sections,
+            'monitored_location_ids' => $monitoredLocationIds,
+        ];
+    }
+
+    /**
+     * @return array<int, array{id:string, name:string, short_code:?string, type:string, inbound:bool, outbound:bool}>
+     */
+    private function availableMonitoredLocations(): array
+    {
+        return Location::query()
+            ->orderBy('short_code')
+            ->orderBy('name')
+            ->get(['guid', 'name', 'short_code', 'type', 'inbound', 'outbound'])
+            ->map(fn (Location $location): array => [
+                'id' => $location->guid,
+                'name' => $location->name,
+                'short_code' => $location->short_code,
+                'type' => $location->type,
+                'inbound' => (bool) $location->inbound,
+                'outbound' => (bool) $location->outbound,
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  Collection<int, string>  $monitoredLocationGuids
+     * @return Collection<int, Location>
+     */
+    private function resolveMonitoredLocations(Collection $monitoredLocationGuids): Collection
+    {
+        if ($monitoredLocationGuids->isEmpty()) {
+            return collect();
+        }
+
+        $locationsByGuid = Location::query()
+            ->whereIn('guid', $monitoredLocationGuids->all())
+            ->get(['id', 'guid', 'name', 'short_code', 'type', 'inbound', 'outbound'])
+            ->keyBy('guid');
+
+        return $monitoredLocationGuids
+            ->map(fn (string $guid) => $locationsByGuid->get($guid))
+            ->filter(fn ($location): bool => $location instanceof Location)
+            ->values();
     }
 }
