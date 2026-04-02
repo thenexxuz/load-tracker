@@ -46,7 +46,7 @@ it('keeps shipment show rates using viewer-specific carrier visibility rules', f
         ->toContain("'destination_state' => \$rate->destination_state")
         ->toContain("'destination_country' => \$rate->destination_country")
         ->toContain("'destination_distance_miles' => \$this->rateDestinationDistanceMilesFromDc(\$shipment, \$dcLocation, \$rate)")
-        ->toContain('shouldIncludeRegularRateForShipment($shipment, $rate)');
+        ->toContain('shouldIncludeRegularRateForShipment($shipment, $dcLocation, $rate, 200.0)');
 
     expect($page)
         ->toContain('name: string | null')
@@ -60,7 +60,6 @@ it('keeps shipment show rates using viewer-specific carrier visibility rules', f
         ->toContain('v-model.number="selectedRateRadiusMiles"')
         ->toContain('const isRateWithinSelectedRadius = (rate: typeof rates[number]): boolean => {')
         ->toContain('const displayedRates = computed(() => rates.filter((rate) => isRateWithinSelectedRadius(rate)))')
-        ->toContain('selectedRateRadiusMiles.value === 200')
         ->toContain('rate.destination_distance_miles <= selectedRateRadiusMiles.value')
         ->toContain('watch(selectedRateRadiusMiles, () => {')
         ->toContain('includedRateIds.value = includedRateIds.value.filter((rateId) => {')
