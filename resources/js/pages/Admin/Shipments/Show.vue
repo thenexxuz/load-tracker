@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Head, router, useForm, usePage } from '@inertiajs/vue3'
 import mapboxgl from 'mapbox-gl'
-import { onMounted, onUnmounted, ref, computed } from 'vue'
+import { onMounted, onUnmounted, ref, computed, watch } from 'vue'
 import { route } from 'ziggy-js'
 
 import 'mapbox-gl/dist/mapbox-gl.css'
@@ -151,7 +151,7 @@ let map: mapboxgl.Map | null = null
 const includedRateIds = ref<number[]>(hasAssignedCarrier ? rates.map((rate) => rate.id) : [])
 const selectedRateRadiusMiles = ref(60)
 
-const displayedRates = computed(() => rates.filter((rate) => {
+const isRateWithinSelectedRadius = (rate: typeof rates[number]): boolean => {
   if (selectedRateRadiusMiles.value === 200) {
     return true
   }
@@ -161,7 +161,21 @@ const displayedRates = computed(() => rates.filter((rate) => {
   }
 
   return rate.destination_distance_miles <= selectedRateRadiusMiles.value
-}))
+}
+
+const displayedRates = computed(() => rates.filter((rate) => isRateWithinSelectedRadius(rate)))
+
+watch(selectedRateRadiusMiles, () => {
+  includedRateIds.value = includedRateIds.value.filter((rateId) => {
+    const rate = rates.find((currentRate) => currentRate.id === rateId)
+
+    if (!rate) {
+      return false
+    }
+
+    return isRateWithinSelectedRadius(rate)
+  })
+})
 
 const isRateIncludedInTotal = (rateId: number): boolean => includedRateIds.value.includes(rateId)
 
