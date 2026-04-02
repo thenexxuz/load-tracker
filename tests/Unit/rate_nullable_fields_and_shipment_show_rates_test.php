@@ -48,6 +48,9 @@ it('keeps shipment show rates using viewer-specific carrier visibility rules', f
         ->toContain("'destination_distance_miles' => \$this->rateDestinationDistanceMilesFromDc(\$shipment, \$dcLocation, \$rate)")
         ->toContain("'rate_destinations' => \$rateDestinations")
         ->toContain('$rateDestinations = $this->buildRateDestinationsForMap($rates);')
+        ->toContain('if (! $shipment->carrier_id) {')
+        ->toContain('shouldIncludeRegularRateForUnassignedShipment($shipment, $dcLocation, $rate)')
+        ->toContain('neighboringStatesFor(')
         ->toContain('isRegularRateForDcCity($shipment, $dcLocation, $rate)')
         ->toContain('shouldIncludeRegularRateForShipment($shipment, $dcLocation, $rate, $hasRatesForDcCity, 100.0)');
 
