@@ -43,6 +43,8 @@ class Location extends Model
         'longitude',
         'emails',
         'expected_arrival_time',
+        'inbound',
+        'outbound',
     ];
 
     /**
@@ -55,10 +57,16 @@ class Location extends Model
         'latitude' => 'float',
         'longitude' => 'float',
         'expected_arrival_time' => 'datetime',
+        'inbound' => 'boolean',
+        'outbound' => 'boolean',
     ];
 
     protected static function booted(): void
     {
+        static::saving(function (Location $location): void {
+            $location->applyDirectionFlagsFromType();
+        });
+
         static::creating(function ($location) {
             if (empty($location->id)) {
                 $location->id = $location->guid ?: (string) Str::uuid();
@@ -68,6 +76,12 @@ class Location extends Model
                 $location->guid = $location->id;
             }
         });
+    }
+
+    public function applyDirectionFlagsFromType(): void
+    {
+        $this->inbound = in_array($this->type, ['distribution_center', 'recycling'], true);
+        $this->outbound = $this->type === 'pickup';
     }
 
     /**
