@@ -9,8 +9,19 @@ import 'mapbox-gl/dist/mapbox-gl.css'
 import MultiSelect from 'vue-multiselect'
 import 'vue-multiselect/dist/vue-multiselect.css'
 
+interface LocationOption {
+  id: string
+  short_code: string
+  name: string | null
+  city: string | null
+  state: string | null
+  country: string | null
+  address: string
+  type: string
+}
+
 const props = defineProps<{
-  locations: Array<{ id: string; short_code: string; address: string; type: string }>
+  locations: LocationOption[]
   preselected?: string | null
   mapbox_token: string
   default_rate_per_mile?: number
@@ -30,7 +41,12 @@ onMounted(() => {
   }
 })
 
-const selectedLocations = ref<Array<{ id: string; short_code: string; address: string; type?: string }>>([])
+const selectedLocations = ref<LocationOption[]>([])
+
+const locationLabel = (loc: LocationOption): string => {
+  const place = [loc.city, loc.state, loc.country].filter(Boolean).join(', ')
+  return place ? `${loc.short_code} — ${place}` : (loc.short_code ?? '')
+}
 const isLoading = ref(false)
 const routeData = ref<{
   total_km: number
@@ -244,9 +260,9 @@ onUnmounted(() => {
           :multiple="true"
           :searchable="true"
           :close-on-select="false"
-          label="short_code"
+          :custom-label="locationLabel"
           track-by="id"
-          placeholder="Search and select locations..."
+          placeholder="Search by short code, city, state, or country..."
           class="border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
         />
       </div>

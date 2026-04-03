@@ -436,12 +436,16 @@ class LocationController extends Controller
         $locationIds = [$dc->guid, $rec->guid];
 
         $locations = Location::orderBy('short_code')
-            ->get(['id', 'guid', 'short_code', 'address', 'type']);
+            ->get(['id', 'guid', 'short_code', 'name', 'address', 'city', 'state', 'country', 'type']);
 
         return Inertia::render('Admin/Locations/MultiLocationRoute', [
             'locations' => $locations->map(fn (Location $location) => [
                 'id' => $location->guid,
                 'short_code' => $location->short_code,
+                'name' => $location->name,
+                'city' => $location->city,
+                'state' => $location->state,
+                'country' => $location->country,
                 'address' => $location->address,
                 'type' => $location->type,
             ])->values(),
@@ -480,12 +484,16 @@ class LocationController extends Controller
     public function multiRoute()
     {
         $locations = Location::orderBy('short_code')
-            ->get(['id', 'guid', 'short_code', 'address', 'type']);
+            ->get(['id', 'guid', 'short_code', 'name', 'address', 'city', 'state', 'country', 'type']);
 
         return Inertia::render('Admin/Locations/MultiLocationRoute', [
             'locations' => $locations->map(fn (Location $location) => [
                 'id' => $location->guid,
                 'short_code' => $location->short_code,
+                'name' => $location->name,
+                'city' => $location->city,
+                'state' => $location->state,
+                'country' => $location->country,
                 'address' => $location->address,
                 'type' => $location->type,
             ])->values(),
@@ -570,12 +578,16 @@ class LocationController extends Controller
 
         // Load all locations for the dropdown
         $allLocations = Location::orderBy('short_code')
-            ->get(['id', 'guid', 'short_code', 'address', 'type']);
+            ->get(['id', 'guid', 'short_code', 'name', 'address', 'city', 'state', 'country', 'type']);
 
         return Inertia::render('Admin/Locations/MultiLocationRoute', [
             'locations' => $allLocations->map(fn (Location $location) => [
                 'id' => $location->guid,
                 'short_code' => $location->short_code,
+                'name' => $location->name,
+                'city' => $location->city,
+                'state' => $location->state,
+                'country' => $location->country,
                 'address' => $location->address,
                 'type' => $location->type,
             ])->values(),
