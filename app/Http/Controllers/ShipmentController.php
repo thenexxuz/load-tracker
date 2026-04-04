@@ -631,7 +631,7 @@ class ShipmentController extends Controller
             ]);
 
         return collect($offeredCarrierIds)
-            ->mapWithKeys(fn (int $carrierId) => [
+            ->mapWithKeys(fn (string $carrierId) => [
                 $carrierId => [
                     'offered_by_user_id' => $existingOfferUserIds->get($carrierId, $offeredByUserId),
                 ],
