@@ -136,8 +136,11 @@ Route::middleware(['auth', 'role:administrator|supervisor|truckload|carrier'])->
     Route::get('shipments/{shipment}/calculate-bol', [ShipmentController::class, 'calculateBol'])
         ->name('shipments.calculate-bol');
 
-    Route::post('shipments/{shipment}/send-paperwork', [ShipmentController::class, 'sendPaperwork'])
+    Route::get('shipments/{shipment}/send-paperwork', [ShipmentController::class, 'sendPaperwork'])
         ->name('shipments.send-paperwork');
+
+    Route::post('shipments/{shipment}/send-paperwork', [ShipmentController::class, 'processSendPaperwork'])
+        ->name('shipments.send-paperwork.process');
 });
 
 Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () {

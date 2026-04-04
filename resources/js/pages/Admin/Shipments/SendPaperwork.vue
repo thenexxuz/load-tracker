@@ -125,7 +125,7 @@ const submit = () => {
     return
   }
 
-  form.post(route('admin.shipments.send-paperwork', props.shipment.id), {
+  form.post(route('admin.shipments.send-paperwork.process', props.shipment.id), {
     forceFormData: true, // important for file uploads
     onSuccess: () => {
       Notify.success('Paperwork sent successfully.')

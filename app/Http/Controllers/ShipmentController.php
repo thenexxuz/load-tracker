@@ -645,8 +645,7 @@ class ShipmentController extends Controller
         Rate $rate,
         bool $preferDcCityRates,
         float $maxDistanceMiles = 100.0
-    ): bool
-    {
+    ): bool {
         // Global/fallback rates (no start or no end lane fields) should be visible on every shipment.
         if (blank($rate->pickup_location_id)
             || blank($rate->destination_city)
@@ -2546,8 +2545,12 @@ HTML;
         $carrier = $shipment->carrier;
 
         if ($carrier && isset($carrier->emails) && ! empty($carrier->emails)) {
-            $input = str_replace(',', ';', $carrier->emails);
-            $parts = array_map('trim', explode(';', $input));
+            $rawEmails = $carrier->emails;
+
+            $parts = is_array($rawEmails)
+                ? array_map('trim', $rawEmails)
+                : array_map('trim', explode(';', str_replace(',', ';', (string) $rawEmails)));
+
             $emails = [];
 
             foreach ($parts as $part) {
