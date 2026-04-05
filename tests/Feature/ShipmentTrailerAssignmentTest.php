@@ -135,7 +135,7 @@ it('provides existing statuses on the shipment edit page', function (): void {
     $response->assertOk();
     $response->assertInertia(fn (Assert $page) => $page
         ->component('Admin/Shipments/Edit')
-        ->where('shipment.id', $shipment->id)
+        ->where('shipment.id', $shipment->guid)
         ->has('statuses', 2)
         ->where('statuses.0', 'Custom Hold')
         ->where('statuses.1', 'Pending')

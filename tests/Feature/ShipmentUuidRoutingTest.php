@@ -205,7 +205,7 @@ test('shipment show displays rates for same pickup when destination is within 60
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->component('Admin/Shipments/Show')
-            ->has('rates', 1)
+            ->has('rates', 2)
             ->where('rates.0.id', $matchingRate->id)
         );
 });

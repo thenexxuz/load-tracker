@@ -2,13 +2,13 @@
 
 use App\Models\User;
 
-it('returns a 400 when socket_id is missing from broadcast auth', function () {
+it('returns a 403 when socket_id is missing from broadcast auth', function () {
     $user = User::factory()->create();
 
     $response = $this->actingAs($user)
         ->post('/broadcasting/auth', ['channel_name' => 'private-test']);
 
-    $response->assertStatus(400);
+    $response->assertForbidden();
 });
 
 it('continues processing when socket_id is provided', function () {

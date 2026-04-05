@@ -367,7 +367,7 @@ test('send paperwork replaces user placeholder tokens', function (): void {
         'model_type' => 'App\\Models\\Location',
         'model_id' => $pickup->id,
         'subject' => 'Sent by {{user_name}}',
-        'message' => 'Contact {{user_name}} at {{user_email}}',
+        'message' => '<p>Contact {{user_name}} at {{user_email}}</p><p>{{email_footer}}</p>',
     ]);
 
     $shipment = Shipment::query()->create([
@@ -392,5 +392,8 @@ test('send paperwork replaces user placeholder tokens', function (): void {
     expect($capturedReplyToName)->toBe('Template Sender');
     expect($capturedBody)->toContain('Template Sender');
     expect($capturedBody)->toContain('sender@example.com');
+    expect($capturedBody)->toContain('Truckload Team');
+    expect($capturedBody)->toContain('Pegasus Logistics Group');
+    expect($capturedBody)->not->toContain('{{email_footer}}');
     expect($capturedBody)->not->toContain('{{user_email}}');
 });

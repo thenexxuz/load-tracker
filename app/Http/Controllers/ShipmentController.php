@@ -2580,6 +2580,8 @@ HTML;
             'user_email' => $currentUser?->email ?? '',
         ];
 
+        $replacements['email_footer'] = $this->buildEmailFooter($replacements);
+
         $renderPlaceholders = function (string $text) use ($replacements): string {
             return preg_replace_callback('/\{\{?\s*([^\}\s]+)\s*\}?\}/', function ($matches) use ($replacements) {
                 $key = strtolower(trim($matches[1]));
@@ -2741,6 +2743,25 @@ HTML;
         $html .= '</tbody></table>';
 
         return $html;
+    }
+
+    /**
+     * @param  array{user_name?: string, user_email?: string}  $replacements
+     */
+    private function buildEmailFooter(array $replacements): string
+    {
+        return implode('', [
+            '<p>Thank you!</p>',
+            '<p>&nbsp;</p>',
+            '<p>'.e((string) ($replacements['user_name'] ?? '')).'<br>',
+            e((string) ($replacements['user_email'] ?? '')).'<br>',
+            'Truckload Team<br>',
+            'Pegasus Logistics Group</p>',
+            '<p>&nbsp;</p>',
+            '<p>306 Airline Drive<br>Coppell, TX 75019</p>',
+            '<p>Tell Us How We&apos;re Doing</p>',
+            '<p>www.pegasuslogistics.com</p>',
+        ]);
     }
 
     private function propagateScheduleDatesToConsolidationGroup(Shipment $shipment): void
