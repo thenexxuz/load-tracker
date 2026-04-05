@@ -41,7 +41,7 @@ class TemplateController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255|unique:templates,name',
             'model_type' => 'required|in:carrier,location,scheduled_item',
-            'model_id' => 'nullable|integer',
+            'model_id' => 'nullable',
             'subject' => 'nullable|string|max:255',
             'message' => 'nullable|string',
         ]);
@@ -60,6 +60,7 @@ class TemplateController extends Controller
             if (! isset($validated['model_id']) || is_null($validated['model_id'])) {
                 return back()->withErrors(['model_id' => 'Selected model does not exist.']);
             }
+
             if (! class_exists($modelClass) || ! $modelClass::find($validated['model_id'])) {
                 return back()->withErrors(['model_id' => 'Selected model does not exist.']);
             }
@@ -104,7 +105,7 @@ class TemplateController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255|unique:templates,name,'.$template->id,
             'model_type' => 'required|in:carrier,location,scheduled_item',
-            'model_id' => 'nullable|integer',
+            'model_id' => 'nullable',
             'subject' => 'nullable|string|max:255',
             'message' => 'nullable|string',
         ]);
@@ -123,6 +124,7 @@ class TemplateController extends Controller
             if (! isset($validated['model_id']) || is_null($validated['model_id'])) {
                 return back()->withErrors(['model_id' => 'Selected model does not exist.']);
             }
+
             if (! class_exists($modelClass) || ! $modelClass::find($validated['model_id'])) {
                 return back()->withErrors(['model_id' => 'Selected model does not exist.']);
             }

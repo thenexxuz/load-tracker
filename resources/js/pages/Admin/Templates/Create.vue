@@ -1,20 +1,19 @@
 <script setup lang="ts">
 import { Head, useForm } from '@inertiajs/vue3'
 import Editor from '@tinymce/tinymce-vue'
-import { Notify } from 'notiflix';
-import { ref, watch } from 'vue'
+import { watch } from 'vue'
 
 import AdminLayout from '@/layouts/AppLayout.vue'
 
 const props = defineProps<{
-  carriers: Array<{ id: string; name: string; short_code: string }>
-  locations: Array<{ id: string; short_code: string; name: string | null }>
+  carriers: Array<{ id: number; name: string; short_code: string }>
+  locations: Array<{ id: number; short_code: string; name: string | null }>
 }>()
 
 const form = useForm({
   name: '',
   model_type: '', // 'carrier' or 'location'
-  model_id: null as string | null,
+  model_id: null as number | string | null,
   subject: '',
   message: '<p>Start typing your message here...</p>',
 })
@@ -45,22 +44,12 @@ watch(() => form.model_type, (newType, oldType) => {
 })
 
 const submit = () => {
-  // TinyMCE content is already in form.message via v-model
-  const modelTypeMap: { [key: string]: string } = {
-    'carrier': 'App\\Models\\Carrier',
-    'location': 'App\\Models\\Location',
-    'scheduled_item': 'App\\Models\\ScheduledItem',
-  }
-
-  const payload = {
-    ...form.data(),
-    model_type: modelTypeMap[form.model_type] || form.model_type,
-    // For scheduled_item, explicitly set model_id to null
-    model_id: form.model_type === 'scheduled_item' ? null : form.model_id,
-  }
-
-  form.post(route('admin.templates.store'), {
-    data: payload,
+  form.transform((data) => ({
+    ...data,
+    model_id: data.model_type === 'scheduled_item'
+      ? null
+      : (data.model_id === null || data.model_id === '' ? null : data.model_id),
+  })).post(route('admin.templates.store'), {
     onSuccess: () => {
       form.reset()
       form.message = '<p>Start typing your message here...</p>'

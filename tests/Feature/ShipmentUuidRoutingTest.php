@@ -323,6 +323,15 @@ test('administrators can consolidate and unconsolidate shipments on the same lan
             ->where('consolidationData.totals.strap_qty', 17)
         );
 
+    $updatedCarrier = Carrier::factory()->create();
+    $updatedTrailer = Trailer::query()->create([
+        'guid' => (string) Str::uuid(),
+        'number' => 'TRL-2002',
+        'carrier_id' => $updatedCarrier->id,
+        'status' => 'available',
+        'is_active' => true,
+    ]);
+
     $this->actingAs($admin)
         ->put(route('admin.shipments.update', $shipmentB->guid), [
             'shipment_number' => $shipmentB->shipment_number,
@@ -331,9 +340,9 @@ test('administrators can consolidate and unconsolidate shipments on the same lan
             'status' => $shipmentB->status,
             'pickup_location_id' => $pickup->guid,
             'dc_location_id' => $dc->guid,
-            'carrier_id' => $shipmentB->carrier_id,
+            'carrier_id' => $updatedCarrier->id,
             'offered_carrier_ids' => [],
-            'trailer_id' => $shipmentB->trailer_id,
+            'trailer_id' => $updatedTrailer->id,
             'loaned_from_trailer_id' => $shipmentB->loaned_from_trailer_id,
             'drop_date' => $shipmentB->drop_date?->format('Y-m-d'),
             'pickup_date' => $shipmentB->pickup_date?->format('Y-m-d H:i:s'),
@@ -341,7 +350,7 @@ test('administrators can consolidate and unconsolidate shipments on the same lan
             'rack_qty' => $shipmentB->rack_qty,
             'load_bar_qty' => $shipmentB->load_bar_qty,
             'strap_qty' => $shipmentB->strap_qty,
-            'trailer' => $shipmentB->trailer,
+            'trailer' => 'TRL-2002',
             'consolidation_number' => 'MANUAL-CONSOL-001',
             'drayage' => $shipmentB->drayage,
             'on_site' => $shipmentB->on_site,
@@ -359,7 +368,13 @@ test('administrators can consolidate and unconsolidate shipments on the same lan
     $shipmentB->refresh();
 
     expect($shipmentA->consolidation_number)->toBe('MANUAL-CONSOL-001')
-        ->and($shipmentB->consolidation_number)->toBe('MANUAL-CONSOL-001');
+        ->and($shipmentB->consolidation_number)->toBe('MANUAL-CONSOL-001')
+        ->and($shipmentA->carrier_id)->toBe($updatedCarrier->id)
+        ->and($shipmentB->carrier_id)->toBe($updatedCarrier->id)
+        ->and($shipmentA->trailer_id)->toBe($updatedTrailer->id)
+        ->and($shipmentB->trailer_id)->toBe($updatedTrailer->id)
+        ->and($shipmentA->trailer)->toBe('TRL-2002')
+        ->and($shipmentB->trailer)->toBe('TRL-2002');
 
     $this->actingAs($admin)
         ->patch(route('admin.shipments.update-consolidation', $shipmentA->guid), [

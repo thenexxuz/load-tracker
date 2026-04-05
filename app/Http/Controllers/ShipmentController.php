@@ -1087,6 +1087,8 @@ class ShipmentController extends Controller
             );
         }
 
+        $this->propagateCarrierAndTrailerToConsolidationGroup($shipment);
+
         return redirect()->route('admin.shipments.show', $shipment)
             ->with('success', 'Shipment updated successfully.');
     }
@@ -1262,6 +1264,8 @@ class ShipmentController extends Controller
         if ($shipment->carrier_id) {
             $shipment->offeredCarriers()->sync([]);
         }
+
+        $this->propagateCarrierAndTrailerToConsolidationGroup($shipment);
 
         $shipment->load(['trailer:id,number', 'loanedFromTrailer:id,number']);
         $trailer = $shipment->getRelation('trailer');
@@ -1464,6 +1468,34 @@ class ShipmentController extends Controller
 
         } catch (Exception $exception) {
             return back()->withErrors(['file' => 'Failed to process file: '.$exception->getMessage()]);
+        }
+    }
+
+    private function propagateCarrierAndTrailerToConsolidationGroup(Shipment $shipment): void
+    {
+        if (! filled($shipment->consolidation_number)) {
+            return;
+        }
+
+        $peerShipments = Shipment::query()
+            ->where('consolidation_number', $shipment->consolidation_number)
+            ->where('id', '!=', $shipment->id)
+            ->get();
+
+        foreach ($peerShipments as $peerShipment) {
+            $updates = [
+                'carrier_id' => $shipment->carrier_id,
+                'trailer_id' => $shipment->trailer_id,
+                'loaned_from_trailer_id' => $shipment->loaned_from_trailer_id,
+                'trailer' => $shipment->trailer,
+            ];
+
+            $this->syncTrailerAssignments($peerShipment, $updates);
+            $peerShipment->update($updates);
+
+            if ($peerShipment->carrier_id) {
+                $peerShipment->offeredCarriers()->sync([]);
+            }
         }
     }
 
@@ -2505,11 +2537,12 @@ HTML;
         ]);
 
         $template = Template::findOrFail($data['template_id']);
+        $currentUser = $request->user();
 
         $shipment->load(['pickupLocation', 'dcLocation', 'carrier']);
 
         $replacements = [
-            'table' => '',
+            'shipment_info_table' => $this->buildPaperworkEmailTable($shipment),
             'status' => $shipment->status ?? '',
             'shipment_number' => $shipment->shipment_number ?? 'XXXX',
             'bol' => $shipment->bol ?? 'XXXX',
@@ -2519,14 +2552,19 @@ HTML;
             'dc_location' => optional($shipment->dcLocation)->short_code ?? '',
             'dc_location_name' => optional($shipment->dcLocation)->name ?? '',
             'dc_location_address' => optional($shipment->dcLocation)->address ?? '',
+            'delivery_address' => $shipment->dcLocation ? $shipment->dcLocation->fullAddress() : '',
             'carrier_code' => optional($shipment->carrier)->short_code ?? '',
             'trailer' => $shipment->trailer ?? 'XXXX',
             'load_bar_qty' => $shipment->load_bar_qty ?? '0',
+            'load_bars' => $shipment->load_bar_qty ?? '0',
             'rack_qty' => $shipment->rack_qty ?? '0',
             'strap_qty' => $shipment->strap_qty ?? '0',
+            'straps' => $shipment->strap_qty ?? '0',
             'drop_date' => $shipment->drop_date ? Carbon::parse($shipment->drop_date)->format('m/d/Y') : '',
             'pickup_date' => $shipment->pickup_date ? Carbon::parse($shipment->pickup_date)->format('m/d/Y') : '',
             'delivery_date' => $shipment->delivery_date ? Carbon::parse($shipment->delivery_date)->format('m/d/Y') : '',
+            'user_name' => $currentUser?->name ?? '',
+            'user_email' => $currentUser?->email ?? '',
         ];
 
         $renderPlaceholders = function (string $text) use ($replacements): string {
@@ -2579,9 +2617,14 @@ HTML;
         }
 
         try {
-            Mail::send([], [], function ($message) use ($recipients, $subject, $body, $request) {
+            Mail::send([], [], function ($message) use ($recipients, $subject, $body, $request, $currentUser) {
                 $message->to($recipients);
                 $message->subject($subject);
+
+                if ($currentUser && filter_var($currentUser->email, FILTER_VALIDATE_EMAIL)) {
+                    $message->replyTo($currentUser->email, $currentUser->name ?? null);
+                }
+
                 $message->html($body);
 
                 // Attach LRC file if uploaded
@@ -2618,6 +2661,73 @@ HTML;
 
             return back()->withErrors(['email' => 'Failed to send email: '.$e->getMessage()]);
         }
+    }
+
+    private function buildPaperworkEmailTable(Shipment $shipment): string
+    {
+        $shipment->loadMissing(['pickupLocation', 'dcLocation', 'carrier']);
+
+        $shipments = $shipment->isConsolidation()
+            ? Shipment::query()
+                ->with(['pickupLocation', 'dcLocation', 'carrier'])
+                ->where('consolidation_number', $shipment->consolidation_number)
+                ->orderBy('shipment_number')
+                ->get()
+            : collect([$shipment]);
+
+        $headers = [
+            'Status',
+            'BOL',
+            'Pickup Location',
+            'Shipment Number',
+            'DC Location',
+            'Drop Date',
+            'Pickup Date',
+            'Delivery Date',
+            'PO #',
+            'Rack Qty',
+            'Carrier',
+            'Trailer',
+            'Load Bars',
+            'Straps',
+            'Delivery Address',
+        ];
+
+        $html = <<<'HTML'
+<table style="border-collapse: collapse; width: 100%; border: 1px solid #000;" border="1">
+    <tbody>
+        <tr style="background-color: #0b5394; color: #ecf0f1; text-align: center;">
+HTML;
+
+        foreach ($headers as $header) {
+            $html .= '<td style="padding-left: 5px; padding-right: 5px;"><strong>'.e($header).'</strong></td>';
+        }
+
+        $html .= '</tr>';
+
+        foreach ($shipments as $rowShipment) {
+            $html .= '<tr style="border-color: #000; background-color: #fff; color: #000;">';
+            $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) ($rowShipment->status ?? '')).'</td>';
+            $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) ($rowShipment->bol ?? '')).'</td>';
+            $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) (optional($rowShipment->pickupLocation)->short_code ?? '')).'</td>';
+            $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) ($rowShipment->shipment_number ?? '')).'</td>';
+            $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) (optional($rowShipment->dcLocation)->short_code ?? '')).'</td>';
+            $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e($rowShipment->drop_date ? Carbon::parse($rowShipment->drop_date)->format('m/d/Y') : '').'</td>';
+            $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e($rowShipment->pickup_date ? Carbon::parse($rowShipment->pickup_date)->format('m/d/Y') : '').'</td>';
+            $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e($rowShipment->delivery_date ? Carbon::parse($rowShipment->delivery_date)->format('m/d/Y') : '').'</td>';
+            $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) ($rowShipment->po_number ?? '')).'</td>';
+            $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) ($rowShipment->rack_qty ?? '')).'</td>';
+            $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) (optional($rowShipment->carrier)->short_code ?? '')).'</td>';
+            $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) ($rowShipment->trailer ?? '')).'</td>';
+            $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) ($rowShipment->load_bar_qty ?? '')).'</td>';
+            $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) ($rowShipment->strap_qty ?? '')).'</td>';
+            $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) (optional($rowShipment->dcLocation)->fullAddress() ?? '')).'</td>';
+            $html .= '</tr>';
+        }
+
+        $html .= '</tbody></table>';
+
+        return $html;
     }
 
     public function calculateBol(Shipment $shipment): \Illuminate\Http\RedirectResponse

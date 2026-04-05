@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { Head, useForm } from '@inertiajs/vue3'
 import Editor from '@tinymce/tinymce-vue'
-import { Notify } from 'notiflix';
-import { ref, watch } from 'vue'
+import { watch } from 'vue'
 
 import AdminLayout from '@/layouts/AppLayout.vue'
 
@@ -11,18 +10,18 @@ const props = defineProps<{
     id: number
     name: string
     model_type: string  // e.g. 'App\\Models\\Carrier' or 'App\\Models\\Location'
-    model_id: string | null
+    model_id: number | null
     subject: string | null
     message: string | null
   }
-  carriers: Array<{ id: string; name: string; short_code: string }>
-  locations: Array<{ id: string; short_code: string; name: string | null }>
+  carriers: Array<{ id: number; name: string; short_code: string }>
+  locations: Array<{ id: number; short_code: string; name: string | null }>
 }>()
 
 const form = useForm({
   name: props.template.name,
   model_type: props.template.model_type === 'App\\Models\\Carrier' ? 'carrier' : props.template.model_type === 'App\\Models\\Location' ? 'location' : 'scheduled_item',
-  model_id: props.template.model_id,
+  model_id: props.template.model_id as number | string | null,
   subject: props.template.subject || '',
   message: props.template.message || '<p>Start typing your message here...</p>',
 })
@@ -53,22 +52,12 @@ watch(() => form.model_type, (newType, oldType) => {
 })
 
 const submit = () => {
-  // Map simple type back to full namespace for backend
-  const modelTypeMap: { [key: string]: string } = {
-    'carrier': 'App\\Models\\Carrier',
-    'location': 'App\\Models\\Location',
-    'scheduled_item': 'App\\Models\\ScheduledItem',
-  }
-
-  const payload = {
-    ...form.data(),
-    model_type: modelTypeMap[form.model_type] || form.model_type,
-    // For scheduled_item, explicitly set model_id to null
-    model_id: form.model_type === 'scheduled_item' ? null : form.model_id,
-  }
-
-  form.put(route('admin.templates.update', props.template.id), {
-    data: payload,
+  form.transform((data) => ({
+    ...data,
+    model_id: data.model_type === 'scheduled_item'
+      ? null
+      : (data.model_id === null || data.model_id === '' ? null : data.model_id),
+  })).put(route('admin.templates.update', props.template.id), {
     onError: (response) => {
       console.error('Update error:', response)
     }
