@@ -17,10 +17,10 @@ const props = defineProps<{
     template_id: number | null
     apply_to_all: boolean
     schedulable_type: string
-    schedulable_id: number | null
+    schedulable_id: string | null
   }
   carriers: Array<{
-    id: number
+    id: string
     name: string
     short_code: string
   }>
@@ -137,7 +137,7 @@ const updateScheduleType = (type: 'daily' | 'weekly' | 'monthly') => {
         <!-- Schedule Time (All types) -->
         <div>
           <label for="schedule_time" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Time of Day <span class="text-red-500">*</span>
+            Time of Day (CST) <span class="text-red-500">*</span>
           </label>
           <input
             id="schedule_time"
@@ -146,6 +146,9 @@ const updateScheduleType = (type: 'daily' | 'weekly' | 'monthly') => {
             required
             class="block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-4 py-2.5"
           />
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            Scheduled emails are evaluated in Central Time.
+          </p>
           <InputError :message="form.errors.schedule_time" class="mt-1.5 text-sm" />
         </div>
 
@@ -222,7 +225,7 @@ const updateScheduleType = (type: 'daily' | 'weekly' | 'monthly') => {
           </label>
           <select
             id="schedulable_id"
-            v-model.number="form.schedulable_id"
+            v-model="form.schedulable_id"
             required
             class="block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-4 py-2.5"
           >

@@ -44,7 +44,7 @@ class ScheduledItemController extends Controller
             'template_id' => 'nullable|exists:templates,id',
             'apply_to_all' => 'boolean',
             'schedulable_type' => 'required|in:carrier',
-            'schedulable_id' => 'nullable|integer',
+            'schedulable_id' => 'nullable|string',
         ]);
 
         $applyToAll = $validated['apply_to_all'] ?? false;
@@ -114,7 +114,7 @@ class ScheduledItemController extends Controller
             'template_id' => 'nullable|exists:templates,id',
             'apply_to_all' => 'boolean',
             'schedulable_type' => 'required|in:carrier',
-            'schedulable_id' => 'nullable|integer',
+            'schedulable_id' => 'nullable|string',
         ]);
 
         $applyToAll = $validated['apply_to_all'] ?? false;

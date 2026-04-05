@@ -55,3 +55,33 @@ test('template store accepts location uuid model id', function (): void {
     expect($template)->not->toBeNull();
     expect($template?->model_type)->toBe('App\\Models\\Location');
 });
+
+test('template update stores scheduled item type with null model id', function (): void {
+    $admin = User::factory()->create();
+    $admin->assignRole('administrator');
+
+    $template = Template::create([
+        'name' => 'Scheduled Template '.str()->random(8),
+        'model_type' => 'App\\Models\\ScheduledItem',
+        'model_id' => null,
+        'subject' => 'Original subject',
+        'message' => '<p>Original message</p>',
+    ]);
+
+    $this->actingAs($admin)
+        ->put(route('admin.templates.update', $template), [
+            'name' => $template->name,
+            'model_type' => 'scheduled_item',
+            'model_id' => null,
+            'subject' => '{{carrier_name}} SCHEDULE {{today}}',
+            'message' => '<p>Updated message</p>',
+        ])
+        ->assertRedirect(route('admin.templates.show', $template->id))
+        ->assertSessionHas('success', 'Template updated successfully.');
+
+    $template->refresh();
+
+    expect($template->model_type)->toBe('App\\Models\\ScheduledItem')
+        ->and($template->model_id)->toBeNull()
+        ->and($template->subject)->toBe('{{carrier_name}} SCHEDULE {{today}}');
+});

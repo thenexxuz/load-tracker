@@ -26,7 +26,6 @@ class ScheduledItem extends Model
     protected function casts(): array
     {
         return [
-            'schedule_time' => 'time',
             'apply_to_all' => 'boolean',
         ];
     }

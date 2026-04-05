@@ -108,6 +108,9 @@ test('shipment show and edit pages resolve shipments by guid', function (): void
         'status' => 'Booked',
         'pickup_location_id' => $pickup->id,
         'dc_location_id' => $dc->id,
+        'drop_date' => '2026-04-05',
+        'pickup_date' => '2026-04-05 14:30:00',
+        'delivery_date' => '2026-04-06 09:45:00',
     ]);
 
     $this->actingAs($admin)
@@ -128,6 +131,9 @@ test('shipment show and edit pages resolve shipments by guid', function (): void
             ->where('shipment.id', $shipment->guid)
             ->where('shipment.pickup_location_id', $pickup->guid)
             ->where('shipment.dc_location_id', $dc->guid)
+            ->where('shipment.drop_date', '2026-04-05')
+            ->where('shipment.pickup_date', '2026-04-05T14:30')
+            ->where('shipment.delivery_date', '2026-04-06T09:45')
         );
 });
 
@@ -344,9 +350,9 @@ test('administrators can consolidate and unconsolidate shipments on the same lan
             'offered_carrier_ids' => [],
             'trailer_id' => $updatedTrailer->id,
             'loaned_from_trailer_id' => $shipmentB->loaned_from_trailer_id,
-            'drop_date' => $shipmentB->drop_date?->format('Y-m-d'),
-            'pickup_date' => $shipmentB->pickup_date?->format('Y-m-d H:i:s'),
-            'delivery_date' => $shipmentB->delivery_date?->format('Y-m-d H:i:s'),
+            'drop_date' => '2026-04-08',
+            'pickup_date' => '2026-04-08 13:15:00',
+            'delivery_date' => '2026-04-09 08:45:00',
             'rack_qty' => $shipmentB->rack_qty,
             'load_bar_qty' => $shipmentB->load_bar_qty,
             'strap_qty' => $shipmentB->strap_qty,
@@ -374,7 +380,13 @@ test('administrators can consolidate and unconsolidate shipments on the same lan
         ->and($shipmentA->trailer_id)->toBe($updatedTrailer->id)
         ->and($shipmentB->trailer_id)->toBe($updatedTrailer->id)
         ->and($shipmentA->trailer)->toBe('TRL-2002')
-        ->and($shipmentB->trailer)->toBe('TRL-2002');
+        ->and($shipmentB->trailer)->toBe('TRL-2002')
+        ->and($shipmentA->drop_date?->format('Y-m-d'))->toBe('2026-04-08')
+        ->and($shipmentB->drop_date?->format('Y-m-d'))->toBe('2026-04-08')
+        ->and($shipmentA->pickup_date?->format('Y-m-d H:i:s'))->toBe('2026-04-08 13:15:00')
+        ->and($shipmentB->pickup_date?->format('Y-m-d H:i:s'))->toBe('2026-04-08 13:15:00')
+        ->and($shipmentA->delivery_date?->format('Y-m-d H:i:s'))->toBe('2026-04-09 08:45:00')
+        ->and($shipmentB->delivery_date?->format('Y-m-d H:i:s'))->toBe('2026-04-09 08:45:00');
 
     $this->actingAs($admin)
         ->patch(route('admin.shipments.update-consolidation', $shipmentA->guid), [

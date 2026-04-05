@@ -1088,6 +1088,7 @@ class ShipmentController extends Controller
         }
 
         $this->propagateCarrierAndTrailerToConsolidationGroup($shipment);
+        $this->propagateScheduleDatesToConsolidationGroup($shipment);
 
         return redirect()->route('admin.shipments.show', $shipment)
             ->with('success', 'Shipment updated successfully.');
@@ -1483,6 +1484,10 @@ class ShipmentController extends Controller
             ->get();
 
         foreach ($peerShipments as $peerShipment) {
+            if (! $peerShipment instanceof Shipment) {
+                continue;
+            }
+
             $updates = [
                 'carrier_id' => $shipment->carrier_id,
                 'trailer_id' => $shipment->trailer_id,
@@ -2305,11 +2310,19 @@ class ShipmentController extends Controller
 
     protected function formatDateValue(mixed $value, string $format): ?string
     {
-        if (! $value instanceof Carbon) {
+        if ($value instanceof \DateTimeInterface) {
+            return Carbon::instance($value)->format($format);
+        }
+
+        if (blank($value)) {
             return null;
         }
 
-        return $value->format($format);
+        try {
+            return Carbon::parse((string) $value)->format($format);
+        } catch (Exception) {
+            return null;
+        }
     }
 
     /**
@@ -2728,6 +2741,22 @@ HTML;
         $html .= '</tbody></table>';
 
         return $html;
+    }
+
+    private function propagateScheduleDatesToConsolidationGroup(Shipment $shipment): void
+    {
+        if (! filled($shipment->consolidation_number)) {
+            return;
+        }
+
+        Shipment::query()
+            ->where('consolidation_number', $shipment->consolidation_number)
+            ->where('id', '!=', $shipment->id)
+            ->update([
+                'drop_date' => $shipment->drop_date,
+                'pickup_date' => $shipment->pickup_date,
+                'delivery_date' => $shipment->delivery_date,
+            ]);
     }
 
     public function calculateBol(Shipment $shipment): \Illuminate\Http\RedirectResponse
