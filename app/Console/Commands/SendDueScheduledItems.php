@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\Carrier;
 use App\Models\ScheduledItem;
 use App\Models\Shipment;
+use App\Models\Template;
 use Carbon\CarbonInterface;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Mail;
@@ -71,7 +72,10 @@ class SendDueScheduledItems extends Command
                 ];
 
                 $replacements['carrier_shipments'] = $this->buildCarrierShipmentsTable($carrier, $now);
-                $replacements['email_footer'] = $this->buildEmailFooter($replacements);
+                $replacements = array_merge(
+                    $replacements,
+                    $this->resolveTemplateTokenReplacements($replacements)
+                );
 
                 $subjectTemplate = $item->template?->subject ?: $item->name;
                 $bodyTemplate = $item->template?->message ?: '';
@@ -175,11 +179,22 @@ class SendDueScheduledItems extends Command
 
     private function applyTemplateReplacements(string $content, array $replacements): string
     {
-        foreach ($replacements as $key => $value) {
-            $content = str_replace('{{'.$key.'}}', (string) $value, $content);
-        }
+        return preg_replace_callback('/\{\{\s*([^\}\s]+)\s*\}\}/', function (array $matches) use ($replacements): string {
+            $key = strtolower(trim($matches[1]));
 
-        return $content;
+            return array_key_exists($key, $replacements)
+                ? (string) $replacements[$key]
+                : $matches[0];
+        }, $content) ?? $content;
+    }
+
+    /**
+     * @param  array<string, mixed>  $baseReplacements
+     * @return array<string, string>
+     */
+    private function resolveTemplateTokenReplacements(array $baseReplacements): array
+    {
+        return Template::resolveTemplateTokenReplacements($baseReplacements);
     }
 
     private function buildCarrierShipmentsTable(Carrier $carrier, CarbonInterface $now): string
@@ -254,21 +269,5 @@ HTML;
         $html .= '</tbody></table>';
 
         return $html;
-    }
-
-    private function buildEmailFooter(array $replacements): string
-    {
-        return implode('', [
-            '<p>Thank you!</p>',
-            '<p>&nbsp;</p>',
-            '<p>'.e((string) ($replacements['user_name'] ?? '')).'<br>',
-            e((string) ($replacements['user_email'] ?? '')).'<br>',
-            'Truckload Team<br>',
-            'Pegasus Logistics Group</p>',
-            '<p>&nbsp;</p>',
-            '<p>306 Airline Drive<br>Coppell, TX 75019</p>',
-            '<p>Tell Us How We&apos;re Doing</p>',
-            '<p>www.pegasuslogistics.com</p>',
-        ]);
     }
 }

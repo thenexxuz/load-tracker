@@ -245,6 +245,14 @@ test('send paperwork includes all consolidation shipments in table placeholder',
         'emails' => ['dispatch@example.com'],
     ]);
 
+    Template::query()->create([
+        'name' => 'email_footer',
+        'model_type' => Template::class,
+        'model_id' => null,
+        'subject' => null,
+        'message' => '<p>Dynamic Footer Token</p><p>{{user_name}}<br>{{user_email}}<br>Truckload Team<br>Pegasus Logistics Group</p>',
+    ]);
+
     $consolidationNumber = 'CONSOL-TEST-001';
 
     $primaryShipment = Shipment::query()->create([
@@ -362,6 +370,14 @@ test('send paperwork replaces user placeholder tokens', function (): void {
         'emails' => ['dispatch@example.com'],
     ]);
 
+    Template::query()->create([
+        'name' => 'email_footer',
+        'model_type' => Template::class,
+        'model_id' => null,
+        'subject' => null,
+        'message' => '<p>Dynamic Footer Token</p><p>{{user_name}}<br>{{user_email}}<br>Truckload Team<br>Pegasus Logistics Group</p>',
+    ]);
+
     $template = Template::query()->create([
         'name' => 'User Placeholder Template',
         'model_type' => 'App\\Models\\Location',
@@ -390,10 +406,122 @@ test('send paperwork replaces user placeholder tokens', function (): void {
     expect($capturedSubject)->not->toContain('{{user_name}}');
     expect($capturedReplyToEmail)->toBe('sender@example.com');
     expect($capturedReplyToName)->toBe('Template Sender');
+    expect($capturedBody)->toContain('Dynamic Footer Token');
     expect($capturedBody)->toContain('Template Sender');
     expect($capturedBody)->toContain('sender@example.com');
     expect($capturedBody)->toContain('Truckload Team');
     expect($capturedBody)->toContain('Pegasus Logistics Group');
     expect($capturedBody)->not->toContain('{{email_footer}}');
     expect($capturedBody)->not->toContain('{{user_email}}');
+});
+
+test('send paperwork resolves deeply nested template tokens', function (): void {
+    $capturedBody = '';
+
+    Mail::shouldReceive('send')
+        ->once()
+        ->withArgs(function ($view, $data, $callback) use (&$capturedBody): bool {
+            $fakeMessage = new class
+            {
+                public string $htmlBody = '';
+
+                public function to(array $recipients): self
+                {
+                    return $this;
+                }
+
+                public function subject(string $subject): self
+                {
+                    return $this;
+                }
+
+                public function replyTo(string $email, ?string $name = null): self
+                {
+                    return $this;
+                }
+
+                public function html(string $body): self
+                {
+                    $this->htmlBody = $body;
+
+                    return $this;
+                }
+
+                public function attach(string $path, array $options = []): self
+                {
+                    return $this;
+                }
+            };
+
+            $callback($fakeMessage);
+            $capturedBody = $fakeMessage->htmlBody;
+
+            return true;
+        })
+        ->andReturnNull();
+
+    $admin = User::factory()->create([
+        'name' => 'Nested Token User',
+        'email' => 'nested@example.com',
+    ]);
+    $admin->assignRole('administrator');
+
+    $pickup = Location::factory()->pickup()->create();
+    $dc = Location::factory()->distribution_center()->create();
+    $carrier = Carrier::factory()->create([
+        'emails' => ['dispatch@example.com'],
+    ]);
+
+    Template::query()->create([
+        'name' => 'token_c',
+        'model_type' => Template::class,
+        'model_id' => null,
+        'subject' => null,
+        'message' => 'Contact {{user_name}}',
+    ]);
+
+    Template::query()->create([
+        'name' => 'token_b',
+        'model_type' => Template::class,
+        'model_id' => null,
+        'subject' => null,
+        'message' => '{{token_c}} from nested chain',
+    ]);
+
+    Template::query()->create([
+        'name' => 'token_a',
+        'model_type' => Template::class,
+        'model_id' => null,
+        'subject' => null,
+        'message' => 'Start -> {{token_b}}',
+    ]);
+
+    $template = Template::query()->create([
+        'name' => 'Nested Template',
+        'model_type' => 'App\\Models\\Location',
+        'model_id' => $pickup->id,
+        'subject' => 'Nested Subject',
+        'message' => '<p>{{token_a}}</p>',
+    ]);
+
+    $shipment = Shipment::query()->create([
+        'guid' => (string) str()->uuid(),
+        'shipment_number' => 'SHIP-PAPER-NESTED-TOKENS',
+        'status' => 'Pending',
+        'pickup_location_id' => $pickup->id,
+        'dc_location_id' => $dc->id,
+        'carrier_id' => $carrier->id,
+    ]);
+
+    $this->actingAs($admin)
+        ->post(route('admin.shipments.send-paperwork.process', $shipment->guid), [
+            'template_id' => $template->id,
+        ])
+        ->assertRedirect(route('admin.shipments.show', $shipment->guid))
+        ->assertSessionHas('success', 'Paperwork sent successfully.');
+
+    expect($capturedBody)->toContain('Start -> Contact Nested Token User from nested chain');
+    expect($capturedBody)->not->toContain('{{token_a}}');
+    expect($capturedBody)->not->toContain('{{token_b}}');
+    expect($capturedBody)->not->toContain('{{token_c}}');
 });

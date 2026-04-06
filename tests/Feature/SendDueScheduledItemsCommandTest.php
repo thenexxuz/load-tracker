@@ -32,6 +32,14 @@ test('scheduled-items:send-due sends email for due daily scheduled item', functi
         'trailer' => null,
     ]);
 
+    Template::query()->create([
+        'name' => 'email_footer',
+        'model_type' => Template::class,
+        'model_id' => null,
+        'subject' => null,
+        'message' => '<p>Custom Footer Token</p><p>{{user_name}}<br>{{user_email}}<br>Truckload Team<br>Pegasus Logistics Group</p><p>www.pegasuslogistics.com</p>',
+    ]);
+
     $template = Template::query()->create([
         'name' => 'Daily Carrier Summary '.str()->random(6),
         'model_type' => ScheduledItem::class,
@@ -105,6 +113,7 @@ test('scheduled-items:send-due sends email for due daily scheduled item', functi
         ->and($capturedBody)->toContain('SHIP-SCHED-001')
         ->and($capturedBody)->toContain('background-color: #0b5394')
         ->and($capturedBody)->toContain('background-color: #00ff00')
+        ->and($capturedBody)->toContain('Custom Footer Token')
         ->and($capturedBody)->toContain('Scheduled Sender')
         ->and($capturedBody)->toContain('scheduled@example.com')
         ->and($capturedBody)->toContain('Truckload Team')

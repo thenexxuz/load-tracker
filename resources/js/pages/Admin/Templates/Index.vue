@@ -215,6 +215,9 @@ onMounted(() => {
                   {{ template.model_type.split('\\').pop() }}:
                   {{ template.model.short_code || template.model.name || 'ID ' + template.model.id }}
                 </span>
+                <span v-else-if="template.model_type === 'App\\Models\\Template'">
+                  Template Token
+                </span>
                 <span v-else>—</span>
               </td>
               <td class="px-6 py-4 text-center space-x-5" @click.stop>

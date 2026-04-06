@@ -85,3 +85,84 @@ test('template update stores scheduled item type with null model id', function (
         ->and($template->model_id)->toBeNull()
         ->and($template->subject)->toBe('{{carrier_name}} SCHEDULE {{today}}');
 });
+
+test('template store accepts template token type with null model id', function (): void {
+    $admin = User::factory()->create();
+    $admin->assignRole('administrator');
+
+    $this->actingAs($admin)
+        ->post(route('admin.templates.store'), [
+            'name' => 'email_footer',
+            'model_type' => 'template_token',
+            'model_id' => null,
+            'subject' => 'Should be ignored',
+            'message' => '<p>Token body</p>',
+        ])
+        ->assertRedirect(route('admin.templates.index'))
+        ->assertSessionHas('success', 'Template created successfully.');
+
+    $template = Template::query()->latest('id')->first();
+
+    expect($template)->not->toBeNull();
+    expect($template?->model_type)->toBe('App\\Models\\Template')
+        ->and($template?->model_id)->toBeNull()
+        ->and($template?->subject)->toBeNull();
+});
+
+test('template token store rejects circular token nesting', function (): void {
+    $admin = User::factory()->create();
+    $admin->assignRole('administrator');
+
+    Template::query()->create([
+        'name' => 'token_b',
+        'model_type' => Template::class,
+        'model_id' => null,
+        'subject' => null,
+        'message' => '{{token_a}}',
+    ]);
+
+    $this->actingAs($admin)
+        ->post(route('admin.templates.store'), [
+            'name' => 'token_a',
+            'model_type' => 'template_token',
+            'model_id' => null,
+            'subject' => null,
+            'message' => '{{token_b}}',
+        ])
+        ->assertSessionHasErrors([
+            'message' => "Circular template token nesting detected at token '{{token_b}}'.",
+        ]);
+});
+
+test('template token update rejects circular token nesting', function (): void {
+    $admin = User::factory()->create();
+    $admin->assignRole('administrator');
+
+    Template::query()->create([
+        'name' => 'token_b',
+        'model_type' => Template::class,
+        'model_id' => null,
+        'subject' => null,
+        'message' => '{{token_a}}',
+    ]);
+
+    $tokenA = Template::query()->create([
+        'name' => 'token_a',
+        'model_type' => Template::class,
+        'model_id' => null,
+        'subject' => null,
+        'message' => 'safe value',
+    ]);
+
+    $this->actingAs($admin)
+        ->put(route('admin.templates.update', $tokenA), [
+            'name' => 'token_a',
+            'model_type' => 'template_token',
+            'model_id' => null,
+            'subject' => null,
+            'message' => '{{token_b}}',
+        ])
+        ->assertSessionHasErrors([
+            'message' => "Circular template token nesting detected at token '{{token_b}}'.",
+        ]);
+});

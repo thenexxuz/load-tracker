@@ -12,7 +12,7 @@ const props = defineProps<{
     id: number
     name: string
     model_type: string          // e.g. 'App\\Models\\Carrier' or 'App\\Models\\Location'
-    model_id: number
+    model_id: number | null
     subject: string | null
     message: string | null
     created_at: string
@@ -92,6 +92,7 @@ onMounted(() => {
                   {{ modelTypeDisplay }}:
                   {{ template.model.short_code || template.model.name || 'ID ' + template.model.id }}
                 </span>
+                <span v-else-if="template.model_type === 'App\\Models\\Template'">Template Token</span>
                 <span v-else>—</span>
               </dd>
             </div>

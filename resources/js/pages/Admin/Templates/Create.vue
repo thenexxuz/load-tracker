@@ -12,7 +12,7 @@ const props = defineProps<{
 
 const form = useForm({
   name: '',
-  model_type: '', // 'carrier' or 'location'
+  model_type: '',
   model_id: null as number | string | null,
   subject: '',
   message: '<p>Start typing your message here...</p>',
@@ -40,15 +40,20 @@ const tinyMceInit = {
 watch(() => form.model_type, (newType, oldType) => {
   if (newType !== oldType) {
     form.model_id = null
+
+    if (newType === 'template_token') {
+      form.subject = ''
+    }
   }
 })
 
 const submit = () => {
   form.transform((data) => ({
     ...data,
-    model_id: data.model_type === 'scheduled_item'
+    model_id: ['scheduled_item', 'template_token'].includes(data.model_type)
       ? null
       : (data.model_id === null || data.model_id === '' ? null : data.model_id),
+    subject: data.model_type === 'template_token' ? null : data.subject,
   })).post(route('admin.templates.store'), {
     onSuccess: () => {
       form.reset()
@@ -98,11 +103,12 @@ const submit = () => {
               <option value="carrier">Carrier</option>
               <option value="location">Location</option>
               <option value="scheduled_item">Scheduled Item</option>
+              <option value="template_token">Template Token</option>
             </select>
             <p v-if="form.errors.model_type" class="mt-1 text-sm text-red-600">{{ form.errors.model_type }}</p>
           </div>
 
-          <div v-if="form.model_type !== 'scheduled_item'">
+          <div v-if="!['scheduled_item', 'template_token'].includes(form.model_type)">
             <label class="block text-sm font-medium mb-1">Related Model <span class="text-red-600">*</span></label>
             <select
               v-model="form.model_id"
@@ -135,7 +141,7 @@ const submit = () => {
         </div>
 
         <!-- Subject -->
-        <div>
+        <div v-if="form.model_type !== 'template_token'">
           <label class="block text-sm font-medium mb-1">Subject</label>
           <input
             v-model="form.subject"

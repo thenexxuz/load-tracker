@@ -7,6 +7,7 @@ use App\Models\Location;
 use App\Models\ScheduledItem;
 use App\Models\Template;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -40,23 +41,24 @@ class TemplateController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255|unique:templates,name',
-            'model_type' => 'required|in:carrier,location,scheduled_item',
+            'model_type' => 'required|in:carrier,location,scheduled_item,template_token',
             'model_id' => 'nullable',
             'subject' => 'nullable|string|max:255',
             'message' => 'nullable|string',
         ]);
 
-        // Validate that model_id exists for the given model_type (except for scheduled_item)
+        // Validate that model_id exists for the given model_type (except for model-less types)
         $modelTypeMap = [
             'carrier' => 'App\\Models\\Carrier',
             'location' => 'App\\Models\\Location',
             'scheduled_item' => 'App\\Models\\ScheduledItem',
+            'template_token' => 'App\\Models\\Template',
         ];
         $validated['model_type'] = $modelTypeMap[$validated['model_type']];
         $modelClass = $validated['model_type'];
 
-        // Only validate model_id exists if not scheduled_item
-        if ($modelClass !== 'App\\Models\\ScheduledItem') {
+        // Only validate model_id exists if this type requires a related model.
+        if (! in_array($modelClass, ['App\\Models\\ScheduledItem', 'App\\Models\\Template'], true)) {
             if (! isset($validated['model_id']) || is_null($validated['model_id'])) {
                 return back()->withErrors(['model_id' => 'Selected model does not exist.']);
             }
@@ -65,8 +67,17 @@ class TemplateController extends Controller
                 return back()->withErrors(['model_id' => 'Selected model does not exist.']);
             }
         } else {
-            // For scheduled_item, set model_id to null
+            // For model-less template types, set model_id to null.
             $validated['model_id'] = null;
+        }
+
+        if ($modelClass === Template::class) {
+            $validated['subject'] = null;
+
+            $this->ensureNoCircularTokenNesting(
+                (string) $validated['name'],
+                (string) ($validated['message'] ?? ''),
+            );
         }
 
         Template::create($validated);
@@ -104,23 +115,24 @@ class TemplateController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255|unique:templates,name,'.$template->id,
-            'model_type' => 'required|in:carrier,location,scheduled_item',
+            'model_type' => 'required|in:carrier,location,scheduled_item,template_token',
             'model_id' => 'nullable',
             'subject' => 'nullable|string|max:255',
             'message' => 'nullable|string',
         ]);
 
-        // Validate that model_id exists for the given model_type (except for scheduled_item)
+        // Validate that model_id exists for the given model_type (except for model-less types)
         $modelTypeMap = [
             'carrier' => 'App\\Models\\Carrier',
             'location' => 'App\\Models\\Location',
             'scheduled_item' => 'App\\Models\\ScheduledItem',
+            'template_token' => 'App\\Models\\Template',
         ];
         $validated['model_type'] = $modelTypeMap[$validated['model_type']];
         $modelClass = $validated['model_type'];
 
-        // Only validate model_id exists if not scheduled_item
-        if ($modelClass !== 'App\\Models\\ScheduledItem') {
+        // Only validate model_id exists if this type requires a related model.
+        if (! in_array($modelClass, ['App\\Models\\ScheduledItem', 'App\\Models\\Template'], true)) {
             if (! isset($validated['model_id']) || is_null($validated['model_id'])) {
                 return back()->withErrors(['model_id' => 'Selected model does not exist.']);
             }
@@ -129,8 +141,18 @@ class TemplateController extends Controller
                 return back()->withErrors(['model_id' => 'Selected model does not exist.']);
             }
         } else {
-            // For scheduled_item, set model_id to null
+            // For model-less template types, set model_id to null.
             $validated['model_id'] = null;
+        }
+
+        if ($modelClass === Template::class) {
+            $validated['subject'] = null;
+
+            $this->ensureNoCircularTokenNesting(
+                (string) $validated['name'],
+                (string) ($validated['message'] ?? ''),
+                $template,
+            );
         }
 
         $template->update($validated);
@@ -210,5 +232,40 @@ class TemplateController extends Controller
         fclose($handle);
 
         return back()->with('success', "Import complete: {$imported} new templates added, {$updated} updated.");
+    }
+
+    private function ensureNoCircularTokenNesting(string $tokenName, string $tokenMessage, ?Template $currentTemplate = null): void
+    {
+        $normalizedTokenName = strtolower(trim($tokenName));
+
+        if ($normalizedTokenName === '') {
+            return;
+        }
+
+        $tokenMessages = Template::query()
+            ->where('model_type', Template::class)
+            ->whereNull('model_id')
+            ->when($currentTemplate, fn ($query) => $query->whereKeyNot($currentTemplate->getKey()))
+            ->get(['name', 'message'])
+            ->mapWithKeys(function (Template $token): array {
+                $key = strtolower(trim((string) $token->name));
+
+                if ($key === '') {
+                    return [];
+                }
+
+                return [$key => (string) ($token->message ?? '')];
+            })
+            ->all();
+
+        $tokenMessages[$normalizedTokenName] = $tokenMessage;
+
+        try {
+            Template::resolveTemplateTokenReplacements([], $tokenMessages);
+        } catch (\RuntimeException $exception) {
+            throw ValidationException::withMessages([
+                'message' => "Circular template token nesting detected at token '{{{$exception->getMessage()}}}'.",
+            ]);
+        }
     }
 }

@@ -2580,18 +2580,13 @@ HTML;
             'user_email' => $currentUser?->email ?? '',
         ];
 
-        $replacements['email_footer'] = $this->buildEmailFooter($replacements);
+        $replacements = array_merge(
+            $replacements,
+            $this->resolveTemplateTokenReplacements($replacements)
+        );
 
-        $renderPlaceholders = function (string $text) use ($replacements): string {
-            return preg_replace_callback('/\{\{?\s*([^\}\s]+)\s*\}?\}/', function ($matches) use ($replacements) {
-                $key = strtolower(trim($matches[1]));
-
-                return $replacements[$key] ?? $matches[0];
-            }, $text);
-        };
-
-        $subject = $renderPlaceholders((string) $template->subject);
-        $body = $renderPlaceholders((string) $template->message);
+        $subject = $this->applyTemplateReplacements((string) $template->subject, $replacements);
+        $body = $this->applyTemplateReplacements((string) $template->message, $replacements);
 
         $recipients = [];
 
@@ -2746,22 +2741,26 @@ HTML;
     }
 
     /**
-     * @param  array{user_name?: string, user_email?: string}  $replacements
+     * @param  array<string, mixed>  $replacements
      */
-    private function buildEmailFooter(array $replacements): string
+    private function applyTemplateReplacements(string $text, array $replacements): string
     {
-        return implode('', [
-            '<p>Thank you!</p>',
-            '<p>&nbsp;</p>',
-            '<p>'.e((string) ($replacements['user_name'] ?? '')).'<br>',
-            e((string) ($replacements['user_email'] ?? '')).'<br>',
-            'Truckload Team<br>',
-            'Pegasus Logistics Group</p>',
-            '<p>&nbsp;</p>',
-            '<p>306 Airline Drive<br>Coppell, TX 75019</p>',
-            '<p>Tell Us How We&apos;re Doing</p>',
-            '<p>www.pegasuslogistics.com</p>',
-        ]);
+        return preg_replace_callback('/\{\{?\s*([^\}\s]+)\s*\}?\}/', function (array $matches) use ($replacements): string {
+            $key = strtolower(trim($matches[1]));
+
+            return array_key_exists($key, $replacements)
+                ? (string) $replacements[$key]
+                : $matches[0];
+        }, $text) ?? $text;
+    }
+
+    /**
+     * @param  array<string, mixed>  $baseReplacements
+     * @return array<string, string>
+     */
+    private function resolveTemplateTokenReplacements(array $baseReplacements): array
+    {
+        return Template::resolveTemplateTokenReplacements($baseReplacements);
     }
 
     private function propagateScheduleDatesToConsolidationGroup(Shipment $shipment): void
