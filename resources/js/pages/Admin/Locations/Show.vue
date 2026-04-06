@@ -755,3 +755,9 @@ onUnmounted(() => {
     </div>
   </AdminLayout>
 </template>
+
+<style scoped>
+:deep(.mapboxgl-popup) {
+  color: black;
+}
+</style>

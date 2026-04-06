@@ -245,9 +245,15 @@ HTML;
             $dropDate = $shipment->drop_date?->copy()?->timezone(config('app.timezone'));
             $isCurrentDropDay = $dropDate?->isSameDay($now) ?? false;
             $isMissingTrailer = blank($shipment->trailer) && blank($shipment->trailer_id);
-            $backgroundColor = $isCurrentDropDay && $isMissingTrailer ? '#00ff00' : '#fff';
+            $highlightCarrierAndTrailer = $isCurrentDropDay && $isMissingTrailer;
+            $carrierCellStyle = $highlightCarrierAndTrailer
+                ? 'padding-left: 5px; padding-right: 5px; background-color: #00ff00;'
+                : 'padding-left: 5px; padding-right: 5px;';
+            $trailerCellStyle = $highlightCarrierAndTrailer
+                ? 'padding-left: 5px; padding-right: 5px; background-color: #00ff00;'
+                : 'padding-left: 5px; padding-right: 5px;';
 
-            $html .= '<tr style="border-color: #000; background-color: '.$backgroundColor.'; color: #000;">';
+            $html .= '<tr style="border-color: #000; background-color: #fff; color: #000;">';
             $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) ($shipment->status ?? '')).'</td>';
             $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) ($shipment->bol ?? '')).'</td>';
             $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) (optional($shipment->pickupLocation)->short_code ?? '')).'</td>';
@@ -258,8 +264,8 @@ HTML;
             $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e($shipment->delivery_date ? $shipment->delivery_date->copy()->timezone(config('app.timezone'))->format('m/d/Y') : '').'</td>';
             $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) ($shipment->po_number ?? '')).'</td>';
             $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) ($shipment->rack_qty ?? '')).'</td>';
-            $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) ($carrier->short_code ?? '')).'</td>';
-            $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) ($shipment->trailer ?? '')).'</td>';
+            $html .= '<td style="'.$carrierCellStyle.'">'.e((string) ($carrier->short_code ?? '')).'</td>';
+            $html .= '<td style="'.$trailerCellStyle.'">'.e((string) ($shipment->trailer ?? '')).'</td>';
             $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) ($shipment->load_bar_qty ?? '')).'</td>';
             $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) ($shipment->strap_qty ?? '')).'</td>';
             $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) (optional($shipment->dcLocation)->fullAddress() ?? '')).'</td>';

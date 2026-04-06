@@ -2681,9 +2681,13 @@ HTML;
             ? Shipment::query()
                 ->with(['pickupLocation', 'dcLocation', 'carrier'])
                 ->where('consolidation_number', $shipment->consolidation_number)
+                ->orderBy('pickup_location_id')
                 ->orderBy('shipment_number')
                 ->get()
             : collect([$shipment]);
+
+        // Group shipments by pickup location
+        $groupedByLocation = $shipments->groupBy(fn (Shipment $s) => optional($s->pickupLocation)->id ?? 'unknown');
 
         $headers = [
             'Status',
@@ -2703,39 +2707,55 @@ HTML;
             'Delivery Address',
         ];
 
-        $html = <<<'HTML'
-<table style="border-collapse: collapse; width: 100%; border: 1px solid #000;" border="1">
+        $html = '';
+
+        foreach ($groupedByLocation as $locationId => $locationShipments) {
+            // Add location header
+            if ($locationShipments->count() > 0) {
+                $firstShipment = $locationShipments->first();
+                $locationName = optional($firstShipment->pickupLocation)->name ?? 'Unknown Location';
+                $locationCode = optional($firstShipment->pickupLocation)->short_code ?? '';
+
+                $html .= '<p style="margin-top: 20px; margin-bottom: 10px; font-weight: bold; font-size: 14px; color: #333;">';
+                $html .= e($locationCode ? "$locationCode - $locationName" : $locationName);
+                $html .= '</p>';
+            }
+
+            // Add table for this location
+            $html .= <<<'HTML'
+<table style="border-collapse: collapse; width: 100%; border: 1px solid #000; margin-bottom: 15px;" border="1">
     <tbody>
         <tr style="background-color: #0b5394; color: #ecf0f1; text-align: center;">
 HTML;
 
-        foreach ($headers as $header) {
-            $html .= '<td style="padding-left: 5px; padding-right: 5px;"><strong>'.e($header).'</strong></td>';
-        }
+            foreach ($headers as $header) {
+                $html .= '<td style="padding-left: 5px; padding-right: 5px;"><strong>'.e($header).'</strong></td>';
+            }
 
-        $html .= '</tr>';
-
-        foreach ($shipments as $rowShipment) {
-            $html .= '<tr style="border-color: #000; background-color: #fff; color: #000;">';
-            $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) ($rowShipment->status ?? '')).'</td>';
-            $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) ($rowShipment->bol ?? '')).'</td>';
-            $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) (optional($rowShipment->pickupLocation)->short_code ?? '')).'</td>';
-            $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) ($rowShipment->shipment_number ?? '')).'</td>';
-            $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) (optional($rowShipment->dcLocation)->short_code ?? '')).'</td>';
-            $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e($rowShipment->drop_date ? Carbon::parse($rowShipment->drop_date)->format('m/d/Y') : '').'</td>';
-            $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e($rowShipment->pickup_date ? Carbon::parse($rowShipment->pickup_date)->format('m/d/Y') : '').'</td>';
-            $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e($rowShipment->delivery_date ? Carbon::parse($rowShipment->delivery_date)->format('m/d/Y') : '').'</td>';
-            $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) ($rowShipment->po_number ?? '')).'</td>';
-            $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) ($rowShipment->rack_qty ?? '')).'</td>';
-            $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) (optional($rowShipment->carrier)->short_code ?? '')).'</td>';
-            $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) ($rowShipment->trailer ?? '')).'</td>';
-            $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) ($rowShipment->load_bar_qty ?? '')).'</td>';
-            $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) ($rowShipment->strap_qty ?? '')).'</td>';
-            $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) (optional($rowShipment->dcLocation)->fullAddress() ?? '')).'</td>';
             $html .= '</tr>';
-        }
 
-        $html .= '</tbody></table>';
+            foreach ($locationShipments as $rowShipment) {
+                $html .= '<tr style="border-color: #000; background-color: #fff; color: #000;">';
+                $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) ($rowShipment->status ?? '')).'</td>';
+                $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) ($rowShipment->bol ?? '')).'</td>';
+                $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) (optional($rowShipment->pickupLocation)->short_code ?? '')).'</td>';
+                $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) ($rowShipment->shipment_number ?? '')).'</td>';
+                $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) (optional($rowShipment->dcLocation)->short_code ?? '')).'</td>';
+                $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e($rowShipment->drop_date ? Carbon::parse($rowShipment->drop_date)->format('m/d/Y') : '').'</td>';
+                $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e($rowShipment->pickup_date ? Carbon::parse($rowShipment->pickup_date)->format('m/d/Y') : '').'</td>';
+                $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e($rowShipment->delivery_date ? Carbon::parse($rowShipment->delivery_date)->format('m/d/Y') : '').'</td>';
+                $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) ($rowShipment->po_number ?? '')).'</td>';
+                $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) ($rowShipment->rack_qty ?? '')).'</td>';
+                $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) (optional($rowShipment->carrier)->short_code ?? '')).'</td>';
+                $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) ($rowShipment->trailer ?? '')).'</td>';
+                $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) ($rowShipment->load_bar_qty ?? '')).'</td>';
+                $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) ($rowShipment->strap_qty ?? '')).'</td>';
+                $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) (optional($rowShipment->dcLocation)->fullAddress() ?? '')).'</td>';
+                $html .= '</tr>';
+            }
+
+            $html .= '</tbody></table>';
+        }
 
         return $html;
     }
