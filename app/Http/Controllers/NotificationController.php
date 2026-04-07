@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\Notification;
+use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Http\Response as HttpResponse;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -71,6 +73,22 @@ class NotificationController extends Controller
                 'created_at' => $notification->created_at,
                 'read_at' => $userNotification?->pivot?->read_at,
             ],
+        ]);
+    }
+
+    public function emailOpen(Notification $notification, User $user): HttpResponse
+    {
+        if ($notification->users()->where('user_id', $user->id)->exists()) {
+            $notification->markAsReadForUser($user);
+        }
+
+        $pixel = base64_decode('R0lGODlhAQABAPAAAAAAAAAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==');
+
+        return response($pixel, 200, [
+            'Content-Type' => 'image/gif',
+            'Cache-Control' => 'no-cache, no-store, must-revalidate',
+            'Pragma' => 'no-cache',
+            'Expires' => '0',
         ]);
     }
 }

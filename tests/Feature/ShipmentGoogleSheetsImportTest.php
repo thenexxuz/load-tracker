@@ -1,5 +1,6 @@
 <?php
 
+use App\Mail\NotificationEmail;
 use App\Models\AppSetting;
 use App\Models\Carrier;
 use App\Models\Location;
@@ -8,6 +9,7 @@ use App\Models\Shipment;
 use App\Models\Trailer;
 use App\Models\User;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Mail;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
@@ -16,6 +18,7 @@ use Spatie\Permission\Models\Role;
 beforeEach(function (): void {
     Role::create(['name' => 'administrator']);
     Role::create(['name' => 'supervisor']);
+    Role::create(['name' => 'carrier']);
 });
 
 it('imports shipment changes from google sheets', function (): void {
@@ -167,6 +170,126 @@ it('sends one supervisor notification per changed shipment during google sheets 
             ->toContain($supervisorA->id)
             ->toContain($supervisorB->id);
     }
+});
+
+it('emails google sheets notifications only to users who enabled notification emails', function (): void {
+    Mail::fake();
+
+    $workbookContents = buildGoogleSheetsWorkbook([
+        'Sheet 1' => [
+            ['Shipment Number', 'Status', 'PO Number', 'Origin', 'Destination'],
+            ['LOAD-930', 'In Transit', 'PO-930-NEW', 'ING', 'AMS'],
+        ],
+    ]);
+
+    Http::fake([
+        'docs.google.com/spreadsheets/*' => Http::response($workbookContents, 200, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]),
+    ]);
+
+    $admin = User::factory()->create();
+    $admin->assignRole('administrator');
+
+    $optedInSupervisor = User::factory()->create([
+        'notification_email_enabled' => true,
+    ]);
+    $optedInSupervisor->assignRole('supervisor');
+
+    $optedOutSupervisor = User::factory()->create([
+        'notification_email_enabled' => false,
+    ]);
+    $optedOutSupervisor->assignRole('supervisor');
+
+    $pickup = Location::factory()->pickup()->create(['short_code' => 'ING', 'name' => 'Ingrasys']);
+    $dc = Location::factory()->distribution_center()->create(['short_code' => 'AMS', 'name' => 'AMS DC']);
+
+    Shipment::query()->create([
+        'shipment_number' => 'LOAD-930',
+        'status' => 'Pending',
+        'po_number' => 'PO-930-OLD',
+        'pickup_location_id' => $pickup->id,
+        'dc_location_id' => $dc->id,
+    ]);
+
+    $response = $this->actingAs($admin)
+        ->from(route('admin.shipments.index'))
+        ->post(route('admin.shipments.google-sheets-import'), [
+            'google_sheet_url' => 'https://docs.google.com/spreadsheets/d/test-sheet-id/edit#gid=0',
+        ]);
+
+    $response->assertRedirect(route('admin.shipments.index'));
+
+    Mail::assertSent(NotificationEmail::class, function (NotificationEmail $mail) use ($optedInSupervisor): bool {
+        return $mail->hasTo($optedInSupervisor->email);
+    });
+
+    Mail::assertNotSent(NotificationEmail::class, function (NotificationEmail $mail) use ($optedOutSupervisor): bool {
+        return $mail->hasTo($optedOutSupervisor->email);
+    });
+});
+
+it('notifies only assigned carrier users when google sheets changes shipment dates', function (): void {
+    $workbookContents = buildGoogleSheetsWorkbook([
+        'Sheet 1' => [
+            ['Shipment Number', 'Pickup Date', 'Delivery Date', 'Status'],
+            ['LOAD-920', '2026-03-26 08:30', '2026-03-27 10:00', 'In Transit'],
+        ],
+    ]);
+
+    Http::fake([
+        'docs.google.com/spreadsheets/*' => Http::response($workbookContents, 200, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]),
+    ]);
+
+    $admin = User::factory()->create();
+    $admin->assignRole('administrator');
+
+    $carrier = Carrier::factory()->create(['name' => 'Carrier Match', 'short_code' => 'CM']);
+    $otherCarrier = Carrier::factory()->create(['name' => 'Carrier Other', 'short_code' => 'CO']);
+
+    $matchingCarrierUser = User::factory()->create();
+    $matchingCarrierUser->assignRole('carrier');
+    $matchingCarrierUser->forceFill(['carrier_id' => $carrier->id])->save();
+
+    $otherCarrierUser = User::factory()->create();
+    $otherCarrierUser->assignRole('carrier');
+    $otherCarrierUser->forceFill(['carrier_id' => $otherCarrier->id])->save();
+
+    $pickup = Location::factory()->pickup()->create(['short_code' => 'ING', 'name' => 'Ingrasys']);
+    $dc = Location::factory()->distribution_center()->create(['short_code' => 'AMS', 'name' => 'AMS DC']);
+
+    $shipment = Shipment::query()->create([
+        'shipment_number' => 'LOAD-920',
+        'status' => 'Pending',
+        'pickup_location_id' => $pickup->id,
+        'dc_location_id' => $dc->id,
+        'carrier_id' => $carrier->id,
+        'pickup_date' => '2026-03-25 08:00:00',
+        'delivery_date' => '2026-03-26 08:00:00',
+    ]);
+
+    $response = $this->actingAs($admin)
+        ->from(route('admin.shipments.index'))
+        ->post(route('admin.shipments.google-sheets-import'), [
+            'google_sheet_url' => 'https://docs.google.com/spreadsheets/d/test-sheet-id/edit#gid=0',
+        ]);
+
+    $response->assertRedirect(route('admin.shipments.index'));
+
+    $notification = Notification::query()
+        ->where('type', 'google_sheets_import_carrier_dates')
+        ->where('notifiable_type', Shipment::class)
+        ->where('notifiable_id', $shipment->id)
+        ->latest('id')
+        ->first();
+
+    expect($notification)->not->toBeNull();
+
+    expect($notification->users()->pluck('users.id')->all())
+        ->toContain($matchingCarrierUser->id)
+        ->not->toContain($otherCarrierUser->id);
 });
 
 it('uses the app settings google sheets url when request input is not provided', function (): void {

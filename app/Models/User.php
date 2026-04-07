@@ -30,6 +30,7 @@ class User extends Authenticatable
         'password',
         'is_active',
         'dashboard_preferences',
+        'notification_email_enabled',
     ];
 
     /**
@@ -57,6 +58,7 @@ class User extends Authenticatable
             'two_factor_confirmed_at' => 'datetime',
             'is_active' => 'boolean',
             'dashboard_preferences' => 'array',
+            'notification_email_enabled' => 'boolean',
         ];
     }
 

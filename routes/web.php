@@ -36,6 +36,10 @@ Route::get('/', function () {
 
 Route::get('dashboard', [DashboardController::class, 'index'])->middleware(['auth'])->name('dashboard');
 
+Route::get('notifications/{notification}/email-open/{user}', [NotificationController::class, 'emailOpen'])
+    ->middleware('signed')
+    ->name('notifications.email-open');
+
 // Notification Routes
 Route::middleware(['auth'])->group(function () {
     Route::get('notifications', [NotificationController::class, 'index'])->name('notifications.index');

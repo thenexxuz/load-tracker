@@ -79,6 +79,22 @@ const user = page.props.auth.user;
                         <InputError class="mt-2" :message="errors.email" />
                     </div>
 
+                    <div class="grid gap-2">
+                        <Label for="notification_email_enabled">Notification emails</Label>
+                        <label class="inline-flex items-center gap-2 text-sm text-muted-foreground" for="notification_email_enabled">
+                            <input
+                                id="notification_email_enabled"
+                                name="notification_email_enabled"
+                                type="checkbox"
+                                value="1"
+                                :checked="Boolean(user.notification_email_enabled)"
+                                class="h-4 w-4 rounded border border-input"
+                            />
+                            Email me notifications when new notifications are created for my account.
+                        </label>
+                        <InputError class="mt-2" :message="errors.notification_email_enabled" />
+                    </div>
+
                     <div v-if="mustVerifyEmail && !user.email_verified_at">
                         <p class="-mt-4 text-sm text-muted-foreground">
                             Your email address is unverified.

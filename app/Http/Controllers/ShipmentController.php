@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\NotificationEmail;
 use App\Models\AppSetting;
 use App\Models\Carrier;
 use App\Models\Location;
@@ -1589,6 +1590,7 @@ class ShipmentController extends Controller
                         );
 
                         $this->notifySupervisorsOfGoogleSheetsImportUpdate($shipment, $oldValues);
+                        $this->notifyAssignedCarrierUsersOfGoogleSheetsDateChanges($shipment, $oldValues);
 
                         $previousGoogleSheetsRowContext = $this->buildGoogleSheetsPreviousRowContext($shipment);
                         $updated++;
@@ -2185,9 +2187,14 @@ class ShipmentController extends Controller
      * @param  array<string, mixed>  $oldValues
      * @return array<int, string>
      */
-    private function buildShipmentImportChangeMessages(Shipment $shipment, array $oldValues): array
+    private function buildShipmentImportChangeMessages(Shipment $shipment, array $oldValues, ?array $fields = null): array
     {
         $trackedFields = $this->shipmentImportTrackedFieldLabels();
+
+        if ($fields !== null) {
+            $trackedFields = array_intersect_key($trackedFields, array_flip($fields));
+        }
+
         $changes = [];
 
         foreach ($trackedFields as $field => $label) {
@@ -2243,6 +2250,64 @@ class ShipmentController extends Controller
         ]);
 
         $notification->users()->attach($supervisorIds);
+        $this->sendNotificationEmailsToOptedInUsers($notification, $supervisorIds);
+    }
+
+    /**
+     * @param  array<string, mixed>  $oldValues
+     */
+    private function notifyAssignedCarrierUsersOfGoogleSheetsDateChanges(Shipment $shipment, array $oldValues): void
+    {
+        if (blank($shipment->carrier_id)) {
+            return;
+        }
+
+        $dateFields = ['drop_date', 'pickup_date', 'delivery_date'];
+
+        $changes = $this->buildShipmentImportChangeMessages($shipment, $oldValues, $dateFields);
+
+        if ($changes === []) {
+            return;
+        }
+
+        $carrierUserIds = User::role('carrier')
+            ->where('carrier_id', $shipment->carrier_id)
+            ->pluck('id')
+            ->all();
+
+        if ($carrierUserIds === []) {
+            return;
+        }
+
+        $notification = Notification::query()->create([
+            'id' => (string) Str::uuid(),
+            'type' => 'google_sheets_import_carrier_dates',
+            'data' => [
+                'subject' => "Google Sheets import changed dates for shipment {$shipment->shipment_number}",
+                'message' => "Shipment {$shipment->shipment_number} had schedule date changes from Google Sheets.\n".implode("\n", $changes),
+            ],
+            'read_at' => null,
+            'notifiable_type' => Shipment::class,
+            'notifiable_id' => $shipment->id,
+        ]);
+
+        $notification->users()->attach($carrierUserIds);
+        $this->sendNotificationEmailsToOptedInUsers($notification, $carrierUserIds);
+    }
+
+    /**
+     * @param  array<int, int>  $userIds
+     */
+    private function sendNotificationEmailsToOptedInUsers(Notification $notification, array $userIds): void
+    {
+        $users = User::query()
+            ->whereIn('id', $userIds)
+            ->where('notification_email_enabled', true)
+            ->get();
+
+        foreach ($users as $user) {
+            Mail::to($user->email)->send(new NotificationEmail($notification, $user));
+        }
     }
 
     /**

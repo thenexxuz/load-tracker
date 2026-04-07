@@ -1,7 +1,10 @@
 <?php
 
+use App\Mail\NotificationEmail;
 use App\Models\Notification;
 use App\Models\User;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\URL;
 use Inertia\Testing\AssertableInertia as Assert;
 
 beforeEach(function (): void {
@@ -204,4 +207,64 @@ it('handles multiple notifications with different read statuses', function (): v
     $response->assertInertia(fn (Assert $page) => $page
         ->has('notifications.data', 3)
     );
+});
+
+it('marks notification as read when tracking pixel is loaded', function (): void {
+    $user = User::factory()->create();
+    $notification = Notification::factory()->create([
+        'data' => [
+            'subject' => 'Pixel Test',
+            'message' => 'Pixel body',
+        ],
+    ]);
+
+    $user->notifications()->attach($notification->id, ['read_at' => null]);
+
+    $signedUrl = URL::temporarySignedRoute(
+        'notifications.email-open',
+        now()->addMinutes(10),
+        [
+            'notification' => $notification->id,
+            'user' => $user->id,
+        ]
+    );
+
+    $response = $this->get($signedUrl);
+
+    $response->assertOk();
+    $response->assertHeader('Content-Type', 'image/gif');
+
+    $user->refresh();
+    expect($user->notifications()->where('notification_id', $notification->id)->first()->pivot->read_at)
+        ->not()->toBeNull();
+});
+
+it('emails notification only to users opted in for email notifications', function (): void {
+    Mail::fake();
+
+    $optedInUser = User::factory()->create([
+        'notification_email_enabled' => true,
+    ]);
+    $optedOutUser = User::factory()->create([
+        'notification_email_enabled' => false,
+    ]);
+
+    $notification = Notification::factory()->create([
+        'data' => [
+            'subject' => 'Email Test',
+            'message' => 'Email body',
+        ],
+    ]);
+
+    $notification->users()->attach([$optedInUser->id, $optedOutUser->id]);
+
+    Mail::to($optedInUser->email)->send(new NotificationEmail($notification, $optedInUser));
+
+    Mail::assertSent(NotificationEmail::class, function (NotificationEmail $mail) use ($optedInUser): bool {
+        return $mail->hasTo($optedInUser->email);
+    });
+
+    Mail::assertNotSent(NotificationEmail::class, function (NotificationEmail $mail) use ($optedOutUser): bool {
+        return $mail->hasTo($optedOutUser->email);
+    });
 });
