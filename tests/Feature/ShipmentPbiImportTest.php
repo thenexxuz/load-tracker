@@ -3,7 +3,6 @@
 use App\Models\Location;
 use App\Models\Shipment;
 use App\Models\User;
-use Carbon\Carbon;
 use Illuminate\Http\UploadedFile;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
@@ -60,8 +59,8 @@ it('imports a Rittal PBI spreadsheet using the alternate header mapping', functi
         ->rack_qty->toBe(5)
         ->load_bar_qty->toBe(2)
         ->strap_qty->toBe(13)
-        ->pickup_date->format('Y-m-d H:i:s')->toBe(Carbon::parse('2026-03-26 08:00:00')->toDateTimeString())
-        ->delivery_date->format('Y-m-d H:i:s')->toBe(Carbon::parse('2026-03-27 08:00:00')->toDateTimeString());
+        ->pickup_date->toBeNull()
+        ->delivery_date->toBeNull();
 
     expect($shipment->notes()->where('content', 'like', 'PBI import updated this shipment:%')->exists())->toBeTrue();
 });
@@ -98,7 +97,7 @@ it('normalizes checked-in status from pbi import', function (): void {
         ->status->toBe('Checked In');
 });
 
-it('nulls shipment dates when pbi date values are blank or TBD', function (): void {
+it('does not change shipment dates from pbi import', function (): void {
     $admin = User::factory()->create();
     $admin->assignRole('administrator');
 
@@ -131,9 +130,9 @@ it('nulls shipment dates when pbi date values are blank or TBD', function (): vo
     $response->assertRedirect(route('admin.shipments.index'));
 
     expect($shipment->fresh())
-        ->drop_date->toBeNull()
-        ->pickup_date->toBeNull()
-        ->delivery_date->toBeNull();
+        ->drop_date->toDateString()->toBe('2026-03-25')
+        ->pickup_date->format('Y-m-d H:i:s')->toBe('2026-03-26 08:00:00')
+        ->delivery_date->format('Y-m-d H:i:s')->toBe('2026-03-27 08:00:00');
 });
 
 it('maps elp rjs pickup to wiwynn rjs during pbi import', function (): void {

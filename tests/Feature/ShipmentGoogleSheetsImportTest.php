@@ -3,6 +3,7 @@
 use App\Models\AppSetting;
 use App\Models\Carrier;
 use App\Models\Location;
+use App\Models\Notification;
 use App\Models\Shipment;
 use App\Models\Trailer;
 use App\Models\User;
@@ -14,6 +15,7 @@ use Spatie\Permission\Models\Role;
 
 beforeEach(function (): void {
     Role::create(['name' => 'administrator']);
+    Role::create(['name' => 'supervisor']);
 });
 
 it('imports shipment changes from google sheets', function (): void {
@@ -51,9 +53,11 @@ it('imports shipment changes from google sheets', function (): void {
         'strap_qty' => 1,
     ]);
 
-    $response = $this->actingAs($admin)->post(route('admin.shipments.google-sheets-import'), [
-        'google_sheet_url' => 'https://docs.google.com/spreadsheets/d/test-sheet-id/edit#gid=0',
-    ]);
+    $response = $this->actingAs($admin)
+        ->from(route('admin.shipments.index'))
+        ->post(route('admin.shipments.google-sheets-import'), [
+            'google_sheet_url' => 'https://docs.google.com/spreadsheets/d/test-sheet-id/edit#gid=0',
+        ]);
 
     $response->assertRedirect(route('admin.shipments.index'));
     $response->assertSessionHas('success', fn (string $message) => str_contains($message, '1 shipment(s) updated from Google Sheets.'));
@@ -93,6 +97,76 @@ it('rejects private google sheets that redirect to sign in', function (): void {
 
     $response->assertRedirect(route('admin.shipments.index'));
     $response->assertSessionHasErrors('google_sheet_url');
+});
+
+it('sends one supervisor notification per changed shipment during google sheets import', function (): void {
+    $workbookContents = buildGoogleSheetsWorkbook([
+        'Sheet 1' => [
+            ['Shipment Number', 'Status', 'PO Number', 'Origin', 'Destination'],
+            ['LOAD-910', 'In Transit', 'PO-910-NEW', 'ING', 'AMS'],
+            ['LOAD-911', 'Booked', 'PO-911-NEW', 'ING', 'AMS'],
+        ],
+    ]);
+
+    Http::fake([
+        'docs.google.com/spreadsheets/*' => Http::response($workbookContents, 200, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]),
+    ]);
+
+    $admin = User::factory()->create();
+    $admin->assignRole('administrator');
+
+    $supervisorA = User::factory()->create();
+    $supervisorA->assignRole('supervisor');
+    $supervisorB = User::factory()->create();
+    $supervisorB->assignRole('supervisor');
+
+    $pickup = Location::factory()->pickup()->create(['short_code' => 'ING', 'name' => 'Ingrasys']);
+    $dc = Location::factory()->distribution_center()->create(['short_code' => 'AMS', 'name' => 'AMS DC']);
+
+    $shipmentOne = Shipment::query()->create([
+        'shipment_number' => 'LOAD-910',
+        'status' => 'Pending',
+        'po_number' => 'PO-910-OLD',
+        'pickup_location_id' => $pickup->id,
+        'dc_location_id' => $dc->id,
+    ]);
+
+    $shipmentTwo = Shipment::query()->create([
+        'shipment_number' => 'LOAD-911',
+        'status' => 'Pending',
+        'po_number' => 'PO-911-OLD',
+        'pickup_location_id' => $pickup->id,
+        'dc_location_id' => $dc->id,
+    ]);
+
+    $response = $this->actingAs($admin)
+        ->from(route('admin.shipments.index'))
+        ->post(route('admin.shipments.google-sheets-import'), [
+            'google_sheet_url' => 'https://docs.google.com/spreadsheets/d/test-sheet-id/edit#gid=0',
+        ]);
+
+    $response->assertRedirect(route('admin.shipments.index'));
+    $response->assertSessionHas('success', fn (string $message) => str_contains($message, '2 shipment(s) updated from Google Sheets.'));
+
+    $notifications = Notification::query()
+        ->where('type', 'google_sheets_import')
+        ->where('notifiable_type', Shipment::class)
+        ->orderBy('created_at')
+        ->get();
+
+    expect($notifications)->toHaveCount(2);
+
+    expect($notifications->pluck('notifiable_id')->all())
+        ->toContain($shipmentOne->id)
+        ->toContain($shipmentTwo->id);
+
+    foreach ($notifications as $notification) {
+        expect($notification->users()->pluck('users.id')->all())
+            ->toContain($supervisorA->id)
+            ->toContain($supervisorB->id);
+    }
 });
 
 it('uses the app settings google sheets url when request input is not provided', function (): void {

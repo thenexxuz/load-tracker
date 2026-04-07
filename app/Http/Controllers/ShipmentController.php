@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\AppSetting;
 use App\Models\Carrier;
 use App\Models\Location;
+use App\Models\Notification;
 use App\Models\Rate;
 use App\Models\Shipment;
 use App\Models\Template;
@@ -1339,28 +1340,6 @@ class ShipmentController extends Controller
 
                 $validated = $validator->validated();
 
-                $pickupDateRaw = null;
-                if (array_key_exists('pickup_date', $mapped)) {
-                    try {
-                        $pickupDateRaw = $this->parsePbiImportDate($mapped['pickup_date'] ?? null, 'Ship Date');
-                    } catch (Exception $exception) {
-                        $failedRows[] = array_merge($originalRow, ['ERROR' => $exception->getMessage()]);
-
-                        continue;
-                    }
-                }
-
-                $deliveryDateRaw = null;
-                if (array_key_exists('delivery_date', $mapped)) {
-                    try {
-                        $deliveryDateRaw = $this->parsePbiImportDate($mapped['delivery_date'] ?? null, 'Deliver Date');
-                    } catch (Exception $exception) {
-                        $failedRows[] = array_merge($originalRow, ['ERROR' => $exception->getMessage()]);
-
-                        continue;
-                    }
-                }
-
                 $normalizedPickupLocation = $this->normalizeImportedPickupLocationCode($validated['pickup_location']);
 
                 $pickup = Location::firstOrCreate(
@@ -1397,20 +1376,7 @@ class ShipmentController extends Controller
                 $time = $dc->expected_arrival_time
                     ? Carbon::parse($dc->expected_arrival_time)->format('H:i:s')
                     : '00:00:00';
-
-                $pickupDate = $pickupDateRaw ? $pickupDateRaw->format('Y-m-d').' '.$time : null;
-                $deliveryDate = $deliveryDateRaw ? $deliveryDateRaw->format('Y-m-d').' '.$time : null;
                 $equipmentDefaults = Shipment::defaultEquipmentCountsForRackQty((int) $validated['rack_qty']);
-
-                $dropDate = null;
-                if ($pickupDate !== null) {
-                    $dropDate = Carbon::parse($pickupDate)->subDays(2);
-                    if ($dropDate->isSaturday()) {
-                        $dropDate->subDay();
-                    } elseif ($dropDate->isSunday()) {
-                        $dropDate->subDays(2);
-                    }
-                }
 
                 $shipment = Shipment::firstOrNew(['shipment_number' => $validated['shipment_number']]);
 
@@ -1429,9 +1395,6 @@ class ShipmentController extends Controller
                     'pickup_location_id' => $pickup->id,
                     'dc_location_id' => $dc->id,
                     'carrier_id' => null,
-                    'drop_date' => $dropDate,
-                    'pickup_date' => $pickupDate,
-                    'delivery_date' => $deliveryDate,
                     'rack_qty' => (int) $validated['rack_qty'],
                     'load_bar_qty' => $equipmentDefaults['load_bar_qty'],
                     'strap_qty' => $equipmentDefaults['strap_qty'],
@@ -1624,6 +1587,8 @@ class ShipmentController extends Controller
                             $oldValues,
                             'Google Sheets import updated this shipment:'
                         );
+
+                        $this->notifySupervisorsOfGoogleSheetsImportUpdate($shipment, $oldValues);
 
                         $previousGoogleSheetsRowContext = $this->buildGoogleSheetsPreviousRowContext($shipment);
                         $updated++;
@@ -2203,8 +2168,26 @@ class ShipmentController extends Controller
      */
     private function recordImportUpdateNote(Shipment $shipment, array $oldValues, string $contentPrefix): void
     {
-        $trackedFields = $this->shipmentImportTrackedFieldLabels();
+        $changes = $this->buildShipmentImportChangeMessages($shipment, $oldValues);
 
+        if ($changes === []) {
+            return;
+        }
+
+        $shipment->notes()->create([
+            'content' => $contentPrefix."\n".implode("\n", $changes),
+            'is_admin' => false,
+            'user_id' => auth()->id() ?? null,
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $oldValues
+     * @return array<int, string>
+     */
+    private function buildShipmentImportChangeMessages(Shipment $shipment, array $oldValues): array
+    {
+        $trackedFields = $this->shipmentImportTrackedFieldLabels();
         $changes = [];
 
         foreach ($trackedFields as $field => $label) {
@@ -2227,15 +2210,39 @@ class ShipmentController extends Controller
             }
         }
 
+        return $changes;
+    }
+
+    /**
+     * @param  array<string, mixed>  $oldValues
+     */
+    private function notifySupervisorsOfGoogleSheetsImportUpdate(Shipment $shipment, array $oldValues): void
+    {
+        $supervisorIds = User::role('supervisor')->pluck('id')->all();
+
+        if ($supervisorIds === []) {
+            return;
+        }
+
+        $changes = $this->buildShipmentImportChangeMessages($shipment, $oldValues);
+
         if ($changes === []) {
             return;
         }
 
-        $shipment->notes()->create([
-            'content' => $contentPrefix."\n".implode("\n", $changes),
-            'is_admin' => false,
-            'user_id' => auth()->id() ?? null,
+        $notification = Notification::query()->create([
+            'id' => (string) Str::uuid(),
+            'type' => 'google_sheets_import',
+            'data' => [
+                'subject' => "Google Sheets import updated shipment {$shipment->shipment_number}",
+                'message' => "Shipment {$shipment->shipment_number} was updated from Google Sheets.\n".implode("\n", $changes),
+            ],
+            'read_at' => null,
+            'notifiable_type' => Shipment::class,
+            'notifiable_id' => $shipment->id,
         ]);
+
+        $notification->users()->attach($supervisorIds);
     }
 
     /**

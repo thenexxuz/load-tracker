@@ -13,6 +13,7 @@ import {
   Locate,
   AtSign,
   Clock,
+  Bell,
 } from 'lucide-vue-next'
 import { ref, computed } from 'vue'
 import { route } from 'ziggy-js'
@@ -59,6 +60,11 @@ const mainNavItems: NavItem[] = [
     title: 'Dashboard',
     href: dashboard(),
     icon: LayoutGrid,
+  },
+  {
+    title: 'Notifications',
+    href: route('notifications.index'),
+    icon: Bell,
   },
   ...(hasAuditAccess
     ? [{
