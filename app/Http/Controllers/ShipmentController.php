@@ -2,7 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Mail\NotificationEmail;
+use App\Mail\BatchedNotificationEmail;
+use App\Mail\ImportSummaryEmail;
 use App\Models\AppSetting;
 use App\Models\Carrier;
 use App\Models\Location;
@@ -1308,9 +1309,13 @@ class ShipmentController extends Controller
                 return back()->withErrors(['file' => 'No data found after the first two rows.']);
             }
 
+            $startTime = microtime(true);
             $imported = 0;
             $updated = 0;
             $failedRows = [];
+            $createdByLocationId = [];
+            $updatedByLocationId = [];
+            $importFailedDetails = [];
 
             foreach ($dataRows as $row) {
                 if ($this->rowIsEmpty($row)) {
@@ -1335,6 +1340,10 @@ class ShipmentController extends Controller
                 if ($validator->fails()) {
                     $errorMsg = implode('; ', $validator->errors()->all());
                     $failedRows[] = array_merge($originalRow, ['ERROR' => $errorMsg]);
+                    $importFailedDetails[] = [
+                        'shipment_number' => (string) ($mapped['shipment_number'] ?? '(unknown)'),
+                        'error' => $errorMsg,
+                    ];
 
                     continue;
                 }
@@ -1419,8 +1428,24 @@ class ShipmentController extends Controller
                     }
 
                     $wasExisting ? $updated++ : $imported++;
+
+                    if ($wasExisting) {
+                        $updatedByLocationId[$pickup->id] = ($updatedByLocationId[$pickup->id] ?? 0) + 1;
+                    } else {
+                        $createdByLocationId[$pickup->id] = ($createdByLocationId[$pickup->id] ?? 0) + 1;
+                    }
                 }
             }
+
+            $durationSeconds = microtime(true) - $startTime;
+            $this->sendImportSummaryNotification(
+                'PBI',
+                $request->user(),
+                $durationSeconds,
+                $createdByLocationId,
+                $updatedByLocationId,
+                $importFailedDetails,
+            );
 
             $message = "$imported new shipment(s) imported, $updated existing updated.";
 
@@ -1519,11 +1544,16 @@ class ShipmentController extends Controller
                 ]);
             }
 
+            $startTime = microtime(true);
             $updated = 0;
             $created = 0;
             $unchanged = 0;
             $failed = 0;
             $failedMessages = [];
+            $pendingImportNotificationEmails = [];
+            $createdByLocationId = [];
+            $updatedByLocationId = [];
+            $importFailedDetails = [];
 
             foreach ($sheetRows as [$headers, $rows]) {
                 $previousGoogleSheetsRowContext = null;
@@ -1532,6 +1562,8 @@ class ShipmentController extends Controller
                     if ($this->rowIsEmpty($row)) {
                         continue;
                     }
+
+                    $mappedRow = [];
 
                     try {
                         $mappedRow = $this->mapGoogleSheetsRow($headers, $row);
@@ -1590,6 +1622,7 @@ class ShipmentController extends Controller
 
                         if ($isNewShipment) {
                             $created++;
+                            $createdByLocationId[$shipment->pickup_location_id ?? 'unknown'] = ($createdByLocationId[$shipment->pickup_location_id ?? 'unknown'] ?? 0) + 1;
                         } else {
                             $this->recordImportUpdateNote(
                                 $shipment,
@@ -1597,21 +1630,32 @@ class ShipmentController extends Controller
                                 'Google Sheets import updated this shipment:'
                             );
 
-                            $this->notifySupervisorsOfGoogleSheetsImportUpdate($shipment, $oldValues);
-                            $this->notifyAssignedCarrierUsersOfGoogleSheetsDateChanges($shipment, $oldValues);
+                            $this->notifySupervisorsOfGoogleSheetsImportUpdate($shipment, $oldValues, $pendingImportNotificationEmails);
+                            $this->notifyAssignedCarrierUsersOfGoogleSheetsDateChanges($shipment, $oldValues, $pendingImportNotificationEmails);
                         }
 
                         $previousGoogleSheetsRowContext = $this->buildGoogleSheetsPreviousRowContext($shipment);
 
                         if (! $isNewShipment) {
                             $updated++;
+                            $updatedByLocationId[$shipment->pickup_location_id ?? 'unknown'] = ($updatedByLocationId[$shipment->pickup_location_id ?? 'unknown'] ?? 0) + 1;
                         }
                     } catch (ValidationException $exception) {
                         $failed++;
-                        $failedMessages[] = collect($exception->errors())->flatten()->first();
+                        $msg = (string) (collect($exception->errors())->flatten()->first() ?? 'Validation error');
+                        $failedMessages[] = $msg;
+                        $importFailedDetails[] = [
+                            'shipment_number' => (string) ($mappedRow['shipment_number'] ?? $mappedRow['bol'] ?? '(unknown)'),
+                            'error' => $msg,
+                        ];
                     } catch (Exception $exception) {
                         $failed++;
-                        $failedMessages[] = $exception->getMessage();
+                        $msg = $exception->getMessage();
+                        $failedMessages[] = $msg;
+                        $importFailedDetails[] = [
+                            'shipment_number' => (string) ($mappedRow['shipment_number'] ?? $mappedRow['bol'] ?? '(unknown)'),
+                            'error' => $msg,
+                        ];
                     }
                 }
             }
@@ -1627,6 +1671,18 @@ class ShipmentController extends Controller
                         : 'No shipment rows could be imported from the Google Sheet. Check the sheet headers, identifiers, and sharing settings.',
                 ]);
             }
+
+            $this->sendBatchedImportNotificationEmails($pendingImportNotificationEmails);
+
+            $durationSeconds = microtime(true) - $startTime;
+            $this->sendImportSummaryNotification(
+                'Google Sheets',
+                $request->user(),
+                $durationSeconds,
+                $createdByLocationId,
+                $updatedByLocationId,
+                $importFailedDetails,
+            );
 
             $message = "$updated shipment(s) updated from Google Sheets.";
 
@@ -2261,7 +2317,7 @@ class ShipmentController extends Controller
     /**
      * @param  array<string, mixed>  $oldValues
      */
-    private function notifySupervisorsOfGoogleSheetsImportUpdate(Shipment $shipment, array $oldValues): void
+    private function notifySupervisorsOfGoogleSheetsImportUpdate(Shipment $shipment, array $oldValues, array &$pendingImportNotificationEmails): void
     {
         $supervisorIds = User::role('supervisor')->pluck('id')->all();
 
@@ -2288,13 +2344,13 @@ class ShipmentController extends Controller
         ]);
 
         $notification->users()->attach($supervisorIds);
-        $this->sendNotificationEmailsToOptedInUsers($notification, $supervisorIds);
+        $this->queueImportNotificationEmails($notification, $supervisorIds, $pendingImportNotificationEmails);
     }
 
     /**
      * @param  array<string, mixed>  $oldValues
      */
-    private function notifyAssignedCarrierUsersOfGoogleSheetsDateChanges(Shipment $shipment, array $oldValues): void
+    private function notifyAssignedCarrierUsersOfGoogleSheetsDateChanges(Shipment $shipment, array $oldValues, array &$pendingImportNotificationEmails): void
     {
         if (blank($shipment->carrier_id)) {
             return;
@@ -2330,21 +2386,62 @@ class ShipmentController extends Controller
         ]);
 
         $notification->users()->attach($carrierUserIds);
-        $this->sendNotificationEmailsToOptedInUsers($notification, $carrierUserIds);
+        $this->queueImportNotificationEmails($notification, $carrierUserIds, $pendingImportNotificationEmails);
     }
 
     /**
      * @param  array<int, int>  $userIds
+     * @param  array<int, array<string, bool>>  $pendingImportNotificationEmails
      */
-    private function sendNotificationEmailsToOptedInUsers(Notification $notification, array $userIds): void
+    private function queueImportNotificationEmails(Notification $notification, array $userIds, array &$pendingImportNotificationEmails): void
     {
+        foreach (array_unique($userIds) as $userId) {
+            $pendingImportNotificationEmails[(int) $userId][(string) $notification->id] = true;
+        }
+    }
+
+    /**
+     * @param  array<int, array<string, bool>>  $pendingImportNotificationEmails
+     */
+    private function sendBatchedImportNotificationEmails(array $pendingImportNotificationEmails): void
+    {
+        if ($pendingImportNotificationEmails === []) {
+            return;
+        }
+
+        $userIds = array_map('intval', array_keys($pendingImportNotificationEmails));
+        $allNotificationIds = collect($pendingImportNotificationEmails)
+            ->flatMap(static fn (array $queuedNotificationIds): array => array_keys($queuedNotificationIds))
+            ->unique()
+            ->values();
+
+        if ($allNotificationIds->isEmpty()) {
+            return;
+        }
+
+        $notificationsById = Notification::query()
+            ->whereIn('id', $allNotificationIds->all())
+            ->get()
+            ->keyBy('id');
+
         $users = User::query()
             ->whereIn('id', $userIds)
             ->where('notification_email_enabled', true)
             ->get();
 
+        /** @var \Illuminate\Database\Eloquent\Collection<int, User> $users */
         foreach ($users as $user) {
-            Mail::to($user->email)->send(new NotificationEmail($notification, $user));
+            $notifications = collect(array_keys($pendingImportNotificationEmails[$user->id] ?? []))
+                ->map(static fn (string $notificationId) => $notificationsById->get($notificationId))
+                ->filter(static fn ($notification): bool => $notification instanceof Notification)
+                ->values();
+
+            /** @var \Illuminate\Support\Collection<int, Notification> $notifications */
+            if ($notifications->isEmpty()) {
+                continue;
+            }
+
+            Mail::to($user->email)->send(new BatchedNotificationEmail($notifications, $user));
         }
     }
 
@@ -2921,5 +3018,221 @@ HTML;
 
             return back()->withErrors(['bol' => 'Failed to calculate BOL: '.$e->getMessage()]);
         }
+    }
+
+    /**
+     * @param  array<string|int, int>  $createdByLocationId
+     * @param  array<string|int, int>  $updatedByLocationId
+     * @param  array<int, array{shipment_number: string, error: string}>  $failedDetails
+     */
+    private function sendImportSummaryNotification(
+        string $importType,
+        ?User $importer,
+        float $durationSeconds,
+        array $createdByLocationId,
+        array $updatedByLocationId,
+        array $failedDetails,
+    ): void {
+        $totalCreated = array_sum($createdByLocationId);
+        $totalUpdated = array_sum($updatedByLocationId);
+        $totalFailed = count($failedDetails);
+
+        if ($totalCreated === 0 && $totalUpdated === 0 && $totalFailed === 0) {
+            return;
+        }
+
+        $allLocationIds = array_unique([...array_keys($createdByLocationId), ...array_keys($updatedByLocationId)]);
+        $locationNames = $allLocationIds !== []
+            ? Location::query()->whereIn('id', $allLocationIds)->pluck('name', 'id')
+            : collect();
+
+        $createdByLocation = [];
+
+        foreach ($createdByLocationId as $locId => $count) {
+            $name = (string) ($locationNames->get($locId) ?? $locId);
+            $createdByLocation[$name] = $count;
+        }
+
+        $updatedByLocation = [];
+
+        foreach ($updatedByLocationId as $locId => $count) {
+            $name = (string) ($locationNames->get($locId) ?? $locId);
+            $updatedByLocation[$name] = $count;
+        }
+
+        $importerName = $importer?->name ?? 'System';
+        $importerEmail = $importer?->email ?? '';
+        $durationFormatted = number_format($durationSeconds, 2).' seconds';
+        $subject = "{$importType} Import completed by {$importerName}";
+
+        $notification = Notification::query()->create([
+            'id' => (string) Str::uuid(),
+            'type' => 'import_summary',
+            'data' => [
+                'subject' => $subject,
+                'message' => $this->buildImportSummaryPlainText(
+                    $importType, $importerName, $importerEmail, $durationFormatted,
+                    $totalCreated, $createdByLocation, $totalUpdated, $updatedByLocation,
+                    $totalFailed, $failedDetails,
+                ),
+                'html_message' => $this->buildImportSummaryHtml(
+                    $importType, $importerName, $importerEmail, $durationFormatted,
+                    $totalCreated, $createdByLocation, $totalUpdated, $updatedByLocation,
+                    $totalFailed, $failedDetails,
+                ),
+                'import_type' => $importType,
+                'importer_name' => $importerName,
+                'importer_email' => $importerEmail,
+                'duration_seconds' => $durationSeconds,
+                'created_count' => $totalCreated,
+                'updated_count' => $totalUpdated,
+                'failed_count' => $totalFailed,
+                'created_by_location' => $createdByLocation,
+                'updated_by_location' => $updatedByLocation,
+                'failed_details' => $failedDetails,
+            ],
+            'read_at' => null,
+            'notifiable_type' => User::class,
+            'notifiable_id' => $importer?->id,
+        ]);
+
+        /** @var \Illuminate\Database\Eloquent\Collection<int, User> $recipients */
+        $recipients = User::role(['administrator', 'supervisor'])->get();
+
+        if ($recipients->isEmpty()) {
+            return;
+        }
+
+        $notification->users()->attach($recipients->pluck('id')->all());
+
+        $recipients
+            ->filter(static fn (User $user): bool => (bool) $user->notification_email_enabled)
+            ->each(function (User $user) use ($notification): void {
+                Mail::to($user->email)->send(new ImportSummaryEmail($notification, $user));
+            });
+    }
+
+    /**
+     * @param  array<string, int>  $createdByLocation
+     * @param  array<string, int>  $updatedByLocation
+     * @param  array<int, array{shipment_number: string, error: string}>  $failedDetails
+     */
+    private function buildImportSummaryPlainText(
+        string $importType,
+        string $importerName,
+        string $importerEmail,
+        string $durationFormatted,
+        int $totalCreated,
+        array $createdByLocation,
+        int $totalUpdated,
+        array $updatedByLocation,
+        int $totalFailed,
+        array $failedDetails,
+    ): string {
+        $lines = [
+            "Import type: {$importType}",
+            "Performed by: {$importerName}".($importerEmail !== '' ? " ({$importerEmail})" : ''),
+            "Duration: {$durationFormatted}",
+            '',
+            "Shipments added: {$totalCreated}",
+        ];
+
+        foreach ($createdByLocation as $location => $count) {
+            $lines[] = "  - {$location}: {$count}";
+        }
+
+        $lines[] = "Shipments updated: {$totalUpdated}";
+
+        foreach ($updatedByLocation as $location => $count) {
+            $lines[] = "  - {$location}: {$count}";
+        }
+
+        if ($totalFailed > 0) {
+            $lines[] = "Records failed to import: {$totalFailed}";
+
+            foreach ($failedDetails as $detail) {
+                $lines[] = "  - {$detail['shipment_number']}: {$detail['error']}";
+            }
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * @param  array<string, int>  $createdByLocation
+     * @param  array<string, int>  $updatedByLocation
+     * @param  array<int, array{shipment_number: string, error: string}>  $failedDetails
+     */
+    private function buildImportSummaryHtml(
+        string $importType,
+        string $importerName,
+        string $importerEmail,
+        string $durationFormatted,
+        int $totalCreated,
+        array $createdByLocation,
+        int $totalUpdated,
+        array $updatedByLocation,
+        int $totalFailed,
+        array $failedDetails,
+    ): string {
+        $thStyle = 'padding:6px 10px;text-align:left;background:#f3f4f6;border:1px solid #d1d5db;';
+        $thRightStyle = 'padding:6px 10px;text-align:right;background:#f3f4f6;border:1px solid #d1d5db;';
+        $tdStyle = 'padding:6px 10px;border:1px solid #d1d5db;';
+        $tdRightStyle = 'padding:6px 10px;text-align:right;border:1px solid #d1d5db;';
+        $tableStyle = 'border-collapse:collapse;width:100%;margin-bottom:16px;';
+
+        $html = '<p style="margin:0 0 6px 0;"><strong>Import type:</strong> '.e($importType).'</p>';
+        $html .= '<p style="margin:0 0 6px 0;"><strong>Performed by:</strong> '.e($importerName);
+
+        if ($importerEmail !== '') {
+            $html .= ' ('.e($importerEmail).')';
+        }
+
+        $html .= '</p>';
+        $html .= '<p style="margin:0 0 16px 0;"><strong>Duration:</strong> '.e($durationFormatted).'</p>';
+
+        $html .= '<h3 style="margin:0 0 8px 0;">Shipments Added ('.e($totalCreated).')</h3>';
+
+        if ($createdByLocation !== []) {
+            $html .= '<table style="'.$tableStyle.'">';
+            $html .= '<thead><tr><th style="'.$thStyle.'">Pickup Location</th><th style="'.$thRightStyle.'">Count</th></tr></thead><tbody>';
+
+            foreach ($createdByLocation as $locationName => $count) {
+                $html .= '<tr><td style="'.$tdStyle.'">'.e($locationName).'</td><td style="'.$tdRightStyle.'">'.e((string) $count).'</td></tr>';
+            }
+
+            $html .= '</tbody></table>';
+        } else {
+            $html .= '<p style="margin:0 0 16px 0;color:#6b7280;">No shipments were added.</p>';
+        }
+
+        $html .= '<h3 style="margin:0 0 8px 0;">Shipments Updated ('.e($totalUpdated).')</h3>';
+
+        if ($updatedByLocation !== []) {
+            $html .= '<table style="'.$tableStyle.'">';
+            $html .= '<thead><tr><th style="'.$thStyle.'">Pickup Location</th><th style="'.$thRightStyle.'">Count</th></tr></thead><tbody>';
+
+            foreach ($updatedByLocation as $locationName => $count) {
+                $html .= '<tr><td style="'.$tdStyle.'">'.e($locationName).'</td><td style="'.$tdRightStyle.'">'.e((string) $count).'</td></tr>';
+            }
+
+            $html .= '</tbody></table>';
+        } else {
+            $html .= '<p style="margin:0 0 16px 0;color:#6b7280;">No shipments were updated.</p>';
+        }
+
+        if ($totalFailed > 0) {
+            $html .= '<h3 style="margin:0 0 8px 0;">Records Failed to Import ('.e($totalFailed).')</h3>';
+            $html .= '<table style="'.$tableStyle.'">';
+            $html .= '<thead><tr><th style="'.$thStyle.'">Shipment Number</th><th style="'.$thStyle.'">Error</th></tr></thead><tbody>';
+
+            foreach ($failedDetails as $detail) {
+                $html .= '<tr><td style="'.$tdStyle.'">'.e($detail['shipment_number']).'</td><td style="'.$tdStyle.'">'.e($detail['error']).'</td></tr>';
+            }
+
+            $html .= '</tbody></table>';
+        }
+
+        return $html;
     }
 }

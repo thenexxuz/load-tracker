@@ -8,6 +8,7 @@ interface NotificationData {
   id: string
   subject: string
   message: string
+  html_message: string | null
   created_at: string
   read_at: string | null
 }
@@ -95,7 +96,15 @@ const isRead = (): boolean => {
 
       <!-- Notification Content -->
       <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-8">
-        <div class="prose dark:prose-invert max-w-none whitespace-pre-wrap">
+        <div
+          v-if="notification.html_message"
+          class="prose dark:prose-invert max-w-none"
+          v-html="notification.html_message"
+        />
+        <div
+          v-else
+          class="prose dark:prose-invert max-w-none whitespace-pre-wrap"
+        >
           {{ notification.message }}
         </div>
       </div>

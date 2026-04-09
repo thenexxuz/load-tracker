@@ -70,6 +70,7 @@ class NotificationController extends Controller
                 'id' => $notification->id,
                 'subject' => $notification->data['subject'] ?? '',
                 'message' => $notification->data['message'] ?? '',
+                'html_message' => $notification->data['html_message'] ?? null,
                 'created_at' => $notification->created_at,
                 'read_at' => $userNotification?->pivot?->read_at,
             ],

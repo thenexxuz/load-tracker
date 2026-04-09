@@ -1,5 +1,7 @@
 <?php
 
+use App\Mail\BatchedNotificationEmail;
+use App\Mail\ImportSummaryEmail;
 use App\Mail\NotificationEmail;
 use App\Models\AppSetting;
 use App\Models\Carrier;
@@ -148,6 +150,8 @@ it('rejects private google sheets that redirect to sign in', function (): void {
 });
 
 it('sends one supervisor notification per changed shipment during google sheets import', function (): void {
+    Mail::fake();
+
     $workbookContents = buildGoogleSheetsWorkbook([
         'Sheet 1' => [
             ['Shipment Number', 'Status', 'PO Number', 'Origin', 'Destination'],
@@ -165,9 +169,13 @@ it('sends one supervisor notification per changed shipment during google sheets 
     $admin = User::factory()->create();
     $admin->assignRole('administrator');
 
-    $supervisorA = User::factory()->create();
+    $supervisorA = User::factory()->create([
+        'notification_email_enabled' => true,
+    ]);
     $supervisorA->assignRole('supervisor');
-    $supervisorB = User::factory()->create();
+    $supervisorB = User::factory()->create([
+        'notification_email_enabled' => true,
+    ]);
     $supervisorB->assignRole('supervisor');
 
     $pickup = Location::factory()->pickup()->create(['short_code' => 'ING', 'name' => 'Ingrasys']);
@@ -204,6 +212,7 @@ it('sends one supervisor notification per changed shipment during google sheets 
         ->orderBy('created_at')
         ->get();
 
+    /** @var \Illuminate\Database\Eloquent\Collection<int, Notification> $notifications */
     expect($notifications)->toHaveCount(2);
 
     expect($notifications->pluck('notifiable_id')->all())
@@ -215,9 +224,12 @@ it('sends one supervisor notification per changed shipment during google sheets 
             ->toContain($supervisorA->id)
             ->toContain($supervisorB->id);
     }
+
+    Mail::assertSent(BatchedNotificationEmail::class, 2);
+    Mail::assertNotSent(NotificationEmail::class);
 });
 
-it('emails google sheets notifications only to users who enabled notification emails', function (): void {
+it('emails google sheets notifications in one batch per user who enabled notification emails', function (): void {
     Mail::fake();
 
     $workbookContents = buildGoogleSheetsWorkbook([
@@ -265,13 +277,76 @@ it('emails google sheets notifications only to users who enabled notification em
 
     $response->assertRedirect(route('admin.shipments.index'));
 
-    Mail::assertSent(NotificationEmail::class, function (NotificationEmail $mail) use ($optedInSupervisor): bool {
+    Mail::assertSent(BatchedNotificationEmail::class, function (BatchedNotificationEmail $mail) use ($optedInSupervisor): bool {
         return $mail->hasTo($optedInSupervisor->email);
     });
 
-    Mail::assertNotSent(NotificationEmail::class, function (NotificationEmail $mail) use ($optedOutSupervisor): bool {
+    Mail::assertNotSent(BatchedNotificationEmail::class, function (BatchedNotificationEmail $mail) use ($optedOutSupervisor): bool {
         return $mail->hasTo($optedOutSupervisor->email);
     });
+
+    Mail::assertNotSent(NotificationEmail::class);
+});
+
+it('batches multiple import notifications into one email per user', function (): void {
+    Mail::fake();
+
+    $workbookContents = buildGoogleSheetsWorkbook([
+        'Sheet 1' => [
+            ['Shipment Number', 'Status', 'PO Number', 'Origin', 'Destination'],
+            ['LOAD-950', 'In Transit', 'PO-950-NEW', 'ING', 'AMS'],
+            ['LOAD-951', 'Booked', 'PO-951-NEW', 'ING', 'AMS'],
+        ],
+    ]);
+
+    Http::fake([
+        'docs.google.com/spreadsheets/*' => Http::response($workbookContents, 200, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]),
+    ]);
+
+    $admin = User::factory()->create();
+    $admin->assignRole('administrator');
+
+    $supervisor = User::factory()->create([
+        'notification_email_enabled' => true,
+    ]);
+    $supervisor->assignRole('supervisor');
+
+    $pickup = Location::factory()->pickup()->create(['short_code' => 'ING', 'name' => 'Ingrasys']);
+    $dc = Location::factory()->distribution_center()->create(['short_code' => 'AMS', 'name' => 'AMS DC']);
+
+    Shipment::query()->create([
+        'shipment_number' => 'LOAD-950',
+        'status' => 'Pending',
+        'po_number' => 'PO-950-OLD',
+        'pickup_location_id' => $pickup->id,
+        'dc_location_id' => $dc->id,
+    ]);
+
+    Shipment::query()->create([
+        'shipment_number' => 'LOAD-951',
+        'status' => 'Pending',
+        'po_number' => 'PO-951-OLD',
+        'pickup_location_id' => $pickup->id,
+        'dc_location_id' => $dc->id,
+    ]);
+
+    $response = $this->actingAs($admin)
+        ->from(route('admin.shipments.index'))
+        ->post(route('admin.shipments.google-sheets-import'), [
+            'google_sheet_url' => 'https://docs.google.com/spreadsheets/d/test-sheet-id/edit#gid=0',
+        ]);
+
+    $response->assertRedirect(route('admin.shipments.index'));
+
+    Mail::assertSent(BatchedNotificationEmail::class, 1);
+    Mail::assertSent(BatchedNotificationEmail::class, function (BatchedNotificationEmail $mail) use ($supervisor): bool {
+        return $mail->hasTo($supervisor->email)
+            && $mail->notifications->count() === 2;
+    });
+
+    Mail::assertNotSent(NotificationEmail::class);
 });
 
 it('notifies only assigned carrier users when google sheets changes shipment dates', function (): void {
@@ -828,3 +903,140 @@ function buildGoogleSheetsWorkbook(array $sheets): string
 
     return (string) ob_get_clean();
 }
+
+it('sends an import summary notification to all admins and supervisors after google sheets import', function (): void {
+    Mail::fake();
+
+    $workbookContents = buildGoogleSheetsWorkbook([
+        'Sheet 1' => [
+            ['Shipment Number', 'Status', 'PO Number', 'Origin', 'Destination'],
+            ['LOAD-SUMM-001', 'In Transit', 'PO-SUMM-NEW', 'ING', 'AMS'],
+            ['LOAD-SUMM-002', 'Booked', 'PO-SUMM2-NEW', 'ING', 'AMS'],
+        ],
+    ]);
+
+    Http::fake([
+        'docs.google.com/spreadsheets/*' => Http::response($workbookContents, 200, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]),
+    ]);
+
+    $admin = User::factory()->create(['notification_email_enabled' => true]);
+    $admin->assignRole('administrator');
+
+    $supervisor = User::factory()->create(['notification_email_enabled' => true]);
+    $supervisor->assignRole('supervisor');
+
+    $unemailedAdmin = User::factory()->create(['notification_email_enabled' => false]);
+    $unemailedAdmin->assignRole('administrator');
+
+    $pickup = Location::factory()->pickup()->create(['short_code' => 'ING', 'name' => 'Ingrasys']);
+    $dc = Location::factory()->distribution_center()->create(['short_code' => 'AMS', 'name' => 'AMS DC']);
+
+    Shipment::query()->create([
+        'shipment_number' => 'LOAD-SUMM-001',
+        'status' => 'Pending',
+        'po_number' => 'PO-SUMM-OLD',
+        'pickup_location_id' => $pickup->id,
+        'dc_location_id' => $dc->id,
+    ]);
+
+    Shipment::query()->create([
+        'shipment_number' => 'LOAD-SUMM-002',
+        'status' => 'Pending',
+        'po_number' => 'PO-SUMM2-OLD',
+        'pickup_location_id' => $pickup->id,
+        'dc_location_id' => $dc->id,
+    ]);
+
+    $this->actingAs($admin)
+        ->from(route('admin.shipments.index'))
+        ->post(route('admin.shipments.google-sheets-import'), [
+            'google_sheet_url' => 'https://docs.google.com/spreadsheets/d/test-sheet-id/edit#gid=0',
+        ])
+        ->assertRedirect(route('admin.shipments.index'));
+
+    $summaryNotification = Notification::query()
+        ->where('type', 'import_summary')
+        ->latest('id')
+        ->first();
+
+    /** @var Notification $summaryNotification */
+    expect($summaryNotification)->not->toBeNull();
+    expect($summaryNotification->data['updated_count'])->toBe(2);
+    expect($summaryNotification->data['created_count'])->toBe(0);
+    expect($summaryNotification->data['failed_count'])->toBe(0);
+    expect($summaryNotification->data['updated_by_location'])->toHaveKey('Ingrasys', 2);
+    expect($summaryNotification->data['importer_name'])->toBe($admin->name);
+    expect($summaryNotification->data['html_message'])->toContain('Ingrasys');
+    expect($summaryNotification->data['html_message'])->toContain('Shipments Updated');
+
+    expect($summaryNotification->users()->pluck('users.id')->all())
+        ->toContain($admin->id)
+        ->toContain($supervisor->id)
+        ->toContain($unemailedAdmin->id);
+
+    Mail::assertSent(ImportSummaryEmail::class, 2);
+    Mail::assertSent(ImportSummaryEmail::class, fn (ImportSummaryEmail $mail) => $mail->hasTo($admin->email));
+    Mail::assertSent(ImportSummaryEmail::class, fn (ImportSummaryEmail $mail) => $mail->hasTo($supervisor->email));
+    Mail::assertNotSent(ImportSummaryEmail::class, fn (ImportSummaryEmail $mail) => $mail->hasTo($unemailedAdmin->email));
+});
+
+it('includes per-location breakdown and failed details in google sheets import summary', function (): void {
+    Mail::fake();
+
+    $workbookContents = buildGoogleSheetsWorkbook([
+        'Sheet 1' => [
+            ['Shipment Number', 'Status', 'Origin', 'Destination'],
+            ['LOAD-LOC-001', 'In Transit', 'LOC-A', 'AMS'],
+            ['LOAD-LOC-002', 'Booked', 'LOC-B', 'AMS'],
+            ['', '', '', ''],
+        ],
+    ]);
+
+    Http::fake([
+        'docs.google.com/spreadsheets/*' => Http::response($workbookContents, 200, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]),
+    ]);
+
+    $admin = User::factory()->create(['notification_email_enabled' => false]);
+    $admin->assignRole('administrator');
+
+    $locA = Location::factory()->pickup()->create(['short_code' => 'LOC-A', 'name' => 'Location Alpha']);
+    $locB = Location::factory()->pickup()->create(['short_code' => 'LOC-B', 'name' => 'Location Beta']);
+    $dc = Location::factory()->distribution_center()->create(['short_code' => 'AMS', 'name' => 'AMS DC']);
+
+    Shipment::query()->create([
+        'shipment_number' => 'LOAD-LOC-001',
+        'status' => 'Pending',
+        'pickup_location_id' => $locA->id,
+        'dc_location_id' => $dc->id,
+    ]);
+
+    Shipment::query()->create([
+        'shipment_number' => 'LOAD-LOC-002',
+        'status' => 'Pending',
+        'pickup_location_id' => $locB->id,
+        'dc_location_id' => $dc->id,
+    ]);
+
+    $this->actingAs($admin)
+        ->from(route('admin.shipments.index'))
+        ->post(route('admin.shipments.google-sheets-import'), [
+            'google_sheet_url' => 'https://docs.google.com/spreadsheets/d/test-sheet-id/edit#gid=0',
+        ])
+        ->assertRedirect(route('admin.shipments.index'));
+
+    $summaryNotification = Notification::query()
+        ->where('type', 'import_summary')
+        ->latest('id')
+        ->first();
+
+    /** @var Notification $summaryNotification */
+    expect($summaryNotification)->not->toBeNull();
+    expect($summaryNotification->data['updated_by_location'])->toHaveKey('Location Alpha', 1);
+    expect($summaryNotification->data['updated_by_location'])->toHaveKey('Location Beta', 1);
+    expect($summaryNotification->data['html_message'])->toContain('Location Alpha');
+    expect($summaryNotification->data['html_message'])->toContain('Location Beta');
+});
