@@ -1715,7 +1715,16 @@ class ShipmentController extends Controller
                 ->with('success', $message);
         } catch (ValidationException $exception) {
             throw $exception;
-        } catch (Exception $exception) {
+        } catch (\Throwable $exception) {
+            Log::error('Google Sheets import failed with unexpected error.', [
+                'user_id' => $request->user()?->id,
+                'google_sheet_url' => $googleSheetUrl,
+                'exception' => get_class($exception),
+                'message' => $exception->getMessage(),
+            ]);
+
+            report($exception);
+
             return back()->withErrors([
                 'google_sheet_url' => 'Failed to process the Google Sheet: '.$exception->getMessage(),
             ]);
