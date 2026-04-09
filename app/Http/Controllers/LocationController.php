@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Location;
 use App\Models\LocationDistance;
+use App\Models\Shipment;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -143,8 +144,12 @@ class LocationController extends Controller
                 ->first();
         }
 
-        // Load shipments for this location as pickup point
-        $shipments = $location->pickupShipments()
+        // Load shipments assigned to this location as pickup and/or distribution center
+        $shipments = Shipment::query()
+            ->where(function ($query) use ($location): void {
+                $query->where('pickup_location_id', $location->id)
+                    ->orWhere('dc_location_id', $location->id);
+            })
             ->with([
                 'carrier:id,name,short_code',
                 'trailer:id,number,carrier_id',
@@ -163,8 +168,22 @@ class LocationController extends Controller
             ->values()
             ->flatten(1)
             ->values()
-            ->map(function ($shipment) {
+            ->map(function ($shipment) use ($location) {
                 $trailer = $shipment->getRelation('trailer');
+                $assignedAs = [];
+
+                if ((string) $shipment->pickup_location_id === (string) $shipment->dc_location_id && (string) $shipment->pickup_location_id === (string) $location->id) {
+                    $assignedAs[] = 'pickup';
+                    $assignedAs[] = 'distribution_center';
+                } else {
+                    if ((string) $shipment->pickup_location_id === (string) $location->id) {
+                        $assignedAs[] = 'pickup';
+                    }
+
+                    if ((string) $shipment->dc_location_id === (string) $location->id) {
+                        $assignedAs[] = 'distribution_center';
+                    }
+                }
 
                 return [
                     'id' => $shipment->guid,
@@ -180,6 +199,7 @@ class LocationController extends Controller
                     'drop_date' => $shipment->drop_date,
                     'pickup_date' => $shipment->pickup_date,
                     'delivery_date' => $shipment->delivery_date,
+                    'assigned_as' => $assignedAs,
                 ];
             });
 
@@ -359,6 +379,15 @@ class LocationController extends Controller
      */
     public function destroy(Location $location)
     {
+        $hasAssignedShipments = $location->pickupShipments()->exists()
+            || $location->dcShipments()->exists();
+
+        if ($hasAssignedShipments) {
+            return redirect()->route('admin.locations.index')
+                ->with('error', 'This location cannot be deleted because shipments are assigned to it.')
+                ->with('blocked_location_id', $location->guid);
+        }
+
         $location->delete();
 
         return redirect()->route('admin.locations.index')

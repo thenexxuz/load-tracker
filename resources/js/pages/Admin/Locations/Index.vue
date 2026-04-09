@@ -1,13 +1,17 @@
 <script setup lang="ts">
 import { Head, Link, router, usePage } from '@inertiajs/vue3'
 import { Confirm, Notify } from 'notiflix'
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 
 import ActionIconButton from '@/components/ActionIconButton.vue'
 import Pagination from '@/components/Pagination.vue'
 import AdminLayout from '@/layouts/AppLayout.vue'
 
 const page = usePage()
+const blockedLocationId = computed(() => {
+  const flash = page.props.flash as { blocked_location_id?: string } | undefined
+  return flash?.blocked_location_id ?? null
+})
 
 const props = defineProps<{
   locations: {
@@ -154,6 +158,19 @@ onMounted(() => {
 
   <AdminLayout>
     <div class="p-6">
+      <div
+        v-if="blockedLocationId"
+        class="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200"
+      >
+        This location cannot be deleted while shipments are assigned.
+        <Link
+          :href="route('admin.locations.show', blockedLocationId)"
+          class="ml-2 font-semibold underline hover:no-underline"
+        >
+          View assigned shipments
+        </Link>
+      </div>
+
       <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
         <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">
           Locations

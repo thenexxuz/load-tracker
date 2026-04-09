@@ -39,6 +39,7 @@ const props = defineProps<{
     shipment_number: string
     bol: string | null
     status: string
+    assigned_as?: string[]
     consolidation_number: string | null
     carrier_id: string | null
     carrier_name: string | null
@@ -507,10 +508,10 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <!-- Pickup Shipments Section -->
+      <!-- Assigned Shipments Section -->
       <div v-if="shipments && filteredShipments.length > 0" class="mt-8">
         <h2 class="text-xl font-bold text-gray-900 dark:text-gray-100 mb-4">
-          Pickup Shipments ({{ filteredShipments.length }})
+          Assigned Shipments ({{ filteredShipments.length }})
         </h2>
 
         <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
@@ -526,6 +527,9 @@ onUnmounted(() => {
                   </th>
                   <th class="px-4 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider">
                     Status
+                  </th>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                    Assigned As
                   </th>
                   <th class="px-4 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider">
                     Carrier
@@ -572,6 +576,9 @@ onUnmounted(() => {
                     </span>
                   </td>
                   <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
+                    {{ shipment.assigned_as?.length ? shipment.assigned_as.join(', ').replace('_', ' ') : '—' }}
+                  </td>
+                  <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
                     {{ shipment.carrier_name || '—' }}
                   </td>
                   <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
@@ -581,6 +588,12 @@ onUnmounted(() => {
                     </div>
                   </td>
                   <td class="px-4 py-3 text-sm">
+                    <Link
+                      :href="route('admin.shipments.show', shipment.id)"
+                      class="mr-3 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 font-medium"
+                    >
+                      View
+                    </Link>
                     <button
                       @click="openEditModal(shipment)"
                       class="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 font-medium"
@@ -599,7 +612,7 @@ onUnmounted(() => {
       <div v-else-if="shipments" class="mt-8">
         <div class="p-6 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 text-center">
           <p class="text-gray-600 dark:text-gray-400">
-            No shipments found with this location as a pickup point.
+            No shipments are currently assigned to this location.
           </p>
         </div>
       </div>

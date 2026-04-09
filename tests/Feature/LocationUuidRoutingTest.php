@@ -122,3 +122,68 @@ test('location show keeps consolidated pickup shipments adjacent', function (): 
             ->where('shipments.2.shipment_number', 'SHIP-LOC-SOLO-001')
         );
 });
+
+test('location show includes shipments assigned as distribution center', function (): void {
+    $admin = User::factory()->create();
+    $admin->assignRole('administrator');
+
+    $location = Location::factory()->distribution_center()->create();
+    $pickup = Location::factory()->pickup()->create();
+
+    $shipment = Shipment::query()->create([
+        'guid' => (string) str()->uuid(),
+        'shipment_number' => 'SHIP-LOC-DC-001',
+        'status' => 'Pending',
+        'pickup_location_id' => $pickup->id,
+        'dc_location_id' => $location->id,
+    ]);
+
+    $this->actingAs($admin)
+        ->get(route('admin.locations.show', $location->guid))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Admin/Locations/Show')
+            ->where('shipments.0.id', $shipment->guid)
+            ->where('shipments.0.assigned_as.0', 'distribution_center')
+        );
+});
+
+test('location cannot be deleted when shipments are assigned to it', function (): void {
+    $admin = User::factory()->create();
+    $admin->assignRole('administrator');
+
+    $location = Location::factory()->pickup()->create();
+    $dc = Location::factory()->distribution_center()->create();
+
+    Shipment::query()->create([
+        'guid' => (string) str()->uuid(),
+        'shipment_number' => 'SHIP-LOC-DELETE-001',
+        'status' => 'Pending',
+        'pickup_location_id' => $location->id,
+        'dc_location_id' => $dc->id,
+    ]);
+
+    $response = $this->actingAs($admin)
+        ->delete(route('admin.locations.destroy', $location->guid));
+
+    $response->assertRedirect(route('admin.locations.index'));
+    $response->assertSessionHas('error', 'This location cannot be deleted because shipments are assigned to it.');
+    $response->assertSessionHas('blocked_location_id', $location->guid);
+
+    expect(Location::query()->whereKey($location->id)->exists())->toBeTrue();
+});
+
+test('location can be deleted when no shipments are assigned', function (): void {
+    $admin = User::factory()->create();
+    $admin->assignRole('administrator');
+
+    $location = Location::factory()->pickup()->create();
+
+    $response = $this->actingAs($admin)
+        ->delete(route('admin.locations.destroy', $location->guid));
+
+    $response->assertRedirect(route('admin.locations.index'));
+    $response->assertSessionHas('success', 'Location deleted successfully.');
+
+    expect(Location::query()->whereKey($location->id)->exists())->toBeFalse();
+});

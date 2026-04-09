@@ -429,7 +429,7 @@ onMounted(() => {
             </h2>
 
             <p class="mb-4 text-sm text-gray-600 dark:text-gray-400">
-              Paste a Google Sheets URL. This field is pre-populated from App Settings when configured. The app will download the sheet as CSV and update matching shipments by Shipment Number, Load, or BOL.
+              Paste a Google Sheets URL. This field is pre-populated from App Settings when configured. The app will download the sheet and update matching shipments by Shipment Number, Load, or BOL. If no matching shipment exists, a new shipment is created.
             </p>
 
             <p class="mb-6 text-sm text-gray-600 dark:text-gray-400">

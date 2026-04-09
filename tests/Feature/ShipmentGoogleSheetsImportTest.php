@@ -86,6 +86,51 @@ it('imports shipment changes from google sheets', function (): void {
     expect($shipment->notes()->where('content', 'like', 'Google Sheets import updated this shipment:%')->exists())->toBeTrue();
 });
 
+it('creates a shipment from google sheets when no existing shipment matches', function (): void {
+    $workbookContents = buildGoogleSheetsWorkbook([
+        'Sheet 1' => [
+            ['Shipment Number', 'Status', 'PO Number', 'Origin', 'Destination', 'Pickup Date', 'Delivery Date', 'Sum of Pallets', 'Carrier', 'Trailer Number'],
+            ['LOAD-NEW-100', 'Booked', 'PO-NEW-100', 'ING', 'AMS', '2026-03-26 08:30', '2026-03-27 10:00', '5', 'Carrier Beta', 'TRL-NEW-100'],
+        ],
+    ]);
+
+    Http::fake([
+        'docs.google.com/spreadsheets/*' => Http::response($workbookContents, 200, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]),
+    ]);
+
+    $admin = User::factory()->create();
+    $admin->assignRole('administrator');
+
+    $pickup = Location::factory()->pickup()->create(['short_code' => 'ING', 'name' => 'Ingrasys']);
+    $dc = Location::factory()->distribution_center()->create(['short_code' => 'AMS', 'name' => 'AMS DC']);
+    $carrier = Carrier::factory()->create(['name' => 'Carrier Beta', 'short_code' => 'BETA']);
+
+    $response = $this->actingAs($admin)
+        ->from(route('admin.shipments.index'))
+        ->post(route('admin.shipments.google-sheets-import'), [
+            'google_sheet_url' => 'https://docs.google.com/spreadsheets/d/test-sheet-id/edit#gid=0',
+        ]);
+
+    $response->assertRedirect(route('admin.shipments.index'));
+    $response->assertSessionHas('success', fn (string $message) => str_contains($message, '1 shipment(s) created from Google Sheets.'));
+
+    $shipment = Shipment::query()
+        ->where('shipment_number', 'LOAD-NEW-100')
+        ->first();
+
+    expect($shipment)->not->toBeNull();
+    expect($shipment)
+        ->status->toBe('Booked')
+        ->po_number->toBe('PO-NEW-100')
+        ->pickup_location_id->toBe($pickup->id)
+        ->dc_location_id->toBe($dc->id)
+        ->carrier_id->toBe($carrier->id)
+        ->trailer->toBe('TRL-NEW-100')
+        ->rack_qty->toBe(5);
+});
+
 it('rejects private google sheets that redirect to sign in', function (): void {
     Http::fake([
         'docs.google.com/spreadsheets/*' => Http::response('<html><body>ServiceLogin</body></html>', 200, ['Content-Type' => 'text/html; charset=utf-8']),

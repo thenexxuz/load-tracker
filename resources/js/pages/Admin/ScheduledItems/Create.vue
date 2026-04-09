@@ -12,6 +12,11 @@ const props = defineProps<{
     name: string
     short_code: string
   }>
+  outboundLocations: Array<{
+    id: string
+    short_code: string
+    name: string
+  }>
   templates: Array<{
     id: number
     name: string
@@ -31,6 +36,7 @@ const form = useForm({
   apply_to_all: false,
   schedulable_type: 'carrier' as const,
   schedulable_id: null as string | null,
+  outbound_location_ids: [] as string[],
 })
 
 const submit = () => {
@@ -43,12 +49,31 @@ const submit = () => {
 
 const showDayOfWeek = computed(() => form.schedule_type === 'weekly')
 const showDayOfMonth = computed(() => form.schedule_type === 'monthly')
+const outboundLocationError = computed(() => {
+  const errors = form.errors as Record<string, string>
+
+  if (form.errors.outbound_location_ids) {
+    return form.errors.outbound_location_ids
+  }
+
+  const nestedErrorKey = Object.keys(errors).find((key) => key.startsWith('outbound_location_ids.'))
+
+  return nestedErrorKey ? errors[nestedErrorKey] : undefined
+})
 
 // Reset conditional fields when schedule_type changes
 const updateScheduleType = (type: 'daily' | 'weekly' | 'monthly') => {
   form.schedule_type = type
   form.schedule_day_of_week = null
   form.schedule_day_of_month = null
+}
+
+const selectAllOutboundLocations = () => {
+  form.outbound_location_ids = props.outboundLocations.map((location) => location.id)
+}
+
+const clearOutboundLocations = () => {
+  form.outbound_location_ids = []
 }
 </script>
 
@@ -225,6 +250,53 @@ const updateScheduleType = (type: 'daily' | 'weekly' | 'monthly') => {
             </option>
           </select>
           <InputError :message="form.errors.schedulable_id" class="mt-1.5 text-sm" />
+        </div>
+
+        <!-- Outbound Locations (Carrier only) -->
+        <div v-if="form.schedulable_type === 'carrier'">
+          <div class="flex items-center justify-between mb-2">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Outbound Pickup Locations <span class="text-red-500">*</span>
+            </label>
+            <div class="flex items-center gap-2">
+              <button
+                type="button"
+                class="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                @click="selectAllOutboundLocations"
+              >
+                Select all
+              </button>
+              <button
+                type="button"
+                class="text-xs text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-300"
+                @click="clearOutboundLocations"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+          <p class="mb-2 text-xs text-gray-500 dark:text-gray-400">
+            Choose one or more outbound pickup locations to include for carrier shipment reminders.
+          </p>
+          <div class="max-h-56 overflow-y-auto rounded-lg border border-gray-300 dark:border-gray-600 p-3">
+            <label
+              v-for="location in props.outboundLocations"
+              :key="location.id"
+              class="flex items-start gap-2 py-1.5 text-sm text-gray-800 dark:text-gray-200"
+            >
+              <input
+                v-model="form.outbound_location_ids"
+                type="checkbox"
+                :value="location.id"
+                class="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span>{{ location.short_code }} - {{ location.name }}</span>
+            </label>
+            <p v-if="props.outboundLocations.length === 0" class="text-sm text-gray-500 dark:text-gray-400">
+              No outbound locations are available.
+            </p>
+          </div>
+          <InputError :message="outboundLocationError" class="mt-1.5 text-sm" />
         </div>
 
         <!-- Template (Optional) -->

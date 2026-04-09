@@ -1520,6 +1520,7 @@ class ShipmentController extends Controller
             }
 
             $updated = 0;
+            $created = 0;
             $unchanged = 0;
             $failed = 0;
             $failedMessages = [];
@@ -1540,14 +1541,18 @@ class ShipmentController extends Controller
                         );
 
                         $shipment = $this->resolveShipmentForGoogleSheetsRow($mappedRow);
+                        $isNewShipment = false;
 
                         if (! $shipment) {
-                            throw ValidationException::withMessages([
-                                'google_sheet_url' => 'Each row must match an existing shipment by Shipment Number, Load, or BOL.',
-                            ]);
+                            $shipment = new Shipment;
+                            $isNewShipment = true;
                         }
 
                         $attributes = $this->buildGoogleSheetsShipmentAttributes($mappedRow, $shipment);
+
+                        if ($isNewShipment) {
+                            $this->validateGoogleSheetsNewShipmentAttributes($mappedRow, $attributes);
+                        }
 
                         if ($shouldConsolidateWithPrevious) {
                             $attributes = $this->applyGoogleSheetsConsolidationAttributes(
@@ -1583,17 +1588,24 @@ class ShipmentController extends Controller
                             $shipment->offeredCarriers()->sync([]);
                         }
 
-                        $this->recordImportUpdateNote(
-                            $shipment,
-                            $oldValues,
-                            'Google Sheets import updated this shipment:'
-                        );
+                        if ($isNewShipment) {
+                            $created++;
+                        } else {
+                            $this->recordImportUpdateNote(
+                                $shipment,
+                                $oldValues,
+                                'Google Sheets import updated this shipment:'
+                            );
 
-                        $this->notifySupervisorsOfGoogleSheetsImportUpdate($shipment, $oldValues);
-                        $this->notifyAssignedCarrierUsersOfGoogleSheetsDateChanges($shipment, $oldValues);
+                            $this->notifySupervisorsOfGoogleSheetsImportUpdate($shipment, $oldValues);
+                            $this->notifyAssignedCarrierUsersOfGoogleSheetsDateChanges($shipment, $oldValues);
+                        }
 
                         $previousGoogleSheetsRowContext = $this->buildGoogleSheetsPreviousRowContext($shipment);
-                        $updated++;
+
+                        if (! $isNewShipment) {
+                            $updated++;
+                        }
                     } catch (ValidationException $exception) {
                         $failed++;
                         $failedMessages[] = collect($exception->errors())->flatten()->first();
@@ -1604,7 +1616,7 @@ class ShipmentController extends Controller
                 }
             }
 
-            if ($updated === 0 && $failed > 0) {
+            if ($updated === 0 && $created === 0 && $failed > 0) {
                 $firstFailureMessage = collect($failedMessages)
                     ->filter(fn ($message) => filled($message))
                     ->first();
@@ -1617,6 +1629,10 @@ class ShipmentController extends Controller
             }
 
             $message = "$updated shipment(s) updated from Google Sheets.";
+
+            if ($created > 0) {
+                $message .= " $created shipment(s) created from Google Sheets.";
+            }
 
             if ($unchanged > 0) {
                 $message .= " $unchanged row(s) had no changes.";
@@ -2161,6 +2177,28 @@ class ShipmentController extends Controller
         } catch (Exception) {
             throw ValidationException::withMessages([
                 'google_sheet_url' => "Date value [{$normalizedValue}] could not be parsed.",
+            ]);
+        }
+    }
+
+    /**
+     * @param  array<string, string>  $mappedRow
+     * @param  array<string, mixed>  $attributes
+     */
+    private function validateGoogleSheetsNewShipmentAttributes(array $mappedRow, array $attributes): void
+    {
+        $shipmentNumber = trim((string) ($mappedRow['shipment_number'] ?? ''));
+        $bol = trim((string) ($mappedRow['bol'] ?? ''));
+
+        if ($shipmentNumber === '' && $bol === '') {
+            throw ValidationException::withMessages([
+                'google_sheet_url' => 'New shipment rows must include Shipment Number (or BOL).',
+            ]);
+        }
+
+        if (! array_key_exists('pickup_location_id', $attributes) || ! array_key_exists('dc_location_id', $attributes)) {
+            throw ValidationException::withMessages([
+                'google_sheet_url' => 'New shipment rows must include both Origin and Destination.',
             ]);
         }
     }

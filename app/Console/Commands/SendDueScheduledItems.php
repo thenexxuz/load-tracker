@@ -64,14 +64,21 @@ class SendDueScheduledItems extends Command
                     continue;
                 }
 
+                $carrierShipmentsTable = $this->buildCarrierShipmentsTable($carrier, $now, $item);
+
+                if ($carrierShipmentsTable === null) {
+                    continue;
+                }
+
                 $replacements = [
                     'carrier_name' => $carrier->name ?? '',
-                    'today' => $now->format('Y-m-d'),
+                    'carrier_short_code' => $carrier->short_code ?? '',
+                    'today' => $now->format('m/d/Y'),
                     'user_name' => (string) (config('mail.from.name') ?: config('app.name')),
                     'user_email' => (string) (config('mail.from.address') ?: ''),
                 ];
 
-                $replacements['carrier_shipments'] = $this->buildCarrierShipmentsTable($carrier, $now);
+                $replacements['carrier_shipments'] = $carrierShipmentsTable;
                 $replacements = array_merge(
                     $replacements,
                     $this->resolveTemplateTokenReplacements($replacements)
@@ -197,17 +204,28 @@ class SendDueScheduledItems extends Command
         return Template::resolveTemplateTokenReplacements($baseReplacements);
     }
 
-    private function buildCarrierShipmentsTable(Carrier $carrier, CarbonInterface $now): string
+    private function buildCarrierShipmentsTable(Carrier $carrier, CarbonInterface $now, ScheduledItem $item): ?string
     {
-        $shipments = Shipment::query()
+        $outboundLocationIds = $this->selectedOutboundLocationIds($item);
+
+        $shipmentsQuery = Shipment::query()
             ->with(['pickupLocation', 'dcLocation'])
             ->where('carrier_id', $carrier->id)
             ->whereRaw('LOWER(COALESCE(status, "")) NOT IN (?, ?)', ['delivered', 'cancelled'])
             ->orderBy('drop_date')
-            ->orderBy('shipment_number')
-            ->get();
+            ->orderBy('shipment_number');
+
+        if ($outboundLocationIds !== []) {
+            $shipmentsQuery->whereIn('pickup_location_id', $outboundLocationIds);
+        }
+
+        $shipments = $shipmentsQuery->get();
 
         if ($shipments->isEmpty()) {
+            if ($outboundLocationIds !== []) {
+                return null;
+            }
+
             return '<p>No active shipments found.</p>';
         }
 
@@ -229,51 +247,81 @@ class SendDueScheduledItems extends Command
             'Delivery Address',
         ];
 
-        $html = <<<'HTML'
-<table style="border-collapse: collapse; width: 100%; border: 1px solid #000;" border="1">
+        $shipmentsByPickupLocation = $shipments->groupBy(static function (Shipment $shipment): string {
+            return (string) ($shipment->pickup_location_id ?? 'unassigned');
+        });
+
+        $html = '';
+
+        foreach ($shipmentsByPickupLocation as $locationShipments) {
+            $firstShipment = $locationShipments->first();
+            $pickupLocation = $firstShipment?->pickupLocation;
+            $pickupLocationLabel = filled($pickupLocation?->name)
+                ? $pickupLocation->name
+                : 'Unassigned Pickup Location';
+
+            $html .= '<h3 style="margin: 20px 0 8px; color: #0b5394;">'.e($pickupLocationLabel).'</h3>';
+
+            $html .= <<<'HTML'
+<table style="border-collapse: collapse; width: 100%; border: 1px solid #000; margin-bottom: 16px;" border="1">
     <tbody>
         <tr style="background-color: #0b5394; color: #ecf0f1; text-align: center;">
 HTML;
 
-        foreach ($headers as $header) {
-            $html .= '<td style="padding-left: 5px; padding-right: 5px;"><strong>'.e($header).'</strong></td>';
-        }
+            foreach ($headers as $header) {
+                $html .= '<td style="padding-left: 5px; padding-right: 5px;"><strong>'.e($header).'</strong></td>';
+            }
 
-        $html .= '</tr>';
-
-        foreach ($shipments as $shipment) {
-            $dropDate = $shipment->drop_date?->copy()?->timezone(config('app.timezone'));
-            $isCurrentDropDay = $dropDate?->isSameDay($now) ?? false;
-            $isMissingTrailer = blank($shipment->trailer) && blank($shipment->trailer_id);
-            $highlightCarrierAndTrailer = $isCurrentDropDay && $isMissingTrailer;
-            $carrierCellStyle = $highlightCarrierAndTrailer
-                ? 'padding-left: 5px; padding-right: 5px; background-color: #00ff00;'
-                : 'padding-left: 5px; padding-right: 5px;';
-            $trailerCellStyle = $highlightCarrierAndTrailer
-                ? 'padding-left: 5px; padding-right: 5px; background-color: #00ff00;'
-                : 'padding-left: 5px; padding-right: 5px;';
-
-            $html .= '<tr style="border-color: #000; background-color: #fff; color: #000;">';
-            $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) ($shipment->status ?? '')).'</td>';
-            $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) ($shipment->bol ?? '')).'</td>';
-            $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) (optional($shipment->pickupLocation)->short_code ?? '')).'</td>';
-            $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) ($shipment->shipment_number ?? '')).'</td>';
-            $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) (optional($shipment->dcLocation)->short_code ?? '')).'</td>';
-            $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e($shipment->drop_date ? $shipment->drop_date->copy()->timezone(config('app.timezone'))->format('m/d/Y') : '').'</td>';
-            $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e($shipment->pickup_date ? $shipment->pickup_date->copy()->timezone(config('app.timezone'))->format('m/d/Y') : '').'</td>';
-            $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e($shipment->delivery_date ? $shipment->delivery_date->copy()->timezone(config('app.timezone'))->format('m/d/Y') : '').'</td>';
-            $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) ($shipment->po_number ?? '')).'</td>';
-            $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) ($shipment->rack_qty ?? '')).'</td>';
-            $html .= '<td style="'.$carrierCellStyle.'">'.e((string) ($carrier->short_code ?? '')).'</td>';
-            $html .= '<td style="'.$trailerCellStyle.'">'.e((string) ($shipment->trailer ?? '')).'</td>';
-            $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) ($shipment->load_bar_qty ?? '')).'</td>';
-            $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) ($shipment->strap_qty ?? '')).'</td>';
-            $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) (optional($shipment->dcLocation)->fullAddress() ?? '')).'</td>';
             $html .= '</tr>';
-        }
 
-        $html .= '</tbody></table>';
+            foreach ($locationShipments as $shipment) {
+                $dropDate = $shipment->drop_date?->copy()?->timezone(config('app.timezone'));
+                $isCurrentDropDay = $dropDate?->isSameDay($now) ?? false;
+                $isMissingTrailer = blank($shipment->trailer) && blank($shipment->trailer_id);
+                $highlightCarrierAndTrailer = $isCurrentDropDay && $isMissingTrailer;
+                $carrierCellStyle = $highlightCarrierAndTrailer
+                    ? 'padding-left: 5px; padding-right: 5px; background-color: #00ff00;'
+                    : 'padding-left: 5px; padding-right: 5px;';
+                $trailerCellStyle = $highlightCarrierAndTrailer
+                    ? 'padding-left: 5px; padding-right: 5px; background-color: #00ff00;'
+                    : 'padding-left: 5px; padding-right: 5px;';
+
+                $html .= '<tr style="border-color: #000; background-color: #fff; color: #000;">';
+                $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) ($shipment->status ?? '')).'</td>';
+                $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) ($shipment->bol ?? '')).'</td>';
+                $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) (optional($shipment->pickupLocation)->short_code ?? '')).'</td>';
+                $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) ($shipment->shipment_number ?? '')).'</td>';
+                $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) (optional($shipment->dcLocation)->short_code ?? '')).'</td>';
+                $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e($shipment->drop_date ? $shipment->drop_date->copy()->timezone(config('app.timezone'))->format('m/d/Y') : '').'</td>';
+                $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e($shipment->pickup_date ? $shipment->pickup_date->copy()->timezone(config('app.timezone'))->format('m/d/Y') : '').'</td>';
+                $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e($shipment->delivery_date ? $shipment->delivery_date->copy()->timezone(config('app.timezone'))->format('m/d/Y') : '').'</td>';
+                $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) ($shipment->po_number ?? '')).'</td>';
+                $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) ($shipment->rack_qty ?? '')).'</td>';
+                $html .= '<td style="'.$carrierCellStyle.'">'.e((string) ($carrier->short_code ?? '')).'</td>';
+                $html .= '<td style="'.$trailerCellStyle.'">'.e((string) ($shipment->trailer ?? '')).'</td>';
+                $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) ($shipment->load_bar_qty ?? '')).'</td>';
+                $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) ($shipment->strap_qty ?? '')).'</td>';
+                $html .= '<td style="padding-left: 5px; padding-right: 5px;">'.e((string) (optional($shipment->dcLocation)->fullAddress() ?? '')).'</td>';
+                $html .= '</tr>';
+            }
+
+            $html .= '</tbody></table>';
+        }
 
         return $html;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function selectedOutboundLocationIds(ScheduledItem $item): array
+    {
+        $rawLocationIds = $item->outbound_location_ids;
+
+        if (! is_array($rawLocationIds)) {
+            return [];
+        }
+
+        return array_values(array_filter(array_map(static fn ($value): string => (string) $value, $rawLocationIds)));
     }
 }

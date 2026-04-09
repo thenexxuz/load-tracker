@@ -3,9 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\Carrier;
+use App\Models\Location;
 use App\Models\ScheduledItem;
 use App\Models\Template;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -25,10 +27,16 @@ class ScheduledItemController extends Controller
     public function create(): Response
     {
         $carriers = Carrier::orderBy('name')->get(['id', 'name', 'short_code']);
+        $outboundLocations = Location::query()
+            ->where('outbound', true)
+            ->orderBy('short_code')
+            ->orderBy('name')
+            ->get(['id', 'short_code', 'name']);
         $templates = Template::orderBy('name')->get(['id', 'name', 'model_type']);
 
         return Inertia::render('Admin/ScheduledItems/Create', [
             'carriers' => $carriers,
+            'outboundLocations' => $outboundLocations,
             'templates' => $templates,
         ]);
     }
@@ -45,6 +53,11 @@ class ScheduledItemController extends Controller
             'apply_to_all' => 'boolean',
             'schedulable_type' => 'required|in:carrier',
             'schedulable_id' => 'nullable|string',
+            'outbound_location_ids' => ['required', 'array', 'min:1'],
+            'outbound_location_ids.*' => [
+                'string',
+                Rule::exists('locations', 'id')->where(fn ($query) => $query->where('outbound', true)),
+            ],
         ]);
 
         $applyToAll = $validated['apply_to_all'] ?? false;
@@ -64,6 +77,8 @@ class ScheduledItemController extends Controller
             $validated['schedulable_id'] = null;
             $validated['schedulable_type'] = $validated['schedulable_type'] === 'carrier' ? 'App\\Models\\Carrier' : null;
         }
+
+        $validated['outbound_location_ids'] = array_values(array_unique($validated['outbound_location_ids']));
 
         // Validate schedule requirements based on type
         if ($validated['schedule_type'] === 'weekly' && ! isset($validated['schedule_day_of_week'])) {
@@ -94,11 +109,17 @@ class ScheduledItemController extends Controller
         $scheduledItem->load(['schedulable', 'template']);
 
         $carriers = Carrier::orderBy('name')->get(['id', 'name', 'short_code']);
+        $outboundLocations = Location::query()
+            ->where('outbound', true)
+            ->orderBy('short_code')
+            ->orderBy('name')
+            ->get(['id', 'short_code', 'name']);
         $templates = Template::orderBy('name')->get(['id', 'name', 'model_type']);
 
         return Inertia::render('Admin/ScheduledItems/Edit', [
             'scheduledItem' => $scheduledItem,
             'carriers' => $carriers,
+            'outboundLocations' => $outboundLocations,
             'templates' => $templates,
         ]);
     }
@@ -115,6 +136,11 @@ class ScheduledItemController extends Controller
             'apply_to_all' => 'boolean',
             'schedulable_type' => 'required|in:carrier',
             'schedulable_id' => 'nullable|string',
+            'outbound_location_ids' => ['required', 'array', 'min:1'],
+            'outbound_location_ids.*' => [
+                'string',
+                Rule::exists('locations', 'id')->where(fn ($query) => $query->where('outbound', true)),
+            ],
         ]);
 
         $applyToAll = $validated['apply_to_all'] ?? false;
@@ -134,6 +160,8 @@ class ScheduledItemController extends Controller
             $validated['schedulable_id'] = null;
             $validated['schedulable_type'] = $validated['schedulable_type'] === 'carrier' ? 'App\\Models\\Carrier' : null;
         }
+
+        $validated['outbound_location_ids'] = array_values(array_unique($validated['outbound_location_ids']));
 
         // Validate schedule requirements based on type
         if ($validated['schedule_type'] === 'weekly' && ! isset($validated['schedule_day_of_week'])) {

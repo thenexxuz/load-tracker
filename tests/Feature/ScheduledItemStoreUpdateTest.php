@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Carrier;
+use App\Models\Location;
 use App\Models\ScheduledItem;
 use App\Models\User;
 use Spatie\Permission\Models\Role;
@@ -14,6 +15,7 @@ test('scheduled item can be stored with a time value', function (): void {
     $admin->assignRole('administrator');
 
     $carrier = Carrier::factory()->create();
+    $outboundLocation = Location::factory()->pickup()->create();
 
     $this->actingAs($admin)
         ->post(route('admin.scheduled-items.store'), [
@@ -23,6 +25,7 @@ test('scheduled item can be stored with a time value', function (): void {
             'apply_to_all' => false,
             'schedulable_type' => 'carrier',
             'schedulable_id' => $carrier->id,
+            'outbound_location_ids' => [$outboundLocation->id],
         ])
         ->assertRedirect(route('admin.scheduled-items.index'))
         ->assertSessionHas('success', 'Scheduled item created successfully.');
@@ -31,7 +34,8 @@ test('scheduled item can be stored with a time value', function (): void {
 
     expect($item)->not->toBeNull()
         ->and($item->schedule_time)->toBe('08:30')
-        ->and($item->schedule_type)->toBe('daily');
+        ->and($item->schedule_type)->toBe('daily')
+        ->and($item->outbound_location_ids)->toBe([$outboundLocation->id]);
 });
 
 test('scheduled item can be updated with a time value', function (): void {
@@ -39,6 +43,8 @@ test('scheduled item can be updated with a time value', function (): void {
     $admin->assignRole('administrator');
 
     $carrier = Carrier::factory()->create();
+    $initialOutboundLocation = Location::factory()->pickup()->create();
+    $updatedOutboundLocation = Location::factory()->pickup()->create();
 
     $item = ScheduledItem::create([
         'name' => 'Original Name',
@@ -47,6 +53,7 @@ test('scheduled item can be updated with a time value', function (): void {
         'apply_to_all' => false,
         'schedulable_type' => 'App\\Models\\Carrier',
         'schedulable_id' => $carrier->id,
+        'outbound_location_ids' => [$initialOutboundLocation->id],
     ]);
 
     $this->actingAs($admin)
@@ -57,6 +64,7 @@ test('scheduled item can be updated with a time value', function (): void {
             'apply_to_all' => false,
             'schedulable_type' => 'carrier',
             'schedulable_id' => $carrier->id,
+            'outbound_location_ids' => [$updatedOutboundLocation->id],
         ])
         ->assertRedirect(route('admin.scheduled-items.index'))
         ->assertSessionHas('success', 'Scheduled item updated successfully.');
@@ -64,5 +72,6 @@ test('scheduled item can be updated with a time value', function (): void {
     $item->refresh();
 
     expect($item->name)->toBe('Updated Name')
-        ->and($item->schedule_time)->toBe('09:15');
+        ->and($item->schedule_time)->toBe('09:15')
+        ->and($item->outbound_location_ids)->toBe([$updatedOutboundLocation->id]);
 });

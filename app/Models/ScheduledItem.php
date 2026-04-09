@@ -21,12 +21,14 @@ class ScheduledItem extends Model
         'apply_to_all',
         'schedulable_id',
         'schedulable_type',
+        'outbound_location_ids',
     ];
 
     protected function casts(): array
     {
         return [
             'apply_to_all' => 'boolean',
+            'outbound_location_ids' => 'array',
         ];
     }
 
