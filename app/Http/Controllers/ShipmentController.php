@@ -1294,6 +1294,8 @@ class ShipmentController extends Controller
      */
     public function pbiImport(Request $request)
     {
+        $this->allowUnlimitedExecutionTime();
+
         $request->validate([
             'file' => 'required|file|mimes:xlsx,xls|max:10240',
         ]);
@@ -1498,6 +1500,8 @@ class ShipmentController extends Controller
 
     public function googleSheetsImport(Request $request)
     {
+        $this->allowUnlimitedExecutionTime();
+
         abort_unless($request->user()?->hasRole(['administrator', 'supervisor']), 403);
 
         $validated = $request->validate([
@@ -3270,6 +3274,13 @@ HTML;
         }
 
         return '';
+    }
+
+    private function allowUnlimitedExecutionTime(): void
+    {
+        if (function_exists('set_time_limit')) {
+            @set_time_limit(0);
+        }
     }
 
     private function formatImportSummaryDuration(float $durationSeconds): string
