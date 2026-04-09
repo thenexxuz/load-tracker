@@ -331,7 +331,7 @@ it('includes failed records in pbi import summary notification', function (): vo
                 ['Reporting period: April 2026'],
                 ['Load', 'Status', 'Order #', 'Origin', 'Destination', 'Sum of Pallets'],
                 ['LOAD-PFAIL-001', 'In Transit', 'PO-OK', 'ING', 'AMS', 2],
-                ['', '', '', '', '', ''],
+                ['LOAD-PFAIL-002', '', 'PO-BAD', 'ING', 'AMS', 2],
             ]),
         ]);
 
@@ -345,4 +345,12 @@ it('includes failed records in pbi import summary notification', function (): vo
     /** @var Notification $summaryNotification */
     expect($summaryNotification)->not->toBeNull();
     expect($summaryNotification->data['created_count'])->toBe(1);
+    expect($summaryNotification->data['failed_count'])->toBe(1);
+    expect($summaryNotification->data['failed_details'])->toHaveCount(1);
+    expect($summaryNotification->data['failed_details'][0])->toMatchArray([
+        'shipment_number' => 'LOAD-PFAIL-002',
+        'row_number' => 5,
+        'sheet_name' => null,
+    ]);
+    expect($summaryNotification->data['html_message'])->toContain('Row 5');
 });

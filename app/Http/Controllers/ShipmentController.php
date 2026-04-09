@@ -1317,7 +1317,7 @@ class ShipmentController extends Controller
             $updatedByLocationId = [];
             $importFailedDetails = [];
 
-            foreach ($dataRows as $row) {
+            foreach ($dataRows as $rowIndex => $row) {
                 if ($this->rowIsEmpty($row)) {
                     continue;
                 }
@@ -1339,10 +1339,13 @@ class ShipmentController extends Controller
 
                 if ($validator->fails()) {
                     $errorMsg = implode('; ', $validator->errors()->all());
+                    $rowNumber = $rowIndex + 4;
                     $failedRows[] = array_merge($originalRow, ['ERROR' => $errorMsg]);
                     $importFailedDetails[] = [
                         'shipment_number' => (string) ($mapped['shipment_number'] ?? '(unknown)'),
                         'error' => $errorMsg,
+                        'row_number' => $rowNumber,
+                        'sheet_name' => null,
                     ];
 
                     continue;
@@ -1555,10 +1558,10 @@ class ShipmentController extends Controller
             $updatedByLocationId = [];
             $importFailedDetails = [];
 
-            foreach ($sheetRows as [$headers, $rows]) {
+            foreach ($sheetRows as [$sheetName, $headers, $rows]) {
                 $previousGoogleSheetsRowContext = null;
 
-                foreach ($rows as $row) {
+                foreach ($rows as $rowIndex => $row) {
                     if ($this->rowIsEmpty($row)) {
                         continue;
                     }
@@ -1643,18 +1646,24 @@ class ShipmentController extends Controller
                     } catch (ValidationException $exception) {
                         $failed++;
                         $msg = (string) (collect($exception->errors())->flatten()->first() ?? 'Validation error');
+                        $rowNumber = $rowIndex + 2;
                         $failedMessages[] = $msg;
                         $importFailedDetails[] = [
                             'shipment_number' => (string) ($mappedRow['shipment_number'] ?? $mappedRow['bol'] ?? '(unknown)'),
                             'error' => $msg,
+                            'row_number' => $rowNumber,
+                            'sheet_name' => (string) $sheetName,
                         ];
                     } catch (Exception $exception) {
                         $failed++;
                         $msg = $exception->getMessage();
+                        $rowNumber = $rowIndex + 2;
                         $failedMessages[] = $msg;
                         $importFailedDetails[] = [
                             'shipment_number' => (string) ($mappedRow['shipment_number'] ?? $mappedRow['bol'] ?? '(unknown)'),
                             'error' => $msg,
+                            'row_number' => $rowNumber,
+                            'sheet_name' => (string) $sheetName,
                         ];
                     }
                 }
@@ -1869,7 +1878,7 @@ class ShipmentController extends Controller
     }
 
     /**
-     * @return array<int, array{0: array<int, string>, 1: array<int, array<int, string|null>>}>
+     * @return array<int, array{0: string, 1: array<int, string>, 2: array<int, array<int, string|null>>}>
      */
     private function parseGoogleSheetsWorkbook(string $workbookContents): array
     {
@@ -1907,6 +1916,7 @@ class ShipmentController extends Controller
             }
 
             $sheetRows[] = [
+                (string) $worksheet->getTitle(),
                 array_map(fn ($header) => trim((string) $header), $headerRow),
                 array_map(fn ($row) => is_array($row) ? array_map(fn ($value) => $value === null ? null : (string) $value, $row) : [], $rows),
             ];
@@ -3062,7 +3072,7 @@ HTML;
 
         $importerName = $importer?->name ?? 'System';
         $importerEmail = $importer?->email ?? '';
-        $durationFormatted = number_format($durationSeconds, 2).' seconds';
+        $durationFormatted = $this->formatImportSummaryDuration($durationSeconds);
         $subject = "{$importType} Import completed by {$importerName}";
 
         $notification = Notification::query()->create([
@@ -3115,7 +3125,7 @@ HTML;
     /**
      * @param  array<string, int>  $createdByLocation
      * @param  array<string, int>  $updatedByLocation
-     * @param  array<int, array{shipment_number: string, error: string}>  $failedDetails
+     * @param  array<int, array{shipment_number: string, error: string, row_number?: int|null, sheet_name?: string|null}>  $failedDetails
      */
     private function buildImportSummaryPlainText(
         string $importType,
@@ -3151,7 +3161,9 @@ HTML;
             $lines[] = "Records failed to import: {$totalFailed}";
 
             foreach ($failedDetails as $detail) {
-                $lines[] = "  - {$detail['shipment_number']}: {$detail['error']}";
+                $source = $this->formatImportFailureSource($detail);
+                $sourcePrefix = $source !== '' ? "{$source} - " : '';
+                $lines[] = "  - {$sourcePrefix}{$detail['shipment_number']}: {$detail['error']}";
             }
         }
 
@@ -3161,7 +3173,7 @@ HTML;
     /**
      * @param  array<string, int>  $createdByLocation
      * @param  array<string, int>  $updatedByLocation
-     * @param  array<int, array{shipment_number: string, error: string}>  $failedDetails
+     * @param  array<int, array{shipment_number: string, error: string, row_number?: int|null, sheet_name?: string|null}>  $failedDetails
      */
     private function buildImportSummaryHtml(
         string $importType,
@@ -3224,15 +3236,49 @@ HTML;
         if ($totalFailed > 0) {
             $html .= '<h3 style="margin:0 0 8px 0;">Records Failed to Import ('.e($totalFailed).')</h3>';
             $html .= '<table style="'.$tableStyle.'">';
-            $html .= '<thead><tr><th style="'.$thStyle.'">Shipment Number</th><th style="'.$thStyle.'">Error</th></tr></thead><tbody>';
+            $html .= '<thead><tr><th style="'.$thStyle.'">Source</th><th style="'.$thStyle.'">Shipment Number</th><th style="'.$thStyle.'">Error</th></tr></thead><tbody>';
 
             foreach ($failedDetails as $detail) {
-                $html .= '<tr><td style="'.$tdStyle.'">'.e($detail['shipment_number']).'</td><td style="'.$tdStyle.'">'.e($detail['error']).'</td></tr>';
+                $source = $this->formatImportFailureSource($detail);
+                $html .= '<tr><td style="'.$tdStyle.'">'.e($source !== '' ? $source : 'Unknown').'</td><td style="'.$tdStyle.'">'.e($detail['shipment_number']).'</td><td style="'.$tdStyle.'">'.e($detail['error']).'</td></tr>';
             }
 
             $html .= '</tbody></table>';
         }
 
         return $html;
+    }
+
+    /**
+     * @param  array{shipment_number: string, error: string, row_number?: int|null, sheet_name?: string|null}  $detail
+     */
+    private function formatImportFailureSource(array $detail): string
+    {
+        $sheetName = isset($detail['sheet_name']) ? trim((string) $detail['sheet_name']) : '';
+        $rowNumber = $detail['row_number'] ?? null;
+
+        if ($sheetName !== '' && is_int($rowNumber) && $rowNumber > 0) {
+            return "{$sheetName} row {$rowNumber}";
+        }
+
+        if ($sheetName !== '') {
+            return $sheetName;
+        }
+
+        if (is_int($rowNumber) && $rowNumber > 0) {
+            return "Row {$rowNumber}";
+        }
+
+        return '';
+    }
+
+    private function formatImportSummaryDuration(float $durationSeconds): string
+    {
+        $normalizedSeconds = max(0, $durationSeconds);
+        $hours = (int) floor($normalizedSeconds / 3600);
+        $minutes = (int) floor(($normalizedSeconds % 3600) / 60);
+        $seconds = $normalizedSeconds - ($hours * 3600) - ($minutes * 60);
+
+        return sprintf('%dh %dm %.2fs', $hours, $minutes, $seconds);
     }
 }

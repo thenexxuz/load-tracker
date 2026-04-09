@@ -30,6 +30,10 @@ const formatDateTime = (dateString: string): string => {
   })
 }
 
+const formatNullableDateTime = (dateString: string | null): string => {
+  return dateString ? formatDateTime(dateString) : '—'
+}
+
 const isRead = (): boolean => {
   return props.notification.read_at !== null
 }
@@ -69,7 +73,7 @@ const isRead = (): boolean => {
               v-if="isRead()"
               class="text-sm font-medium text-gray-900 dark:text-gray-100"
             >
-              {{ formatDateTime(notification.read_at) }}
+              {{ formatNullableDateTime(notification.read_at) }}
             </span>
             <span
               v-else
@@ -95,10 +99,10 @@ const isRead = (): boolean => {
       </div>
 
       <!-- Notification Content -->
-      <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-8">
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-8 notification-content">
         <div
           v-if="notification.html_message"
-          class="prose dark:prose-invert max-w-none"
+          class="prose dark:prose-invert max-w-none html-message"
           v-html="notification.html_message"
         />
         <div
@@ -112,16 +116,54 @@ const isRead = (): boolean => {
   </AdminLayout>
 </template>
 
-<style scoped>
-/* Add any scoped styles if needed */
-
-:deep(.prose) {
+<style>
+.notification-content .prose {
   font-size: 1rem;
   line-height: 1.6;
   color: #374151;
 }
 
-:deep(.dark .prose) {
-  color: #d1d5db;
+.dark .notification-content .prose {
+  color: #e5e7eb !important;
+}
+
+.dark .notification-content .html-message {
+  color: #e5e7eb;
+}
+
+.dark .notification-content .html-message h1,
+.dark .notification-content .html-message h2,
+.dark .notification-content .html-message h3,
+.dark .notification-content .html-message h4,
+.dark .notification-content .html-message p,
+.dark .notification-content .html-message li,
+.dark .notification-content .html-message strong,
+.dark .notification-content .html-message span,
+.dark .notification-content .html-message div {
+  color: #e5e7eb !important;
+}
+
+.dark .notification-content .html-message table {
+  background-color: #111827 !important;
+  color: #e5e7eb !important;
+  border-color: #374151 !important;
+}
+
+.dark .notification-content .html-message th,
+.dark .notification-content .html-message td {
+  color: #e5e7eb !important;
+  border-color: #4b5563 !important;
+}
+
+.dark .notification-content .html-message th {
+  background-color: #1f2937 !important;
+}
+
+.dark .notification-content .html-message td {
+  background-color: #111827 !important;
+}
+
+.dark .notification-content .html-message tr {
+  background-color: #111827 !important;
 }
 </style>

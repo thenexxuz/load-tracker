@@ -990,7 +990,7 @@ it('includes per-location breakdown and failed details in google sheets import s
             ['Shipment Number', 'Status', 'Origin', 'Destination'],
             ['LOAD-LOC-001', 'In Transit', 'LOC-A', 'AMS'],
             ['LOAD-LOC-002', 'Booked', 'LOC-B', 'AMS'],
-            ['', '', '', ''],
+            ['LOAD-LOC-003', '', '', 'AMS'],
         ],
     ]);
 
@@ -1035,8 +1035,16 @@ it('includes per-location breakdown and failed details in google sheets import s
 
     /** @var Notification $summaryNotification */
     expect($summaryNotification)->not->toBeNull();
+    expect($summaryNotification->data['failed_count'])->toBe(1);
+    expect($summaryNotification->data['failed_details'])->toHaveCount(1);
+    expect($summaryNotification->data['failed_details'][0])->toMatchArray([
+        'shipment_number' => 'LOAD-LOC-003',
+        'sheet_name' => 'Sheet 1',
+        'row_number' => 4,
+    ]);
     expect($summaryNotification->data['updated_by_location'])->toHaveKey('Location Alpha', 1);
     expect($summaryNotification->data['updated_by_location'])->toHaveKey('Location Beta', 1);
     expect($summaryNotification->data['html_message'])->toContain('Location Alpha');
     expect($summaryNotification->data['html_message'])->toContain('Location Beta');
+    expect($summaryNotification->data['html_message'])->toContain('Sheet 1 row 4');
 });
