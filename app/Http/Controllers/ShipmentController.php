@@ -1502,6 +1502,13 @@ class ShipmentController extends Controller
     {
         $this->allowUnlimitedExecutionTime();
 
+        $importTraceId = (string) Str::uuid();
+
+        Log::info('Google Sheets import request started.', [
+            'trace_id' => $importTraceId,
+            'user_id' => $request->user()?->id,
+        ]);
+
         abort_unless($request->user()?->hasRole(['administrator', 'supervisor']), 403);
 
         $validated = $request->validate([
@@ -1519,6 +1526,8 @@ class ShipmentController extends Controller
                 'google_sheet_url' => 'Set a Google Sheets URL in App Settings or provide one for this import.',
             ]);
         }
+
+        $this->registerImportFatalErrorLogger($importTraceId, $request->user()?->id, $googleSheetUrl);
 
         try {
             $exportUrl = $this->buildGoogleSheetsExportUrl($googleSheetUrl);
@@ -1714,13 +1723,23 @@ class ShipmentController extends Controller
             return redirect()->route('admin.shipments.index')
                 ->with('success', $message);
         } catch (ValidationException $exception) {
+            Log::warning('Google Sheets import validation failed.', [
+                'trace_id' => $importTraceId,
+                'user_id' => $request->user()?->id,
+                'google_sheet_url' => $googleSheetUrl,
+                'errors' => $exception->errors(),
+            ]);
+
             throw $exception;
         } catch (\Throwable $exception) {
             Log::error('Google Sheets import failed with unexpected error.', [
+                'trace_id' => $importTraceId,
                 'user_id' => $request->user()?->id,
                 'google_sheet_url' => $googleSheetUrl,
                 'exception' => get_class($exception),
                 'message' => $exception->getMessage(),
+                'file' => $exception->getFile(),
+                'line' => $exception->getLine(),
             ]);
 
             report($exception);
@@ -1729,6 +1748,33 @@ class ShipmentController extends Controller
                 'google_sheet_url' => 'Failed to process the Google Sheet: '.$exception->getMessage(),
             ]);
         }
+    }
+
+    private function registerImportFatalErrorLogger(string $traceId, ?string $userId, string $googleSheetUrl): void
+    {
+        register_shutdown_function(function () use ($traceId, $userId, $googleSheetUrl): void {
+            $error = error_get_last();
+
+            if (! is_array($error)) {
+                return;
+            }
+
+            $fatalTypes = [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR];
+
+            if (! in_array($error['type'] ?? null, $fatalTypes, true)) {
+                return;
+            }
+
+            Log::critical('Google Sheets import terminated by fatal PHP error.', [
+                'trace_id' => $traceId,
+                'user_id' => $userId,
+                'google_sheet_url' => $googleSheetUrl,
+                'error_type' => $error['type'] ?? null,
+                'message' => $error['message'] ?? null,
+                'file' => $error['file'] ?? null,
+                'line' => $error['line'] ?? null,
+            ]);
+        });
     }
 
     private function buildGoogleSheetsExportUrl(string $url): string
