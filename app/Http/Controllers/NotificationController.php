@@ -77,6 +77,56 @@ class NotificationController extends Controller
         ]);
     }
 
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            public function bulkUpdate()
+    {
+        /** @var \App\Models\User $user */
+        $user = auth()->user();
+
+        $validated = request()->validate([
+            'notification_ids' => 'required|array|min:1',
+            'notification_ids.*' => 'required|string',
+            'action' => 'required|in:mark_read,mark_unread',
+        ]);
+
+        $notificationIds = $validated['notification_ids'];
+        $action = $validated['action'];
+
+        // Verify user has access to all notifications
+        $userNotificationCount = $user->notifications()
+            ->whereIn('notification_id', $notificationIds)
+            ->count();
+
+        if ($userNotificationCount !== count($notificationIds)) {
+            throw new AuthorizationException('You do not have access to one or more of these notifications.');
+        }
+
+        // Get the notifications and update them
+        /** @var \Illuminate\Database\Eloquent\Collection<int, Notification> $notifications */
+        $notifications = Notification::whereIn('id', $notificationIds)->get();
+
+        if ($action === 'mark_read') {
+            foreach ($notifications as $notification) {
+                $notification->markAsReadForUser($user);
+            }
+        } else {
+            // mark_unread
+            foreach ($notifications as $notification) {
+                $user->notifications()
+                    ->where('notification_id', $notification->id)
+                    ->updateExistingPivot($notification->id, ['read_at' => null]);
+            }
+        }
+
+        return response()->json([
+            'message' => sprintf(
+                '%d notification%s marked as %s.',
+                count($notificationIds),
+                count($notificationIds) !== 1 ? 's' : '',
+                $action === 'mark_read' ? 'read' : 'unread'
+            ),
+        ]);
+    }
+
     public function emailOpen(Notification $notification, User $user): HttpResponse
     {
         if ($notification->users()->where('user_id', $user->id)->exists()) {

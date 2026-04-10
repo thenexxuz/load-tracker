@@ -268,3 +268,105 @@ it('emails notification only to users opted in for email notifications', functio
         return $mail->hasTo($optedOutUser->email);
     });
 });
+
+it('bulk marks multiple unread notifications as read', function (): void {
+    $user = User::factory()->create();
+
+    $notifications = Notification::factory()
+        ->count(3)
+        ->create()
+        ->each(fn ($notification) => $user->notifications()->attach($notification->id, ['read_at' => null]));
+
+    $notificationIds = $notifications->pluck('id')->toArray();
+
+    // Verify they're initially unread
+    expect($user->notifications()->wherePivotNull('read_at')->count())->toBe(3);
+
+    $response = $this->actingAs($user)->postJson(route('notifications.bulk-update'), [
+        'notification_ids' => $notificationIds,
+        'action' => 'mark_read',
+    ]);
+
+    $response->assertSuccessful()
+        ->assertJsonStructure(['message']);
+
+    // Verify they're now read
+    $user->refresh();
+    expect($user->notifications()->wherePivotNotNull('read_at')->count())->toBe(3);
+});
+
+it('bulk marks multiple read notifications as unread', function (): void {
+    $user = User::factory()->create();
+
+    $notifications = Notification::factory()
+        ->count(3)
+        ->create()
+        ->each(fn ($notification) => $user->notifications()->attach($notification->id, ['read_at' => now()]));
+
+    $notificationIds = $notifications->pluck('id')->toArray();
+
+    // Verify they're initially read
+    expect($user->notifications()->wherePivotNotNull('read_at')->count())->toBe(3);
+
+    $response = $this->actingAs($user)->postJson(route('notifications.bulk-update'), [
+        'notification_ids' => $notificationIds,
+        'action' => 'mark_unread',
+    ]);
+
+    $response->assertSuccessful()
+        ->assertJsonStructure(['message']);
+
+    // Verify they're now unread
+    $user->refresh();
+    expect($user->notifications()->wherePivotNull('read_at')->count())->toBe(3);
+});
+
+it('bulk update prevents unauthorized access to other users notifications', function (): void {
+    $user1 = User::factory()->create();
+    $user2 = User::factory()->create();
+
+    $notification = Notification::factory()->create();
+    $user1->notifications()->attach($notification->id, ['read_at' => null]);
+
+    $response = $this->actingAs($user2)->postJson(route('notifications.bulk-update'), [
+        'notification_ids' => [$notification->id],
+        'action' => 'mark_read',
+    ]);
+
+    $response->assertForbidden();
+});
+
+it('bulk update validates required action parameter', function (): void {
+    $user = User::factory()->create();
+    $notification = Notification::factory()->create();
+    $user->notifications()->attach($notification->id);
+
+    $response = $this->actingAs($user)->postJson(route('notifications.bulk-update'), [
+        'notification_ids' => [$notification->id],
+        'action' => 'invalid_action',
+    ]);
+
+    $response->assertUnprocessable()
+        ->assertJsonValidationErrors('action');
+});
+
+it('bulk update requires at least one notification id', function (): void {
+    $user = User::factory()->create();
+
+    $response = $this->actingAs($user)->postJson(route('notifications.bulk-update'), [
+        'notification_ids' => [],
+        'action' => 'mark_read',
+    ]);
+
+    $response->assertUnprocessable()
+        ->assertJsonValidationErrors('notification_ids');
+});
+
+it('unauthenticated user cannot perform bulk update', function (): void {
+    $response = $this->postJson(route('notifications.bulk-update'), [
+        'notification_ids' => ['test'],
+        'action' => 'mark_read',
+    ]);
+
+    $response->assertUnauthorized();
+});

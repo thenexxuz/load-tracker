@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, router, Link } from '@inertiajs/vue3'
-import { onMounted, ref, watch } from 'vue'
+import { onMounted, ref, watch, computed } from 'vue'
 import { Notify } from 'notiflix'
 import { route } from 'ziggy-js'
 
@@ -34,6 +34,8 @@ const props = defineProps<{
 }>()
 
 const showRead = ref<boolean>(Boolean(props.filters?.show_read))
+const selectedNotifications = ref<Set<string>>(new Set())
+const isProcessing = ref<boolean>(false)
 
 const formatDate = (dateString: string): string => {
   if (!dateString) return '—'
@@ -84,8 +86,116 @@ watch(showRead, (value) => {
   })
 })
 
-const goToNotification = (id: string): void => {
+const goToNotification = (id: string, event: MouseEvent): void => {
+  // Don't navigate if clicking the checkbox
+  if ((event.target as HTMLElement).tagName === 'INPUT') {
+    return
+  }
   router.visit(route('notifications.show', id))
+}
+
+const toggleSelection = (id: string): void => {
+  if (selectedNotifications.value.has(id)) {
+    selectedNotifications.value.delete(id)
+  } else {
+    selectedNotifications.value.add(id)
+  }
+}
+
+const selectAll = (): void => {
+  if (selectedNotifications.value.size === props.notifications.data.length) {
+    selectedNotifications.value.clear()
+  } else {
+    props.notifications.data.forEach(notification => {
+      selectedNotifications.value.add(notification.id)
+    })
+  }
+}
+
+const isAllSelected = computed<boolean>(() => {
+  return props.notifications.data.length > 0 && selectedNotifications.value.size === props.notifications.data.length
+})
+
+const someSelected = computed<boolean>(() => {
+  return selectedNotifications.value.size > 0 && selectedNotifications.value.size < props.notifications.data.length
+})
+
+const selectedCount = computed<number>(() => {
+  return selectedNotifications.value.size
+})
+
+const bulkMarkAsRead = async (): Promise<void> => {
+  if (selectedNotifications.value.size === 0) return
+
+  isProcessing.value = true
+  try {
+    await fetch(route('notifications.bulk-update'), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content || '',
+      },
+      body: JSON.stringify({
+        notification_ids: Array.from(selectedNotifications.value),
+        action: 'mark_read',
+      }),
+    }).then(response => {
+      if (response.ok) {
+        Notify.success(`${selectedNotifications.value.size} notification${selectedNotifications.value.size !== 1 ? 's' : ''} marked as read`)
+        router.get(route('notifications.index'), {
+          show_read: showRead.value ? 1 : 0,
+        }, {
+          preserveScroll: true,
+          replace: true,
+        })
+        selectedNotifications.value.clear()
+      } else {
+        Notify.failure('Failed to mark notifications as read')
+      }
+    })
+  } catch (error) {
+    Notify.failure('An error occurred')
+    console.error(error)
+  } finally {
+    isProcessing.value = false
+  }
+}
+
+const bulkMarkAsUnread = async (): Promise<void> => {
+  if (selectedNotifications.value.size === 0) return
+
+  isProcessing.value = true
+  try {
+    await fetch(route('notifications.bulk-update'), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content || '',
+      },
+      body: JSON.stringify({
+        notification_ids: Array.from(selectedNotifications.value),
+        action: 'mark_unread',
+      }),
+    }).then(response => {
+      if (response.ok) {
+        Notify.success(`${selectedNotifications.value.size} notification${selectedNotifications.value.size !== 1 ? 's' : ''} marked as unread`)
+        router.get(route('notifications.index'), {
+          show_read: showRead.value ? 1 : 0,
+        }, {
+          preserveScroll: true,
+          replace: true,
+        })
+        selectedNotifications.value.clear()
+      } else {
+        Notify.failure('Failed to mark notifications as unread')
+      }
+    })
+  } catch (error) {
+    Notify.failure('An error occurred')
+    console.error(error)
+  } finally {
+    isProcessing.value = false
+  }
 }
 
 onMounted(() => {
@@ -121,11 +231,55 @@ onMounted(() => {
         </label>
       </div>
 
+      <!-- Bulk Actions Bar -->
+      <div
+        v-if="selectedCount > 0"
+        class="mb-4 flex items-center justify-between gap-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 p-4"
+      >
+        <div class="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+          <span>{{ selectedCount }} notification{{ selectedCount !== 1 ? 's' : '' }} selected</span>
+        </div>
+        <div class="flex gap-2">
+          <button
+            :disabled="isProcessing"
+            @click="bulkMarkAsRead"
+            class="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            <span v-if="!isProcessing">Mark as Read</span>
+            <span v-else>Processing...</span>
+          </button>
+          <button
+            :disabled="isProcessing"
+            @click="bulkMarkAsUnread"
+            class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            <span v-if="!isProcessing">Mark as Unread</span>
+            <span v-else>Processing...</span>
+          </button>
+          <button
+            :disabled="isProcessing"
+            @click="() => selectedNotifications.clear()"
+            class="rounded-md bg-gray-600 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            Clear Selection
+          </button>
+        </div>
+      </div>
+
       <!-- Notifications Table -->
       <div class="overflow-x-auto rounded-t-lg shadow">
         <table class="min-w-full bg-white dark:bg-gray-800">
           <thead>
             <tr class="bg-gray-100 dark:bg-gray-700 text-left">
+              <th class="px-4 py-4 font-medium text-gray-700 dark:text-gray-300 w-12">
+                <input
+                  type="checkbox"
+                  :checked="isAllSelected"
+                  :indeterminate="someSelected"
+                  @change="selectAll"
+                  class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                />
+              </th>
               <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300">Subject</th>
               <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300 min-w-[150px]">Received</th>
               <th class="px-6 py-4 font-medium text-gray-700 dark:text-gray-300 min-w-[150px]">Read</th>
@@ -137,19 +291,27 @@ onMounted(() => {
               v-for="notification in notifications.data"
               :key="notification.id"
               :class="[
-                'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50',
+                'hover:bg-gray-50 dark:hover:bg-gray-700/50',
                 !isRead(notification.read_at) ? 'bg-blue-50 dark:bg-blue-900/20' : '',
               ]"
-              @click="goToNotification(notification.id)"
+              @click="goToNotification(notification.id, $event)"
             >
-              <td class="px-6 py-4 font-medium text-gray-900 dark:text-gray-100">
+              <td class="px-4 py-4 text-center">
+                <input
+                  type="checkbox"
+                  :checked="selectedNotifications.has(notification.id)"
+                  @change="toggleSelection(notification.id)"
+                  class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                />
+              </td>
+              <td class="px-6 py-4 font-medium text-gray-900 dark:text-gray-100 cursor-pointer">
                 {{ notification.data.subject }}
               </td>
-              <td class="px-6 py-4 text-gray-600 dark:text-gray-400">
+              <td class="px-6 py-4 text-gray-600 dark:text-gray-400 cursor-pointer">
                 {{ formatDateTime(notification.created_at) }}
               </td>
-              <td class="px-6 py-4 text-gray-600 dark:text-gray-400">
-                {{ isRead(notification.read_at) ? formatDateTime(notification.read_at) : '—' }}
+              <td class="px-6 py-4 text-gray-600 dark:text-gray-400 cursor-pointer">
+                {{ notification.read_at ? formatDateTime(notification.read_at) : '—' }}
               </td>
               <td class="px-6 py-4 text-center">
                 <span
@@ -166,7 +328,7 @@ onMounted(() => {
             </tr>
 
             <tr v-if="!notifications.data.length">
-              <td colspan="4" class="px-6 py-16 text-center text-gray-500 dark:text-gray-400">
+              <td colspan="5" class="px-6 py-16 text-center text-gray-500 dark:text-gray-400">
                 No notifications found.<br />
                 <span class="text-sm">Come back later!</span>
               </td>

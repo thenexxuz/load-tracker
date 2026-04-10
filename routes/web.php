@@ -44,6 +44,7 @@ Route::get('notifications/{notification}/email-open/{user}', [NotificationContro
 Route::middleware(['auth'])->group(function () {
     Route::get('notifications', [NotificationController::class, 'index'])->name('notifications.index');
     Route::get('notifications/{notification}', [NotificationController::class, 'show'])->name('notifications.show');
+    Route::post('notifications/bulk-update', [NotificationController::class, 'bulkUpdate'])->name('notifications.bulk-update');
 });
 
 Route::middleware(['auth', 'role:administrator'])->prefix('admin')->name('admin.')->group(function () {
