@@ -1541,18 +1541,36 @@ class ShipmentController extends Controller
             }
 
             $workbookContents = $response->body();
+            $contentType = Str::lower((string) $response->header('Content-Type'));
+            unset($response);
 
             if (
                 str_contains($workbookContents, 'ServiceLogin')
                 || str_contains($workbookContents, 'accounts.google.com')
-                || str_contains(Str::lower((string) $response->header('Content-Type')), 'text/html')
+                || str_contains($contentType, 'text/html')
             ) {
                 throw ValidationException::withMessages([
                     'google_sheet_url' => 'The Google Sheet must be shared or published so the app can download it.',
                 ]);
             }
 
-            $sheetRows = $this->parseGoogleSheetsWorkbook($workbookContents);
+            // Write workbook to a temp file and immediately free the body string so
+            // PhpSpreadsheet does not compete with it for the same memory budget.
+            $importTempPath = tempnam(sys_get_temp_dir(), 'gs-import-');
+
+            if ($importTempPath === false) {
+                throw new Exception('Unable to create temporary file for workbook.');
+            }
+
+            file_put_contents($importTempPath, $workbookContents);
+            unset($workbookContents);
+            gc_collect_cycles();
+
+            try {
+                $sheetRows = $this->parseGoogleSheetsWorkbook($importTempPath);
+            } finally {
+                @unlink($importTempPath);
+            }
 
             if ($sheetRows === []) {
                 throw ValidationException::withMessages([
@@ -1937,32 +1955,34 @@ class ShipmentController extends Controller
     }
 
     /**
+     * @param  string  $tempPath  Path to the already-written XLSX temp file (owned/deleted by caller)
      * @return array<int, array{0: string, 1: array<int, string>, 2: array<int, array<int, string|null>>}>
      */
-    private function parseGoogleSheetsWorkbook(string $workbookContents): array
+    private function parseGoogleSheetsWorkbook(string $tempPath): array
     {
-        $tempPath = tempnam(sys_get_temp_dir(), 'google-sheets-import-');
-
-        if ($tempPath === false) {
-            throw new Exception('Unable to create temporary workbook file.');
-        }
-
-        file_put_contents($tempPath, $workbookContents);
-
         try {
-            $spreadsheet = IOFactory::load($tempPath);
+            $reader = IOFactory::createReader('Xlsx');
+            $reader->setReadDataOnly(true);
+            $spreadsheet = $reader->load($tempPath);
         } catch (Exception $exception) {
-            @unlink($tempPath);
-
             throw new Exception('Unable to read the Google Sheet workbook.');
         }
 
-        @unlink($tempPath);
-
         $sheetRows = [];
+        $sheetCount = $spreadsheet->getSheetCount();
 
-        foreach ($spreadsheet->getWorksheetIterator() as $worksheet) {
-            $rows = $worksheet->toArray(null, true, true, false);
+        // Process each sheet by always reading index 0 and then removing it so
+        // PhpSpreadsheet memory is freed progressively rather than held in full.
+        for ($i = 0; $i < $sheetCount; $i++) {
+            $worksheet = $spreadsheet->getSheet(0);
+            $sheetName = (string) $worksheet->getTitle();
+
+            // Raw values (no formula eval, no format data) — minimal memory overhead.
+            $rows = $worksheet->toArray(null, false, false, false);
+
+            // Free this worksheet's objects before processing the next.
+            $spreadsheet->removeSheetByIndex(0);
+            gc_collect_cycles();
 
             if ($rows === []) {
                 continue;
@@ -1975,11 +1995,15 @@ class ShipmentController extends Controller
             }
 
             $sheetRows[] = [
-                (string) $worksheet->getTitle(),
+                $sheetName,
                 array_map(fn ($header) => trim((string) $header), $headerRow),
                 array_map(fn ($row) => is_array($row) ? array_map(fn ($value) => $value === null ? null : (string) $value, $row) : [], $rows),
             ];
         }
+
+        $spreadsheet->disconnectWorksheets();
+        unset($spreadsheet);
+        gc_collect_cycles();
 
         return $sheetRows;
     }
@@ -2277,6 +2301,16 @@ class ShipmentController extends Controller
 
         if ($this->isImportDateMarkedUnknown($normalizedValue)) {
             return null;
+        }
+
+        // ReadDataOnly mode returns date cells as Excel serial numbers instead of
+        // formatted strings — handle them the same way as PBI numeric dates.
+        if (is_numeric($normalizedValue)) {
+            try {
+                return Carbon::instance(ExcelDate::excelToDateTimeObject((float) $normalizedValue));
+            } catch (Exception) {
+                // Not a valid serial; fall through to string-based parsing.
+            }
         }
 
         foreach ([
