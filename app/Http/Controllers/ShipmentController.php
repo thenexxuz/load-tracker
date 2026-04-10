@@ -24,7 +24,9 @@ use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Log;
 use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Reader\Xlsx;
 use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 class ShipmentController extends Controller
 {
@@ -1567,137 +1569,140 @@ class ShipmentController extends Controller
             gc_collect_cycles();
 
             try {
-                $sheetRows = $this->parseGoogleSheetsWorkbook($importTempPath);
+                $startTime = microtime(true);
+                $updated = 0;
+                $created = 0;
+                $unchanged = 0;
+                $failed = 0;
+                $failedMessages = [];
+                $pendingImportNotificationEmails = [];
+                $createdByLocationId = [];
+                $updatedByLocationId = [];
+                $importFailedDetails = [];
+
+                $hasReadableSheets = $this->processGoogleSheetsWorkbook(
+                    $importTempPath,
+                    function (string $sheetName, array $headers, int $rowNumber, array $row) use (&$updated, &$created, &$unchanged, &$failed, &$failedMessages, &$pendingImportNotificationEmails, &$createdByLocationId, &$updatedByLocationId, &$importFailedDetails): void {
+                        static $previousSheetName = null;
+                        static $previousGoogleSheetsRowContext = null;
+
+                        if ($previousSheetName !== $sheetName) {
+                            $previousSheetName = $sheetName;
+                            $previousGoogleSheetsRowContext = null;
+                        }
+
+                        if ($this->rowIsEmpty($row)) {
+                            return;
+                        }
+
+                        $mappedRow = [];
+
+                        try {
+                            $mappedRow = $this->mapGoogleSheetsRow($headers, $row);
+                            [$mappedRow, $shouldConsolidateWithPrevious] = $this->resolveGoogleSheetsCarryForwardValues(
+                                $mappedRow,
+                                $previousGoogleSheetsRowContext
+                            );
+
+                            $shipment = $this->resolveShipmentForGoogleSheetsRow($mappedRow);
+                            $isNewShipment = false;
+
+                            if (! $shipment) {
+                                $shipment = new Shipment;
+                                $isNewShipment = true;
+                            }
+
+                            $attributes = $this->buildGoogleSheetsShipmentAttributes($mappedRow, $shipment);
+
+                            if ($isNewShipment) {
+                                $this->validateGoogleSheetsNewShipmentAttributes($mappedRow, $attributes);
+                            }
+
+                            if ($shouldConsolidateWithPrevious) {
+                                $attributes = $this->applyGoogleSheetsConsolidationAttributes(
+                                    $attributes,
+                                    $shipment,
+                                    $previousGoogleSheetsRowContext['shipment']
+                                );
+                            }
+
+                            if ($attributes === []) {
+                                $previousGoogleSheetsRowContext = $this->buildGoogleSheetsPreviousRowContext($shipment);
+                                $unchanged++;
+
+                                return;
+                            }
+
+                            $oldValues = $shipment->getAttributes();
+
+                            $this->syncTrailerAssignments($shipment, $attributes);
+
+                            $shipment->fill($attributes);
+
+                            if (! $shipment->isDirty()) {
+                                $previousGoogleSheetsRowContext = $this->buildGoogleSheetsPreviousRowContext($shipment);
+                                $unchanged++;
+
+                                return;
+                            }
+
+                            $shipment->save();
+
+                            if ($shipment->carrier_id) {
+                                $shipment->offeredCarriers()->sync([]);
+                            }
+
+                            if ($isNewShipment) {
+                                $created++;
+                                $createdByLocationId[$shipment->pickup_location_id ?? 'unknown'] = ($createdByLocationId[$shipment->pickup_location_id ?? 'unknown'] ?? 0) + 1;
+                            } else {
+                                $this->recordImportUpdateNote(
+                                    $shipment,
+                                    $oldValues,
+                                    'Google Sheets import updated this shipment:'
+                                );
+
+                                $this->notifySupervisorsOfGoogleSheetsImportUpdate($shipment, $oldValues, $pendingImportNotificationEmails);
+                                $this->notifyAssignedCarrierUsersOfGoogleSheetsDateChanges($shipment, $oldValues, $pendingImportNotificationEmails);
+                            }
+
+                            $previousGoogleSheetsRowContext = $this->buildGoogleSheetsPreviousRowContext($shipment);
+
+                            if (! $isNewShipment) {
+                                $updated++;
+                                $updatedByLocationId[$shipment->pickup_location_id ?? 'unknown'] = ($updatedByLocationId[$shipment->pickup_location_id ?? 'unknown'] ?? 0) + 1;
+                            }
+                        } catch (ValidationException $exception) {
+                            $failed++;
+                            $msg = (string) (collect($exception->errors())->flatten()->first() ?? 'Validation error');
+                            $failedMessages[] = $msg;
+                            $importFailedDetails[] = [
+                                'shipment_number' => (string) ($mappedRow['shipment_number'] ?? $mappedRow['bol'] ?? '(unknown)'),
+                                'error' => $msg,
+                                'row_number' => $rowNumber,
+                                'sheet_name' => $sheetName,
+                            ];
+                        } catch (Exception $exception) {
+                            $failed++;
+                            $msg = $exception->getMessage();
+                            $failedMessages[] = $msg;
+                            $importFailedDetails[] = [
+                                'shipment_number' => (string) ($mappedRow['shipment_number'] ?? $mappedRow['bol'] ?? '(unknown)'),
+                                'error' => $msg,
+                                'row_number' => $rowNumber,
+                                'sheet_name' => $sheetName,
+                            ];
+                        }
+                    }
+                );
             } finally {
                 @unlink($importTempPath);
             }
 
-            if ($sheetRows === []) {
+            if (! $hasReadableSheets) {
                 throw ValidationException::withMessages([
                     'google_sheet_url' => 'The Google Sheet workbook did not contain any readable sheet rows.',
                 ]);
-            }
-
-            $startTime = microtime(true);
-            $updated = 0;
-            $created = 0;
-            $unchanged = 0;
-            $failed = 0;
-            $failedMessages = [];
-            $pendingImportNotificationEmails = [];
-            $createdByLocationId = [];
-            $updatedByLocationId = [];
-            $importFailedDetails = [];
-
-            foreach ($sheetRows as [$sheetName, $headers, $rows]) {
-                $previousGoogleSheetsRowContext = null;
-
-                foreach ($rows as $rowIndex => $row) {
-                    if ($this->rowIsEmpty($row)) {
-                        continue;
-                    }
-
-                    $mappedRow = [];
-
-                    try {
-                        $mappedRow = $this->mapGoogleSheetsRow($headers, $row);
-                        [$mappedRow, $shouldConsolidateWithPrevious] = $this->resolveGoogleSheetsCarryForwardValues(
-                            $mappedRow,
-                            $previousGoogleSheetsRowContext
-                        );
-
-                        $shipment = $this->resolveShipmentForGoogleSheetsRow($mappedRow);
-                        $isNewShipment = false;
-
-                        if (! $shipment) {
-                            $shipment = new Shipment;
-                            $isNewShipment = true;
-                        }
-
-                        $attributes = $this->buildGoogleSheetsShipmentAttributes($mappedRow, $shipment);
-
-                        if ($isNewShipment) {
-                            $this->validateGoogleSheetsNewShipmentAttributes($mappedRow, $attributes);
-                        }
-
-                        if ($shouldConsolidateWithPrevious) {
-                            $attributes = $this->applyGoogleSheetsConsolidationAttributes(
-                                $attributes,
-                                $shipment,
-                                $previousGoogleSheetsRowContext['shipment']
-                            );
-                        }
-
-                        if ($attributes === []) {
-                            $previousGoogleSheetsRowContext = $this->buildGoogleSheetsPreviousRowContext($shipment);
-                            $unchanged++;
-
-                            continue;
-                        }
-
-                        $oldValues = $shipment->getAttributes();
-
-                        $this->syncTrailerAssignments($shipment, $attributes);
-
-                        $shipment->fill($attributes);
-
-                        if (! $shipment->isDirty()) {
-                            $previousGoogleSheetsRowContext = $this->buildGoogleSheetsPreviousRowContext($shipment);
-                            $unchanged++;
-
-                            continue;
-                        }
-
-                        $shipment->save();
-
-                        if ($shipment->carrier_id) {
-                            $shipment->offeredCarriers()->sync([]);
-                        }
-
-                        if ($isNewShipment) {
-                            $created++;
-                            $createdByLocationId[$shipment->pickup_location_id ?? 'unknown'] = ($createdByLocationId[$shipment->pickup_location_id ?? 'unknown'] ?? 0) + 1;
-                        } else {
-                            $this->recordImportUpdateNote(
-                                $shipment,
-                                $oldValues,
-                                'Google Sheets import updated this shipment:'
-                            );
-
-                            $this->notifySupervisorsOfGoogleSheetsImportUpdate($shipment, $oldValues, $pendingImportNotificationEmails);
-                            $this->notifyAssignedCarrierUsersOfGoogleSheetsDateChanges($shipment, $oldValues, $pendingImportNotificationEmails);
-                        }
-
-                        $previousGoogleSheetsRowContext = $this->buildGoogleSheetsPreviousRowContext($shipment);
-
-                        if (! $isNewShipment) {
-                            $updated++;
-                            $updatedByLocationId[$shipment->pickup_location_id ?? 'unknown'] = ($updatedByLocationId[$shipment->pickup_location_id ?? 'unknown'] ?? 0) + 1;
-                        }
-                    } catch (ValidationException $exception) {
-                        $failed++;
-                        $msg = (string) (collect($exception->errors())->flatten()->first() ?? 'Validation error');
-                        $rowNumber = $rowIndex + 2;
-                        $failedMessages[] = $msg;
-                        $importFailedDetails[] = [
-                            'shipment_number' => (string) ($mappedRow['shipment_number'] ?? $mappedRow['bol'] ?? '(unknown)'),
-                            'error' => $msg,
-                            'row_number' => $rowNumber,
-                            'sheet_name' => (string) $sheetName,
-                        ];
-                    } catch (Exception $exception) {
-                        $failed++;
-                        $msg = $exception->getMessage();
-                        $rowNumber = $rowIndex + 2;
-                        $failedMessages[] = $msg;
-                        $importFailedDetails[] = [
-                            'shipment_number' => (string) ($mappedRow['shipment_number'] ?? $mappedRow['bol'] ?? '(unknown)'),
-                            'error' => $msg,
-                            'row_number' => $rowNumber,
-                            'sheet_name' => (string) $sheetName,
-                        ];
-                    }
-                }
             }
 
             if ($updated === 0 && $created === 0 && $failed > 0) {
@@ -1955,57 +1960,79 @@ class ShipmentController extends Controller
     }
 
     /**
-     * @param  string  $tempPath  Path to the already-written XLSX temp file (owned/deleted by caller)
-     * @return array<int, array{0: string, 1: array<int, string>, 2: array<int, array<int, string|null>>}>
+     * @param  callable(string, array<int, string>, int, array<int, string|null>): void  $rowHandler
      */
-    private function parseGoogleSheetsWorkbook(string $tempPath): array
+    private function processGoogleSheetsWorkbook(string $tempPath, callable $rowHandler): bool
     {
         try {
-            $reader = IOFactory::createReader('Xlsx');
-            $reader->setReadDataOnly(true);
-            $spreadsheet = $reader->load($tempPath);
+            $infoReader = new Xlsx;
+            $worksheetInfos = $infoReader->listWorksheetInfo($tempPath);
         } catch (Exception $exception) {
             throw new Exception('Unable to read the Google Sheet workbook.');
         }
 
-        $sheetRows = [];
-        $sheetCount = $spreadsheet->getSheetCount();
+        $hasReadableSheets = false;
 
-        // Process each sheet by always reading index 0 and then removing it so
-        // PhpSpreadsheet memory is freed progressively rather than held in full.
-        for ($i = 0; $i < $sheetCount; $i++) {
-            $worksheet = $spreadsheet->getSheet(0);
-            $sheetName = (string) $worksheet->getTitle();
+        foreach ($worksheetInfos as $worksheetInfo) {
+            $sheetName = (string) ($worksheetInfo['worksheetName'] ?? '');
 
-            // Raw values (no formula eval, no format data) — minimal memory overhead.
-            $rows = $worksheet->toArray(null, false, false, false);
-
-            // Free this worksheet's objects before processing the next.
-            $spreadsheet->removeSheetByIndex(0);
-            gc_collect_cycles();
-
-            if ($rows === []) {
+            if ($sheetName === '') {
                 continue;
             }
 
-            $headerRow = array_shift($rows);
-
-            if (! is_array($headerRow) || $this->rowIsEmpty($headerRow)) {
-                continue;
+            try {
+                $reader = IOFactory::createReader('Xlsx');
+                $reader->setReadDataOnly(true);
+                $reader->setLoadSheetsOnly([$sheetName]);
+                $spreadsheet = $reader->load($tempPath);
+            } catch (Exception $exception) {
+                throw new Exception('Unable to read the Google Sheet workbook.');
             }
 
-            $sheetRows[] = [
-                $sheetName,
-                array_map(fn ($header) => trim((string) $header), $headerRow),
-                array_map(fn ($row) => is_array($row) ? array_map(fn ($value) => $value === null ? null : (string) $value, $row) : [], $rows),
-            ];
+            try {
+                $worksheet = $spreadsheet->getSheet(0);
+                $lastColumnLetter = (string) ($worksheetInfo['lastColumnLetter'] ?? $worksheet->getHighestDataColumn());
+                $highestRow = (int) ($worksheetInfo['totalRows'] ?? $worksheet->getHighestDataRow());
+
+                if ($highestRow < 1) {
+                    continue;
+                }
+
+                $headerRow = $this->readGoogleSheetsWorksheetRow($worksheet, 1, $lastColumnLetter);
+
+                if ($headerRow === [] || $this->rowIsEmpty($headerRow)) {
+                    continue;
+                }
+
+                $headers = array_map(fn ($header) => trim((string) $header), $headerRow);
+                $hasReadableSheets = true;
+
+                for ($rowNumber = 2; $rowNumber <= $highestRow; $rowNumber++) {
+                    $row = $this->readGoogleSheetsWorksheetRow($worksheet, $rowNumber, $lastColumnLetter);
+                    $rowHandler($sheetName, $headers, $rowNumber, $row);
+                }
+            } finally {
+                $spreadsheet->disconnectWorksheets();
+                unset($worksheet, $spreadsheet, $reader);
+                gc_collect_cycles();
+            }
         }
 
-        $spreadsheet->disconnectWorksheets();
-        unset($spreadsheet);
-        gc_collect_cycles();
+        return $hasReadableSheets;
+    }
 
-        return $sheetRows;
+    /**
+     * @return array<int, string|null>
+     */
+    private function readGoogleSheetsWorksheetRow(Worksheet $worksheet, int $rowNumber, string $lastColumnLetter): array
+    {
+        $range = sprintf('A%d:%s%d', $rowNumber, $lastColumnLetter, $rowNumber);
+        $rows = $worksheet->rangeToArray($range, null, false, false, false);
+        $row = $rows[0] ?? [];
+
+        return is_array($row)
+            ? array_map(fn ($value) => $value === null ? null : (string) $value, $row)
+            : [];
     }
 
     /**
