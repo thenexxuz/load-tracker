@@ -44,6 +44,7 @@ const hasRatesAccess = userRoles.includes('administrator') || userRoles.includes
 const hasCarrierAccess = userRoles.includes('administrator') || userRoles.includes('supervisor') || userRoles.includes('carrier')
 const hasTemplateAccess = userRoles.includes('administrator') || userRoles.includes('supervisor')
 const hasScheduledItemsAccess = userRoles.includes('administrator') || userRoles.includes('supervisor')
+const hasAutomatedItemsAccess = userRoles.includes('administrator') || userRoles.includes('supervisor')
 const hasLocationsAccess = userRoles.includes('administrator') || userRoles.includes('supervisor')
 const hasShipmentAccess = userRoles.includes('administrator') || userRoles.includes('supervisor') || userRoles.includes('truckload') || userRoles.includes('data-entry') || userRoles.includes('carrier')
 
@@ -106,6 +107,13 @@ const mainNavItems: NavItem[] = [
         title: 'Scheduled Items',
         href: route('admin.scheduled-items.index'),
         icon: Clock,
+      }]
+    : []),
+  ...(hasAutomatedItemsAccess
+    ? [{
+        title: 'Automated Items',
+        href: route('admin.automated-items.index'),
+        icon: Bell,
       }]
     : []),
   ...(hasRatesAccess

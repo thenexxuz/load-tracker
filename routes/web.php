@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AuditController;
+use App\Http\Controllers\AutomatedItemController;
 use App\Http\Controllers\CarrierController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\LocationController;
@@ -83,6 +84,7 @@ Route::middleware(['auth', 'role:administrator|supervisor'])->prefix('admin')->n
 
     // Scheduled Items
     Route::resource('scheduled-items', ScheduledItemController::class);
+    Route::resource('automated-items', AutomatedItemController::class)->except(['show']);
     // Location Routes
     Route::get('locations/recycling-distances', [LocationController::class, 'recyclingDistances'])->name('locations.recycling-distances');
     Route::get('locations/recycling-map', [LocationController::class, 'recyclingMap'])->name('locations.recycling-map');

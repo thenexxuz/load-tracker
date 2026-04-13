@@ -2,8 +2,11 @@
 
 namespace App\Providers;
 
+use App\Models\Carrier;
 use App\Models\Location;
+use App\Models\Shipment;
 use App\Observers\LocationObserver;
+use App\Observers\MonitoredModelObserver;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
@@ -28,6 +31,9 @@ class AppServiceProvider extends ServiceProvider
         $this->configureDefaults();
 
         Location::observe(LocationObserver::class);
+        Location::observe(MonitoredModelObserver::class);
+        Carrier::observe(MonitoredModelObserver::class);
+        Shipment::observe(MonitoredModelObserver::class);
     }
 
     protected function configureDefaults(): void

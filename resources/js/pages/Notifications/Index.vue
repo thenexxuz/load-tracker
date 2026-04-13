@@ -44,6 +44,7 @@ const formatDate = (dateString: string): string => {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
+    timeZone: 'America/Chicago',
   })
 }
 
@@ -54,12 +55,13 @@ const formatTime = (dateString: string): string => {
     hour: 'numeric',
     minute: '2-digit',
     hour12: true,
+    timeZone: 'America/Chicago',
   })
 }
 
 const formatDateTime = (dateString: string): string => {
   if (!dateString) return '—'
-  return `${formatDate(dateString)} ${formatTime(dateString)}`
+  return `${formatDate(dateString)} ${formatTime(dateString)} CST`
 }
 
 const isRead = (readAt: string | null): boolean => {
