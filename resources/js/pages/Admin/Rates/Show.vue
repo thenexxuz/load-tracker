@@ -42,7 +42,7 @@ const formatDate = (date: string | null): string => {
 }
 
 const isActive = (): boolean => {
-  const now = new Date('2026-03-11') // current date as per context
+  const now = new Date()
   const start = rate.effective_from ? new Date(rate.effective_from) : null
   const end = rate.effective_to ? new Date(rate.effective_to) : null
 
@@ -50,6 +50,10 @@ const isActive = (): boolean => {
   if (end && end < now) return false
   return true
 }
+
+const activeLabel = computed(() => {
+  return isActive() ? `Active (as of ${format(new Date(), 'MMM d, yyyy')})` : 'Inactive'
+})
 
 const rateDisplay = computed(() => {
   if (rate.type === 'flat') {
@@ -162,7 +166,7 @@ const rateDisplay = computed(() => {
                       'inline-flex px-3 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300': !isActive()
                     }"
                   >
-                    {{ isActive() ? 'Active (as of March 11, 2026)' : 'Inactive' }}
+                    {{ activeLabel }}
                   </span>
                 </div>
               </dd>

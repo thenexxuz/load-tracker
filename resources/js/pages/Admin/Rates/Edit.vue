@@ -33,6 +33,12 @@ const props = defineProps<{
   }>
 }>()
 
+const toDateInput = (val) => {
+  if (!val) return ''
+  // If ISO datetime, return YYYY-MM-DD for date inputs
+  return String(val).split('T')[0]
+}
+
 const form = useForm({
   name: props.rate.name || '',
   type: props.rate.type || 'per_mile',
@@ -42,8 +48,8 @@ const form = useForm({
   destination_state: props.rate.destination_state || '',
   destination_country: props.rate.destination_country || '',
   carrier_id: props.rate.carrier_id || null,
-  effective_from: props.rate.effective_from || '',
-  effective_to: props.rate.effective_to || '',
+  effective_from: toDateInput(props.rate.effective_from),
+  effective_to: toDateInput(props.rate.effective_to),
 })
 
 const submit = () => {
@@ -245,12 +251,15 @@ const rateLabel = computed(() => {
             <label for="effective_from" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Effective From
             </label>
-            <input
-              id="effective_from"
-              v-model="form.effective_from"
-              type="date"
-              class="block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm py-2.5 px-3"
-            />
+            <div class="flex gap-2">
+              <input
+                id="effective_from"
+                v-model="form.effective_from"
+                type="date"
+                class="block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm py-2.5 px-3"
+              />
+              <button type="button" class="text-sm text-gray-600 dark:text-gray-300 px-3" @click="form.effective_from = ''">Clear</button>
+            </div>
             <InputError :message="form.errors.effective_from" class="mt-1.5 text-sm" />
           </div>
 
@@ -258,12 +267,15 @@ const rateLabel = computed(() => {
             <label for="effective_to" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Effective To
             </label>
-            <input
-              id="effective_to"
-              v-model="form.effective_to"
-              type="date"
-              class="block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm py-2.5 px-3"
-            />
+            <div class="flex gap-2">
+              <input
+                id="effective_to"
+                v-model="form.effective_to"
+                type="date"
+                class="block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm py-2.5 px-3"
+              />
+              <button type="button" class="text-sm text-gray-600 dark:text-gray-300 px-3" @click="form.effective_to = ''">Clear</button>
+            </div>
             <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
               Leave blank for no expiration date
             </p>
