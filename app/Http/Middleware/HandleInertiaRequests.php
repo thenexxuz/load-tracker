@@ -5,6 +5,8 @@ namespace App\Http\Middleware;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 use Tighten\Ziggy\Ziggy;
+use App\Models\AppSetting;
+use Illuminate\Support\Facades\Storage;
 
 class HandleInertiaRequests extends Middleware
 {
@@ -40,7 +42,12 @@ class HandleInertiaRequests extends Middleware
 
         return [
             ...parent::share($request),
-            'name' => config('app.name'),
+            'name' => AppSetting::getValue(AppSetting::APP_NAME_KEY) ?? config('app.name'),
+            'app_logo' => fn () => (
+                ($path = AppSetting::getValue(AppSetting::APP_LOGO_KEY))
+                    ? Storage::url($path)
+                    : null
+            ),
             'auth' => [
                 'user' => $user ? [
                     'id' => $user->id,

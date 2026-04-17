@@ -15,6 +15,8 @@ import { type BreadcrumbItem } from '@/types';
 interface Props {
     settings: {
         google_sheet_url: string | null;
+        app_name: string | null;
+        app_logo: string | null;
     };
 }
 
@@ -46,6 +48,29 @@ const breadcrumbItems: BreadcrumbItem[] = [
                     class="space-y-6"
                     v-slot="{ errors, processing, recentlySuccessful }"
                 >
+                    <div class="grid gap-2">
+                        <Label for="app_name">Site name</Label>
+                        <Input
+                            id="app_name"
+                            name="app_name"
+                            type="text"
+                            class="mt-1 block w-full"
+                            :default-value="props.settings.app_name ?? ''"
+                            placeholder="Site name"
+                        />
+                        <InputError :message="errors.app_name" />
+                    </div>
+
+                    <div class="grid gap-2">
+                        <Label for="app_logo">App logo</Label>
+                        <input id="app_logo" name="app_logo" type="file" class="mt-1" />
+                        <p class="text-sm text-muted-foreground">Upload a small square logo (PNG, JPG). Max 2MB.</p>
+                        <InputError :message="errors.app_logo" />
+
+                        <div v-if="props.settings.app_logo" class="mt-2">
+                            <img :src="props.settings.app_logo" alt="App logo" class="size-16 rounded" />
+                        </div>
+                    </div>
                     <div class="grid gap-2">
                         <Label for="google_sheet_url">Google Sheets URL</Label>
                         <Input
