@@ -788,25 +788,41 @@ class LocationController extends Controller
         ]);
 
         $handle = fopen($request->file('file')->getPathname(), 'r');
-        fgetcsv($handle); // skip header
+        $header = fgetcsv($handle);
+
+        if ($header === false) {
+            fclose($handle);
+
+            return back()->withErrors(['file' => 'The uploaded file is empty.']);
+        }
+
+        $headerMap = $this->buildLocationImportHeaderMap($header);
 
         while (($row = fgetcsv($handle)) !== false) {
-            if (empty(trim($row[1] ?? ''))) {
+            $shortCode = $this->extractLocationImportValue($row, $headerMap, ['short_code', 'short code'], $row[1] ?? null);
+
+            if ($shortCode === null) {
                 continue;
-            } // skip if short_code empty
+            }
+
+            $rawType = $this->extractLocationImportValue($row, $headerMap, ['type'], $row[10] ?? null);
 
             Location::updateOrCreate(
-                ['short_code' => trim($row[1])],
+                ['short_code' => $shortCode],
                 [
-                    'name' => trim($row[2] ?? null),
-                    'address' => trim($row[3] ?? null),
-                    'city' => trim($row[4] ?? null),
-                    'state' => trim($row[5] ?? null),
-                    'zip' => trim($row[6] ?? null),
-                    'country' => trim($row[7] ?? null),
-                    'latitude' => is_numeric($row[8]) ? (float) $row[8] : null,
-                    'longitude' => is_numeric($row[9]) ? (float) $row[9] : null,
-                    'type' => trim($row[10] ?? null),
+                    'name' => $this->extractLocationImportValue($row, $headerMap, ['name'], $row[2] ?? null),
+                    'address' => $this->extractLocationImportValue($row, $headerMap, ['address'], $row[3] ?? null),
+                    'city' => $this->extractLocationImportValue($row, $headerMap, ['city'], $row[4] ?? null),
+                    'state' => $this->extractLocationImportValue($row, $headerMap, ['state'], $row[5] ?? null),
+                    'zip' => $this->extractLocationImportValue($row, $headerMap, ['zip', 'postal_code', 'postal code'], $row[6] ?? null),
+                    'country' => $this->extractLocationImportValue($row, $headerMap, ['country'], $row[7] ?? null),
+                    'latitude' => $this->parseLocationImportFloat(
+                        $this->extractLocationImportValue($row, $headerMap, ['latitude', 'lat'], $row[8] ?? null)
+                    ),
+                    'longitude' => $this->parseLocationImportFloat(
+                        $this->extractLocationImportValue($row, $headerMap, ['longitude', 'lng', 'lon'], $row[9] ?? null)
+                    ),
+                    'type' => $this->normalizeImportedLocationType($rawType),
                 ]
             );
         }
@@ -828,5 +844,76 @@ class LocationController extends Controller
     private function findLocationByGuidOrFail(string $guid): Location
     {
         return Location::query()->where('guid', $guid)->firstOrFail();
+    }
+
+    /**
+     * @param  array<int, mixed>  $header
+     * @return array<string, int>
+     */
+    private function buildLocationImportHeaderMap(array $header): array
+    {
+        $map = [];
+
+        foreach ($header as $index => $value) {
+            $normalizedHeader = strtolower(trim((string) $value));
+            if ($normalizedHeader === '') {
+                continue;
+            }
+
+            $map[$normalizedHeader] = $index;
+        }
+
+        return $map;
+    }
+
+    /**
+     * @param  array<int, mixed>  $row
+     * @param  array<string, int>  $headerMap
+     * @param  array<int, string>  $headerAliases
+     */
+    private function extractLocationImportValue(array $row, array $headerMap, array $headerAliases, mixed $fallback = null): ?string
+    {
+        foreach ($headerAliases as $alias) {
+            $normalizedAlias = strtolower(trim($alias));
+            if (! array_key_exists($normalizedAlias, $headerMap)) {
+                continue;
+            }
+
+            return $this->normalizeLocationImportString($row[$headerMap[$normalizedAlias]] ?? null);
+        }
+
+        return $this->normalizeLocationImportString($fallback);
+    }
+
+    private function normalizeLocationImportString(mixed $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $normalized = trim((string) $value);
+
+        return $normalized === '' ? null : $normalized;
+    }
+
+    private function parseLocationImportFloat(?string $value): ?float
+    {
+        if ($value === null || ! is_numeric($value)) {
+            return null;
+        }
+
+        return (float) $value;
+    }
+
+    private function normalizeImportedLocationType(?string $value): string
+    {
+        $normalized = strtolower(trim((string) $value));
+
+        return match ($normalized) {
+            'distribution_center', 'distribution center', 'distributioncentre', 'distribution centre', 'dc', 'inbound' => 'distribution_center',
+            'recycling', 'recycle', 'recycler' => 'recycling',
+            'pickup', 'outbound' => 'pickup',
+            default => 'pickup',
+        };
     }
 }
